@@ -1,0 +1,80 @@
+From 8099eb08541428efe92c4a1a4cbaf3530fd125e7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:25:59 +0100
+Subject: [PATCH] intervals: check for EXPR_F_REMOVE in case of element
+ mismatch
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2115627
+Upstream Status: nftables commit 6d1ee9267e7e5
+
+commit 6d1ee9267e7e5e429a84d7bb8a8644f9eebddb22
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jun 23 18:41:21 2022 +0200
+
+    intervals: check for EXPR_F_REMOVE in case of element mismatch
+
+    If auto-merge is disable and element to be deleted finds no exact
+    matching, then bail out.
+
+    Fixes: 3e8d934e4f72 ("intervals: support to partial deletion with automerge")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c                     |  4 ++++
+ tests/shell/testcases/sets/errors_0 | 20 ++++++++++++++++++--
+ 2 files changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/src/intervals.c b/src/intervals.c
+index c21b3ee..13009ca 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -421,6 +421,10 @@ static int setelem_delete(struct list_head *msgs, struct set *set,
+ 			expr_error(msgs, i, "element does not exist");
+ 			err = -1;
+ 			goto err;
++		} else if (i->flags & EXPR_F_REMOVE) {
++			expr_error(msgs, i, "element does not exist");
++			err = -1;
++			goto err;
+ 		}
+ 		prev = NULL;
+ 	}
+diff --git a/tests/shell/testcases/sets/errors_0 b/tests/shell/testcases/sets/errors_0
+index 2960b69..a676ac7 100755
+--- a/tests/shell/testcases/sets/errors_0
++++ b/tests/shell/testcases/sets/errors_0
+@@ -1,7 +1,5 @@
+ #!/bin/bash
+ 
+-set -e
+-
+ RULESET="table ip x {
+ 	set y {
+ 		type ipv4_addr
+@@ -11,4 +9,22 @@ RULESET="table ip x {
+ 
+ delete element ip x y { 2.3.4.5 }"
+ 
++$NFT -f - <<< $RULESET
++if [ $? -eq 0 ]
++then
++	exit 1
++fi
++
++RULESET="table ip x {
++        set y {
++                type ipv4_addr
++                flags interval
++        }
++}
++
++add element x y { 1.1.1.1/24 }
++delete element x y { 1.1.1.1/24 }
++add element x y { 1.1.1.1/24 }
++delete element x y { 2.2.2.2/24 }"
++
+ $NFT -f - <<< $RULESET || exit 0
+-- 
+2.39.1
+

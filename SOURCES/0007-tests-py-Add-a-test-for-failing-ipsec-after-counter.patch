@@ -1,0 +1,86 @@
+From 39c0d8ee8c8b0a667fc1c20336b3d248d28759f3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:18:10 +0100
+Subject: [PATCH] tests/py: Add a test for failing ipsec after counter
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2113874
+Upstream Status: nftables commit ed2426bccd3ea
+
+commit ed2426bccd3ea954adc8a010bf1736e8ed6a81b9
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jun 23 16:28:42 2022 +0200
+
+    tests/py: Add a test for failing ipsec after counter
+
+    This is a bug in parser/scanner due to scoping:
+
+    | Error: syntax error, unexpected string, expecting saddr or daddr
+    | add rule ip ipsec-ip4 ipsec-forw counter ipsec out ip daddr 192.168.1.2
+    |                                                       ^^^^^
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/ipsec.t         |  2 ++
+ tests/py/inet/ipsec.t.json    | 21 +++++++++++++++++++++
+ tests/py/inet/ipsec.t.payload |  6 ++++++
+ 3 files changed, 29 insertions(+)
+
+diff --git a/tests/py/inet/ipsec.t b/tests/py/inet/ipsec.t
+index e924e9b..b18df39 100644
+--- a/tests/py/inet/ipsec.t
++++ b/tests/py/inet/ipsec.t
+@@ -19,3 +19,5 @@ ipsec in ip6 daddr dead::beef;ok
+ ipsec out ip6 saddr dead::feed;ok
+ 
+ ipsec in spnum 256 reqid 1;fail
++
++counter ipsec out ip daddr 192.168.1.2;ok
+diff --git a/tests/py/inet/ipsec.t.json b/tests/py/inet/ipsec.t.json
+index d7d3a03..18a64f3 100644
+--- a/tests/py/inet/ipsec.t.json
++++ b/tests/py/inet/ipsec.t.json
+@@ -134,3 +134,24 @@
+         }
+     }
+ ]
++
++# counter ipsec out ip daddr 192.168.1.2
++[
++    {
++        "counter": null
++    },
++    {
++        "match": {
++            "left": {
++                "ipsec": {
++                    "dir": "out",
++                    "family": "ip",
++                    "key": "daddr",
++                    "spnum": 0
++                }
++            },
++            "op": "==",
++            "right": "192.168.1.2"
++        }
++    }
++]
+diff --git a/tests/py/inet/ipsec.t.payload b/tests/py/inet/ipsec.t.payload
+index c46a226..9648255 100644
+--- a/tests/py/inet/ipsec.t.payload
++++ b/tests/py/inet/ipsec.t.payload
+@@ -37,3 +37,9 @@ ip ipsec-ip4 ipsec-forw
+   [ xfrm load out 0 saddr6 => reg 1 ]
+   [ cmp eq reg 1 0x0000adde 0x00000000 0x00000000 0xedfe0000 ]
+ 
++# counter ipsec out ip daddr 192.168.1.2
++ip ipsec-ip4 ipsec-forw
++  [ counter pkts 0 bytes 0 ]
++  [ xfrm load out 0 daddr4 => reg 1 ]
++  [ cmp eq reg 1 0x0201a8c0 ]
++
+-- 
+2.39.1
+

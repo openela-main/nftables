@@ -1,0 +1,65 @@
+From a273fd3aaf89391ac84d7a155b3bb177552bf115 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:27:57 +0100
+Subject: [PATCH] tests: add a test case for ether and vlan listing
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2094887
+Upstream Status: nftables commit f680055cd4377
+
+commit f680055cd4377f2f531f5f77b3aaa7550988665d
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Jul 25 19:31:22 2022 +0200
+
+    tests: add a test case for ether and vlan listing
+
+    before this patch series, test fails dump validation:
+    -               update @macset { ether saddr . vlan id timeout 5s } counter packets 0 bytes 0
+    -               ether saddr . vlan id @macset
+    +               update @macset { @ll,48,48 . @ll,112,16 & 0xfff timeout 5s } counter packets 0 bytes 0
+    +               @ll,48,48 . @ll,112,16 & 0xfff @macset
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/sets/0070stacked_l2_headers  |  6 ++++++
+ .../sets/dumps/0070stacked_l2_headers.nft          | 14 ++++++++++++++
+ 2 files changed, 20 insertions(+)
+ create mode 100755 tests/shell/testcases/sets/0070stacked_l2_headers
+ create mode 100644 tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft
+
+diff --git a/tests/shell/testcases/sets/0070stacked_l2_headers b/tests/shell/testcases/sets/0070stacked_l2_headers
+new file mode 100755
+index 0000000..07820b7
+--- /dev/null
++++ b/tests/shell/testcases/sets/0070stacked_l2_headers
+@@ -0,0 +1,6 @@
++#!/bin/bash
++
++set -e
++dumpfile=$(dirname $0)/dumps/$(basename $0).nft
++
++$NFT -f "$dumpfile"
+diff --git a/tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft b/tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft
+new file mode 100644
+index 0000000..ef254b9
+--- /dev/null
++++ b/tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft
+@@ -0,0 +1,14 @@
++table netdev nt {
++	set macset {
++		typeof ether saddr . vlan id
++		size 1024
++		flags dynamic,timeout
++	}
++
++	chain nc {
++		update @macset { ether saddr . vlan id timeout 5s } counter packets 0 bytes 0
++		ether saddr . vlan id @macset
++		vlan pcp 1
++		ether saddr 0a:0b:0c:0d:0e:0f vlan id 42
++	}
++}
+-- 
+2.39.1
+

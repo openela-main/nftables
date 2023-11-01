@@ -1,0 +1,44 @@
+From ed9b1e973f19f66cf08ea0db8947768f0240fa10 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:27:57 +0100
+Subject: [PATCH] debug: dump the l2 protocol stack
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2094887
+Upstream Status: nftables commit dbd5f348c71de
+
+commit dbd5f348c71decf0baa8fb592c576f63fa232f50
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Jul 25 16:42:23 2022 +0200
+
+    debug: dump the l2 protocol stack
+
+    Previously we used to print the cumulative size of the headers,
+    update this to print the tracked l2 stack.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/proto.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/proto.c b/src/proto.c
+index 2663f21..c496482 100644
+--- a/src/proto.c
++++ b/src/proto.c
+@@ -154,6 +154,12 @@ static void proto_ctx_debug(const struct proto_ctx *ctx, enum proto_bases base,
+ 	if (!(debug_mask & NFT_DEBUG_PROTO_CTX))
+ 		return;
+ 
++	if (base == PROTO_BASE_LL_HDR && ctx->stacked_ll_count) {
++		pr_debug(" saved ll headers:");
++		for (i = 0; i < ctx->stacked_ll_count; i++)
++			pr_debug(" %s", ctx->stacked_ll[i]->name);
++	}
++
+ 	pr_debug("update %s protocol context:\n", proto_base_names[base]);
+ 	for (i = PROTO_BASE_LL_HDR; i <= PROTO_BASE_MAX; i++) {
+ 		pr_debug(" %-20s: %s",
+-- 
+2.39.1
+

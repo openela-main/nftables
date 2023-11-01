@@ -1,0 +1,44 @@
+From 8bb864ad6586da7767cf4b90b75e62cd7324859d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Feb 2023 19:50:41 +0100
+Subject: [PATCH] netlink: Fix for potential NULL-pointer deref
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2160049
+Upstream Status: nftables commit 927d5674e7bf6
+
+commit 927d5674e7bf656428f97c54c9171006e8c3c75e
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Jan 10 22:36:58 2023 +0100
+
+    netlink: Fix for potential NULL-pointer deref
+
+    If memory allocation fails, calloc() returns NULL which was not checked
+    for. The code seems to expect zero array size though, so simply
+    replacing this call by one of the x*calloc() ones won't work. So guard
+    the call also by a check for 'len'.
+
+    Fixes: db0697ce7f602 ("src: support for flowtable listing")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 799cf9b..dee1732 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -1700,7 +1700,8 @@ netlink_delinearize_flowtable(struct netlink_ctx *ctx,
+ 	while (dev_array[len])
+ 		len++;
+ 
+-	flowtable->dev_array = calloc(1, len * sizeof(char *));
++	if (len)
++		flowtable->dev_array = xmalloc(len * sizeof(char *));
+ 	for (i = 0; i < len; i++)
+ 		flowtable->dev_array[i] = xstrdup(dev_array[i]);
+ 
+-- 
+2.39.2
+

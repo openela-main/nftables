@@ -1,0 +1,44 @@
+From d6087e02d9f25bba362db0af16355ee3be4e450a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Feb 2023 19:50:40 +0100
+Subject: [PATCH] owner: Fix potential array out of bounds access
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2160049
+Upstream Status: nftables commit 9967911e3dabb
+
+commit 9967911e3dabb32901617e81e56602af3b37287f
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Dec 21 17:37:46 2022 +0100
+
+    owner: Fix potential array out of bounds access
+
+    If the link target length exceeds 'sizeof(tmp)' bytes, readlink() will
+    return 'sizeof(tmp)'. Using this value as index is illegal.
+
+    Original update from Phil, for the conntrack-tools tree, which also has
+    a copy of this function.
+
+    Fixes: 6d085b22a8b5 ("table: support for the table owner flag")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/owner.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/owner.c b/src/owner.c
+index 2d98a2e..20bed38 100644
+--- a/src/owner.c
++++ b/src/owner.c
+@@ -66,7 +66,7 @@ static char *portid2name(pid_t pid, uint32_t portid, unsigned long inode)
+ 			continue;
+ 
+ 		rl = readlink(procname, tmp, sizeof(tmp));
+-		if (rl <= 0 || rl > (ssize_t)sizeof(tmp))
++		if (rl <= 0 || rl >= (ssize_t)sizeof(tmp))
+ 			continue;
+ 
+ 		tmp[rl] = 0;
+-- 
+2.39.2
+
