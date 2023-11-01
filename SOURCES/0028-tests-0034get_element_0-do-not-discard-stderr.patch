@@ -1,0 +1,41 @@
+From 4337d4eafe66b594b56b43261c8742d6b65d5ee8 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 30 Jun 2020 16:20:23 +0200
+Subject: [PATCH] tests: 0034get_element_0: do not discard stderr
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1832235
+Upstream Status: nftables commit ff29e6c09aed9
+
+commit ff29e6c09aed922a42e0e0551c34dd5d87067512
+Author: Florian Westphal <fw@strlen.de>
+Date:   Sat Feb 22 00:02:25 2020 +0100
+
+    tests: 0034get_element_0: do not discard stderr
+
+    run_tests.sh alreadty discards stderr by default, but will show it in
+    case the test script is run directly (passed as argument).
+
+    Discarding stderr also in the script prevents one from seeing
+    BUG() assertions and the like.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+---
+ tests/shell/testcases/sets/0034get_element_0 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/shell/testcases/sets/0034get_element_0 b/tests/shell/testcases/sets/0034get_element_0
+index c7e7298..e23dbda 100755
+--- a/tests/shell/testcases/sets/0034get_element_0
++++ b/tests/shell/testcases/sets/0034get_element_0
+@@ -3,7 +3,7 @@
+ RC=0
+ 
+ check() { # (elems, expected)
+-	out=$($NFT get element ip t s "{ $1 }" 2>/dev/null)
++	out=$($NFT get element ip t s "{ $1 }")
+ 	out=$(grep "elements =" <<< "$out")
+ 	out="${out#* \{ }"
+ 	out="${out% \}}"
+-- 
+2.31.1
+

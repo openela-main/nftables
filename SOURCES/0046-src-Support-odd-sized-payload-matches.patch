@@ -1,0 +1,64 @@
+From 64f34f34acedad6cce70f2dd91c82a814d4ffe34 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 19 May 2021 18:03:43 +0200
+Subject: [PATCH] src: Support odd-sized payload matches
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1934926
+Upstream Status: nftables commit 8a927c56d83ed
+
+commit 8a927c56d83ed0f78785011bd92a53edc25a0ca0
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Oct 27 17:05:25 2020 +0100
+
+    src: Support odd-sized payload matches
+
+    When expanding a payload match, don't disregard oversized templates at
+    the right offset. A more flexible user may extract less bytes from the
+    packet if only parts of a field are interesting, e.g. only the prefix of
+    source/destination address. Support that by using the template, but fix
+    the length. Later when creating a relational expression for it, detect
+    the unusually small payload expression length and turn the RHS value
+    into a prefix expression.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/netlink_delinearize.c | 6 ++++++
+ src/payload.c             | 5 +++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index 88dbd5a..8bdee12 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -1577,6 +1577,12 @@ static void payload_match_expand(struct rule_pp_ctx *ctx,
+ 		tmp = constant_expr_splice(right, left->len);
+ 		expr_set_type(tmp, left->dtype, left->byteorder);
+ 
++		if (left->payload.tmpl && (left->len < left->payload.tmpl->len)) {
++			mpz_lshift_ui(tmp->value, left->payload.tmpl->len - left->len);
++			tmp->len = left->payload.tmpl->len;
++			tmp = prefix_expr_alloc(&tmp->location, tmp, left->len);
++		}
++
+ 		nexpr = relational_expr_alloc(&expr->location, expr->op,
+ 					      left, tmp);
+ 		if (expr->op == OP_EQ)
+diff --git a/src/payload.c b/src/payload.c
+index 3576400..45280ef 100644
+--- a/src/payload.c
++++ b/src/payload.c
+@@ -746,6 +746,11 @@ void payload_expr_expand(struct list_head *list, struct expr *expr,
+ 			expr->payload.offset += tmpl->len;
+ 			if (expr->len == 0)
+ 				return;
++		} else if (expr->len > 0) {
++			new = payload_expr_alloc(&expr->location, desc, i);
++			new->len = expr->len;
++			list_add_tail(&new->list, list);
++			return;
+ 		} else
+ 			break;
+ 	}
+-- 
+2.31.1
+

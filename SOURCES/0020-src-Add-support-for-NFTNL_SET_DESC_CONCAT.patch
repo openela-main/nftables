@@ -1,0 +1,181 @@
+From c8a5da2f527c85ab7c392cd293ff37d02a3f93a7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 13 Feb 2020 17:48:18 +0100
+Subject: [PATCH] src: Add support for NFTNL_SET_DESC_CONCAT
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1795224
+Upstream Status: nftables commit 6156ba34018dd
+Conflicts: Context change in src/mnl.c due to missing commit
+	   6e48df5329eab ("src: add "typeof" build/parse/print support")
+
+commit 6156ba34018dddd59cb6737cfd5a69a0cbc5eaa4
+Author: Stefano Brivio <sbrivio@redhat.com>
+Date:   Thu Jan 30 01:16:56 2020 +0100
+
+    src: Add support for NFTNL_SET_DESC_CONCAT
+
+    To support arbitrary range concatenations, the kernel needs to know
+    how long each field in the concatenation is. The new libnftnl
+    NFTNL_SET_DESC_CONCAT set attribute describes this as an array of
+    lengths, in bytes, of concatenated fields.
+
+    While evaluating concatenated expressions, export the datatype size
+    into the new field_len array, and hand the data over via libnftnl.
+
+    Similarly, when data is passed back from libnftnl, parse it into
+    the set description.
+
+    When set data is cloned, we now need to copy the additional fields
+    in set_clone(), too.
+
+    This change depends on the libnftnl patch with title:
+      set: Add support for NFTA_SET_DESC_CONCAT attributes
+
+    v4: No changes
+    v3: Rework to use set description data instead of a stand-alone
+        attribute
+    v2: No changes
+
+    Signed-off-by: Stefano Brivio <sbrivio@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ include/expression.h |  2 ++
+ include/rule.h       |  6 +++++-
+ src/evaluate.c       | 14 +++++++++++---
+ src/mnl.c            |  7 +++++++
+ src/netlink.c        | 11 +++++++++++
+ src/rule.c           |  2 +-
+ 6 files changed, 37 insertions(+), 5 deletions(-)
+
+diff --git a/include/expression.h b/include/expression.h
+index 717b675..ee726aa 100644
+--- a/include/expression.h
++++ b/include/expression.h
+@@ -256,6 +256,8 @@ struct expr {
+ 			struct list_head	expressions;
+ 			unsigned int		size;
+ 			uint32_t		set_flags;
++			uint8_t			field_len[NFT_REG32_COUNT];
++			uint8_t			field_count;
+ 		};
+ 		struct {
+ 			/* EXPR_SET_REF */
+diff --git a/include/rule.h b/include/rule.h
+index 47eb29f..c03b0b8 100644
+--- a/include/rule.h
++++ b/include/rule.h
+@@ -290,7 +290,9 @@ extern struct rule *rule_lookup_by_index(const struct chain *chain,
+  * @rg_cache:	cached range element (left)
+  * @policy:	set mechanism policy
+  * @automerge:	merge adjacents and overlapping elements, if possible
+- * @desc:	set mechanism desc
++ * @desc.size:		count of set elements
++ * @desc.field_len:	length of single concatenated fields, bytes
++ * @desc.field_count:	count of concatenated fields
+  */
+ struct set {
+ 	struct list_head	list;
+@@ -310,6 +312,8 @@ struct set {
+ 	bool			automerge;
+ 	struct {
+ 		uint32_t	size;
++		uint8_t		field_len[NFT_REG32_COUNT];
++		uint8_t		field_count;
+ 	} desc;
+ };
+ 
+diff --git a/src/evaluate.c b/src/evaluate.c
+index a865902..58f458d 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1216,6 +1216,8 @@ static int expr_evaluate_concat(struct eval_ctx *ctx, struct expr **expr,
+ 	struct expr *i, *next;
+ 
+ 	list_for_each_entry_safe(i, next, &(*expr)->expressions, list) {
++		unsigned dsize_bytes;
++
+ 		if (expr_is_constant(*expr) && dtype && off == 0)
+ 			return expr_binary_error(ctx->msgs, i, *expr,
+ 						 "unexpected concat component, "
+@@ -1240,6 +1242,9 @@ static int expr_evaluate_concat(struct eval_ctx *ctx, struct expr **expr,
+ 						 i->dtype->name);
+ 
+ 		ntype = concat_subtype_add(ntype, i->dtype->type);
++
++		dsize_bytes = div_round_up(i->dtype->size, BITS_PER_BYTE);
++		(*expr)->field_len[(*expr)->field_count++] = dsize_bytes;
+ 	}
+ 
+ 	(*expr)->flags |= flags;
+@@ -3321,9 +3326,12 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set)
+ 					 "specified in %s definition",
+ 					 set->key->dtype->name, type);
+ 	}
+-	if (set->flags & NFT_SET_INTERVAL &&
+-	    set->key->etype == EXPR_CONCAT)
+-		return set_error(ctx, set, "concatenated types not supported in interval sets");
++
++	if (set->flags & NFT_SET_INTERVAL && set->key->etype == EXPR_CONCAT) {
++		memcpy(&set->desc.field_len, &set->key->field_len,
++		       sizeof(set->desc.field_len));
++		set->desc.field_count = set->key->field_count;
++	}
+ 
+ 	if (set_is_datamap(set->flags)) {
+ 		if (set->datatype == NULL)
+diff --git a/src/mnl.c b/src/mnl.c
+index aa5b0b4..221ee05 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -881,6 +881,13 @@ int mnl_nft_set_add(struct netlink_ctx *ctx, const struct cmd *cmd,
+ 				 set->automerge))
+ 		memory_allocation_error();
+ 
++	if (set->desc.field_len[0]) {
++		nftnl_set_set_data(nls, NFTNL_SET_DESC_CONCAT,
++				   set->desc.field_len,
++				   set->desc.field_count *
++				   sizeof(set->desc.field_len[0]));
++	}
++
+ 	nftnl_set_set_data(nls, NFTNL_SET_USERDATA, nftnl_udata_buf_data(udbuf),
+ 			   nftnl_udata_buf_len(udbuf));
+ 	nftnl_udata_buf_free(udbuf);
+diff --git a/src/netlink.c b/src/netlink.c
+index 486e124..83d863c 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -672,6 +672,17 @@ struct set *netlink_delinearize_set(struct netlink_ctx *ctx,
+ 	if (nftnl_set_is_set(nls, NFTNL_SET_DESC_SIZE))
+ 		set->desc.size = nftnl_set_get_u32(nls, NFTNL_SET_DESC_SIZE);
+ 
++	if (nftnl_set_is_set(nls, NFTNL_SET_DESC_CONCAT)) {
++		uint32_t len = NFT_REG32_COUNT;
++		const uint8_t *data;
++
++		data = nftnl_set_get_data(nls, NFTNL_SET_DESC_CONCAT, &len);
++		if (data) {
++			memcpy(set->desc.field_len, data, len);
++			set->desc.field_count = len;
++		}
++	}
++
+ 	return set;
+ }
+ 
+diff --git a/src/rule.c b/src/rule.c
+index 3ca1805..4669577 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -337,7 +337,7 @@ struct set *set_clone(const struct set *set)
+ 	new_set->objtype	= set->objtype;
+ 	new_set->policy		= set->policy;
+ 	new_set->automerge	= set->automerge;
+-	new_set->desc.size	= set->desc.size;
++	new_set->desc		= set->desc;
+ 
+ 	return new_set;
+ }
+-- 
+2.31.1
+

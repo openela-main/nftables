@@ -1,0 +1,74 @@
+From cc6c59e683c503b461b4a80526f4bc9cbb0660bf Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 5 Nov 2021 16:06:45 +0100
+Subject: [PATCH] tests: cover baecd1cf2685 ("segtree: Fix segfault when
+ restoring a huge interval set")
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1908127
+Upstream Status: nftables commit d8ccad2a2b73c
+
+commit d8ccad2a2b73c4189934eb5fd0e3d096699b5043
+Author: Štěpán Němec <snemec@redhat.com>
+Date:   Wed Oct 20 14:42:20 2021 +0200
+
+    tests: cover baecd1cf2685 ("segtree: Fix segfault when restoring a huge interval set")
+
+    Test inspired by [1] with both the set and stack size reduced by the
+    same power of 2, to preserve the (pre-baecd1cf2685) segfault on one
+    hand, and make the test successfully complete (post-baecd1cf2685) in a
+    few seconds even on weaker hardware on the other.
+
+    (The reason I stopped at 128kB stack size is that with 64kB I was
+    getting segfaults even with baecd1cf2685 applied.)
+
+    [1] https://bugzilla.redhat.com/show_bug.cgi?id=1908127
+
+    Signed-off-by: Štěpán Němec <snemec@redhat.com>
+    Helped-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ .../sets/0068interval_stack_overflow_0        | 29 +++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+ create mode 100755 tests/shell/testcases/sets/0068interval_stack_overflow_0
+
+diff --git a/tests/shell/testcases/sets/0068interval_stack_overflow_0 b/tests/shell/testcases/sets/0068interval_stack_overflow_0
+new file mode 100755
+index 0000000..134282d
+--- /dev/null
++++ b/tests/shell/testcases/sets/0068interval_stack_overflow_0
+@@ -0,0 +1,29 @@
++#!/bin/bash
++
++set -e
++
++ruleset_file=$(mktemp)
++
++trap 'rm -f "$ruleset_file"' EXIT
++
++{
++	echo 'define big_set = {'
++	for ((i = 1; i < 255; i++)); do
++		for ((j = 1; j < 80; j++)); do
++			echo "10.0.$i.$j,"
++		done
++	done
++	echo '10.1.0.0/24 }'
++} >"$ruleset_file"
++
++cat >>"$ruleset_file" <<\EOF
++table inet test68_table {
++	set test68_set {
++		type ipv4_addr
++		flags interval
++		elements = { $big_set }
++	}
++}
++EOF
++
++( ulimit -s 128 && "$NFT" -f "$ruleset_file" )
+-- 
+2.31.1
+

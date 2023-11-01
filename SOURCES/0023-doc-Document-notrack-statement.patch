@@ -1,0 +1,51 @@
+From f7a31d5c3277b29f104fd8ff48df24c8bc790f19 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 24 Jun 2020 18:46:39 +0200
+Subject: [PATCH] doc: Document notrack statement
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1841292
+Upstream Status: nftables commit f16fbe76f62dc
+
+commit f16fbe76f62dcb9f7395d1837ad2d056463ba55f
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Mon Jun 22 15:07:40 2020 +0200
+
+    doc: Document notrack statement
+
+    Merely a stub, but better to mention it explicitly instead of having it
+    appear in synproxy examples and letting users guess as to what it does.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Florian Westphal <fw@strlen.de>
+---
+ doc/statements.txt | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/doc/statements.txt b/doc/statements.txt
+index 3b82436..749533a 100644
+--- a/doc/statements.txt
++++ b/doc/statements.txt
+@@ -262,6 +262,20 @@ table inet raw {
+ ct event set new,related,destroy
+ --------------------------------------
+ 
++NOTRACK STATEMENT
++~~~~~~~~~~~~~~~~~
++The notrack statement allows to disable connection tracking for certain
++packets.
++
++[verse]
++*notrack*
++
++Note that for this statement to be effective, it has to be applied to packets
++before a conntrack lookup happens. Therefore, it needs to sit in a chain with
++either prerouting or output hook and a hook priority of -300 or less.
++
++See SYNPROXY STATEMENT for an example usage.
++
+ META STATEMENT
+ ~~~~~~~~~~~~~~
+ A meta statement sets the value of a meta expression. The existing meta fields
+-- 
+2.31.1
+

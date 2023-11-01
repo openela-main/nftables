@@ -1,0 +1,58 @@
+From ea4457d5c329c8930c610ef3002cfe42bf8a263f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 8 Dec 2021 14:10:31 +0100
+Subject: [PATCH] tests: shell: $NFT needs to be invoked unquoted
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1908127
+Upstream Status: nftables commit dad3338f1f76a
+Conflicts: Context change in README due to missing other commits.
+
+commit dad3338f1f76a4a5bd782bae9c6b48941dfb1e31
+Author: Štěpán Němec <snemec@redhat.com>
+Date:   Fri Nov 5 12:39:11 2021 +0100
+
+    tests: shell: $NFT needs to be invoked unquoted
+
+    The variable has to undergo word splitting, otherwise the shell tries
+    to find the variable value as an executable, which breaks in cases that
+    7c8a44b25c22 ("tests: shell: Allow wrappers to be passed as nft command")
+    intends to support.
+
+    Mention this in the shell tests README.
+
+    Fixes: d8ccad2a2b73 ("tests: cover baecd1cf2685 ("segtree: Fix segfault when restoring a huge interval set")")
+    Signed-off-by: Štěpán Němec <snemec@redhat.com>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ tests/shell/README                                       | 3 +++
+ tests/shell/testcases/sets/0068interval_stack_overflow_0 | 2 +-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/tests/shell/README b/tests/shell/README
+index e0279bb..aee50e3 100644
+--- a/tests/shell/README
++++ b/tests/shell/README
+@@ -25,4 +25,7 @@ path to the nftables binary being tested.
+ You can pass an arbitrary $NFT value as well:
+  # NFT=/usr/local/sbin/nft ./run-tests.sh
+ 
++Note that, to support usage such as NFT='valgrind nft', tests must
++invoke $NFT unquoted.
++
+ By default the tests are run with the nft binary at '../../src/nft'
+diff --git a/tests/shell/testcases/sets/0068interval_stack_overflow_0 b/tests/shell/testcases/sets/0068interval_stack_overflow_0
+index 134282d..6620572 100755
+--- a/tests/shell/testcases/sets/0068interval_stack_overflow_0
++++ b/tests/shell/testcases/sets/0068interval_stack_overflow_0
+@@ -26,4 +26,4 @@ table inet test68_table {
+ }
+ EOF
+ 
+-( ulimit -s 128 && "$NFT" -f "$ruleset_file" )
++( ulimit -s 128 && $NFT -f "$ruleset_file" )
+-- 
+2.31.1
+

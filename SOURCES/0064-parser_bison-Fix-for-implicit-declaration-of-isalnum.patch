@@ -1,0 +1,37 @@
+From bb4718fa421938c4a501b9a55df68de16a572f23 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 6 Oct 2021 17:32:04 +0200
+Subject: [PATCH] parser_bison: Fix for implicit declaration of isalnum
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1999059
+Upstream Status: nftables commit 7c3b2a7acbdc7
+
+commit 7c3b2a7acbdc793b822a230ec0c28086c7d0365d
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Jun 11 16:03:32 2021 +0200
+
+    parser_bison: Fix for implicit declaration of isalnum
+
+    Have to include ctype.h to make it known.
+
+    Fixes: e76bb37940181 ("src: allow for variables in the log prefix string")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/parser_bison.y | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 5ab5744..d38ec30 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -10,6 +10,7 @@
+ 
+ %{
+ 
++#include <ctype.h>
+ #include <stddef.h>
+ #include <stdio.h>
+ #include <inttypes.h>
+-- 
+2.31.1
+

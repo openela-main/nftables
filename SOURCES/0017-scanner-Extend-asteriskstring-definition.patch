@@ -1,0 +1,39 @@
+From 34ba60c0c2b6057e8b56a77e47899bbeccd88bfd Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 12 Feb 2020 22:39:44 +0100
+Subject: [PATCH] scanner: Extend asteriskstring definition
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1763652
+Upstream Status: nftables commit 556c5a94b8067
+
+commit 556c5a94b8067f33ef0a42836753dae0736b7524
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Feb 6 12:31:56 2020 +0100
+
+    scanner: Extend asteriskstring definition
+
+    Accept escaped asterisks also mid-string and as only character.
+    Especially the latter will help when translating from iptables where
+    asterisk has no special meaning.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/scanner.l | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/scanner.l b/src/scanner.l
+index d32adf4..7daf5c1 100644
+--- a/src/scanner.l
++++ b/src/scanner.l
+@@ -120,7 +120,7 @@ numberstring	({decstring}|{hexstring})
+ letter		[a-zA-Z]
+ string		({letter}|[_.])({letter}|{digit}|[/\-_\.])*
+ quotedstring	\"[^"]*\"
+-asteriskstring	({string}\*|{string}\\\*)
++asteriskstring	({string}\*|{string}\\\*|\\\*|{string}\\\*{string})
+ comment		#.*$
+ slash		\/
+ 
+-- 
+2.31.1
+

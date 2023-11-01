@@ -1,0 +1,131 @@
+From 40cdcccf0fc6f4d0d4c2248d4bd9bf3193a922e9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 30 Jun 2020 16:20:23 +0200
+Subject: [PATCH] segtree: Merge get_set_interval_find() and
+ get_set_interval_end()
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1832235
+Upstream Status: nftables commit f21e73d6700b8
+
+commit f21e73d6700b873eb1a295f43bbad9caaca577e2
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Apr 30 13:57:35 2020 +0200
+
+    segtree: Merge get_set_interval_find() and get_set_interval_end()
+
+    Both functions were very similar already. Under the assumption that they
+    will always either see a range (or start of) that matches exactly or not
+    at all, reduce complexity and make get_set_interval_find() accept NULL
+    (left or) right values. This way it becomes a full replacement for
+    get_set_interval_end().
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/segtree.c | 63 +++++++++++++--------------------------------------
+ 1 file changed, 16 insertions(+), 47 deletions(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index dc4db6b..6e1f696 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -681,63 +681,31 @@ static struct expr *get_set_interval_find(const struct table *table,
+ {
+ 	struct expr *range = NULL;
+ 	struct set *set;
+-	mpz_t low, high;
+ 	struct expr *i;
++	mpz_t val;
+ 
+ 	set = set_lookup(table, set_name);
+-	mpz_init2(low, set->key->len);
+-	mpz_init2(high, set->key->len);
++	mpz_init2(val, set->key->len);
+ 
+ 	list_for_each_entry(i, &set->init->expressions, list) {
+ 		switch (i->key->etype) {
+ 		case EXPR_RANGE:
+-			range_expr_value_low(low, i);
+-			range_expr_value_high(high, i);
+-			if (mpz_cmp(left->key->value, low) >= 0 &&
+-			    mpz_cmp(right->key->value, high) <= 0) {
+-				range = expr_clone(i->key);
+-				goto out;
+-			}
+-			break;
+-		default:
+-			break;
+-		}
+-	}
+-out:
+-	mpz_clear(low);
+-	mpz_clear(high);
+-
+-	return range;
+-}
+-
+-static struct expr *get_set_interval_end(const struct table *table,
+-					 const char *set_name,
+-					 struct expr *left)
+-{
+-	struct expr *i, *range = NULL;
+-	struct set *set;
+-	mpz_t low, high;
++			range_expr_value_low(val, i);
++			if (left && mpz_cmp(left->key->value, val))
++				break;
+ 
+-	set = set_lookup(table, set_name);
+-	mpz_init2(low, set->key->len);
+-	mpz_init2(high, set->key->len);
++			range_expr_value_high(val, i);
++			if (right && mpz_cmp(right->key->value, val))
++				break;
+ 
+-	list_for_each_entry(i, &set->init->expressions, list) {
+-		switch (i->key->etype) {
+-		case EXPR_RANGE:
+-			range_expr_value_low(low, i);
+-			if (mpz_cmp(low, left->key->value) == 0) {
+-				range = expr_clone(i->key);
+-				goto out;
+-			}
+-			break;
++			range = expr_clone(i->key);
++			goto out;
+ 		default:
+ 			break;
+ 		}
+ 	}
+ out:
+-	mpz_clear(low);
+-	mpz_clear(high);
++	mpz_clear(val);
+ 
+ 	return range;
+ }
+@@ -767,9 +735,9 @@ int get_set_decompose(struct table *table, struct set *set)
+ 			left = NULL;
+ 		} else {
+ 			if (left) {
+-				range = get_set_interval_end(table,
+-							     set->handle.set.name,
+-							     left);
++				range = get_set_interval_find(table,
++							      set->handle.set.name,
++							      left, NULL);
+ 				if (range)
+ 					compound_expr_add(new_init, range);
+ 				else
+@@ -780,7 +748,8 @@ int get_set_decompose(struct table *table, struct set *set)
+ 		}
+ 	}
+ 	if (left) {
+-		range = get_set_interval_end(table, set->handle.set.name, left);
++		range = get_set_interval_find(table, set->handle.set.name,
++					      left, NULL);
+ 		if (range)
+ 			compound_expr_add(new_init, range);
+ 		else
+-- 
+2.31.1
+

@@ -1,0 +1,116 @@
+From 0dcfa1b0211fa50201d51d0f52869a8e2d93ba76 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Mon, 7 Dec 2020 18:29:15 +0100
+Subject: [PATCH] json: Fix seqnum_to_json() functionality
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1900565
+Upstream Status: nftables commit 299ec575faa6b
+
+commit 299ec575faa6b070940b483dc517ecd883b9f1a4
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Dec 2 23:07:11 2020 +0100
+
+    json: Fix seqnum_to_json() functionality
+
+    Introduction of json_cmd_assoc_hash missed that by the time the hash
+    table insert happens, the struct cmd object's 'seqnum' field which is
+    used as key is not initialized yet. This doesn't happen until
+    nft_netlink() prepares the batch object which records the lowest seqnum.
+    Therefore push all json_cmd_assoc objects into a temporary list until
+    the first lookup happens. At this time, all referenced cmd objects have
+    their seqnum set and the list entries can be moved into the hash table
+    for fast lookups.
+
+    To expose such problems in the future, make json_events_cb() emit an
+    error message if the passed message has a handle but no assoc entry is
+    found for its seqnum.
+
+    Fixes: 389a0e1edc89a ("json: echo: Speedup seqnum_to_json()")
+    Cc: Derek Dai <daiderek@gmail.com>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/parser_json.c | 27 +++++++++++++++++++++++----
+ 1 file changed, 23 insertions(+), 4 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 107dc38..785f0e7 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -3646,6 +3646,7 @@ static int json_verify_metainfo(struct json_ctx *ctx, json_t *root)
+ }
+ 
+ struct json_cmd_assoc {
++	struct json_cmd_assoc *next;
+ 	struct hlist_node hnode;
+ 	const struct cmd *cmd;
+ 	json_t *json;
+@@ -3653,6 +3654,7 @@ struct json_cmd_assoc {
+ 
+ #define CMD_ASSOC_HSIZE		512
+ static struct hlist_head json_cmd_assoc_hash[CMD_ASSOC_HSIZE];
++static struct json_cmd_assoc *json_cmd_assoc_list;
+ 
+ static void json_cmd_assoc_free(void)
+ {
+@@ -3660,6 +3662,12 @@ static void json_cmd_assoc_free(void)
+ 	struct hlist_node *pos, *n;
+ 	int i;
+ 
++	while (json_cmd_assoc_list) {
++		cur = json_cmd_assoc_list->next;
++		free(json_cmd_assoc_list);
++		json_cmd_assoc_list = cur;
++	}
++
+ 	for (i = 0; i < CMD_ASSOC_HSIZE; i++) {
+ 		hlist_for_each_entry_safe(cur, pos, n,
+ 					  &json_cmd_assoc_hash[i], hnode)
+@@ -3670,21 +3678,29 @@ static void json_cmd_assoc_free(void)
+ static void json_cmd_assoc_add(json_t *json, const struct cmd *cmd)
+ {
+ 	struct json_cmd_assoc *new = xzalloc(sizeof *new);
+-	int key = cmd->seqnum % CMD_ASSOC_HSIZE;
+ 
+ 	new->json	= json;
+ 	new->cmd	= cmd;
++	new->next	= json_cmd_assoc_list;
+ 
+-	hlist_add_head(&new->hnode, &json_cmd_assoc_hash[key]);
++	json_cmd_assoc_list = new;
+ }
+ 
+ static json_t *seqnum_to_json(const uint32_t seqnum)
+ {
+-	int key = seqnum % CMD_ASSOC_HSIZE;
+ 	struct json_cmd_assoc *cur;
+ 	struct hlist_node *n;
++	int key;
+ 
++	while (json_cmd_assoc_list) {
++		cur = json_cmd_assoc_list;
++		json_cmd_assoc_list = cur->next;
+ 
++		key = cur->cmd->seqnum % CMD_ASSOC_HSIZE;
++		hlist_add_head(&cur->hnode, &json_cmd_assoc_hash[key]);
++	}
++
++	key = seqnum % CMD_ASSOC_HSIZE;
+ 	hlist_for_each_entry(cur, n, &json_cmd_assoc_hash[key], hnode) {
+ 		if (cur->cmd->seqnum == seqnum)
+ 			return cur->json;
+@@ -3865,8 +3881,11 @@ int json_events_cb(const struct nlmsghdr *nlh, struct netlink_mon_handler *monh)
+ 		return MNL_CB_OK;
+ 
+ 	json = seqnum_to_json(nlh->nlmsg_seq);
+-	if (!json)
++	if (!json) {
++		json_echo_error(monh, "No JSON command found with seqnum %lu\n",
++				nlh->nlmsg_seq);
+ 		return MNL_CB_OK;
++	}
+ 
+ 	tmp = json_object_get(json, "add");
+ 	if (!tmp)
+-- 
+2.31.1
+

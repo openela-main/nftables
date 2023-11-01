@@ -1,0 +1,47 @@
+From b7964157c40066f09411ac52547acb07d1966aee Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 12 Jan 2021 15:49:43 +0100
+Subject: [PATCH] json: don't leave dangling pointers on hlist
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1900565
+Upstream Status: nftables commit 48917d876d51c
+
+commit 48917d876d51cd6ba5bff07172acef05c9e12474
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Dec 14 16:53:29 2020 +0100
+
+    json: don't leave dangling pointers on hlist
+
+    unshare -n tests/json_echo/run-test.py
+    [..]
+    Adding chain c
+    free(): double free detected in tcache 2
+    Aborted (core dumped)
+
+    The element must be deleted from the hlist prior to freeing it.
+
+    Fixes: 389a0e1edc89a ("json: echo: Speedup seqnum_to_json()")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+---
+ src/parser_json.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 785f0e7..986f128 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -3670,8 +3670,10 @@ static void json_cmd_assoc_free(void)
+ 
+ 	for (i = 0; i < CMD_ASSOC_HSIZE; i++) {
+ 		hlist_for_each_entry_safe(cur, pos, n,
+-					  &json_cmd_assoc_hash[i], hnode)
++					  &json_cmd_assoc_hash[i], hnode) {
++			hlist_del(&cur->hnode);
+ 			free(cur);
++		}
+ 	}
+ }
+ 
+-- 
+2.31.1
+

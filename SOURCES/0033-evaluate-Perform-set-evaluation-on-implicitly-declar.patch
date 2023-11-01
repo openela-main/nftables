@@ -1,0 +1,120 @@
+From 785823a1f607a7bcd32d4cb42655422c223fcad5 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Mon, 7 Dec 2020 18:25:20 +0100
+Subject: [PATCH] evaluate: Perform set evaluation on implicitly declared
+ (anonymous) sets
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1877022
+Upstream Status: nftables commit 7aa08d45031ec
+
+commit 7aa08d45031ec7ce5dadb4979471d626367c09cd
+Author: Stefano Brivio <sbrivio@redhat.com>
+Date:   Wed May 27 22:51:21 2020 +0200
+
+    evaluate: Perform set evaluation on implicitly declared (anonymous) sets
+
+    If a set is implicitly declared, set_evaluate() is not called as a
+    result of cmd_evaluate_add(), because we're adding in fact something
+    else (e.g. a rule). Expression-wise, evaluation still happens as the
+    implicit set expression is eventually found in the tree and handled
+    by expr_evaluate_set(), but context-wise evaluation (set_evaluate())
+    is skipped, and this might be relevant instead.
+
+    This is visible in the reported case of an anonymous set including
+    concatenated ranges:
+
+      # nft add rule t c ip saddr . tcp dport { 192.0.2.1 . 20-30 } accept
+      BUG: invalid range expression type concat
+      nft: expression.c:1160: range_expr_value_low: Assertion `0' failed.
+      Aborted
+
+    because we reach do_add_set() without properly evaluated flags and
+    set description, and eventually end up in expr_to_intervals(), which
+    can't handle that expression.
+
+    Explicitly call set_evaluate() as we add anonymous sets into the
+    context, and instruct the same function to:
+    - skip expression-wise set evaluation if the set is anonymous, as
+      that happens later anyway as part of the general tree evaluation
+    - skip the insertion in the set cache, as it makes no sense to have
+      sets that shouldn't be referenced there
+
+    For object maps, the allocation of the expression for set->data is
+    already handled by set_evaluate(), so we can now drop that from
+    stmt_evaluate_objref_map().
+
+    v2:
+     - skip insertion of set in cache (Pablo Neira Ayuso)
+     - drop double allocation of expression (and leak of the first
+       one) for object maps (Pablo Neira Ayuso)
+
+    Reported-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Reported-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Stefano Brivio <sbrivio@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/evaluate.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 578dcae..fc45cef 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -75,6 +75,7 @@ static void key_fix_dtype_byteorder(struct expr *key)
+ 	datatype_set(key, set_datatype_alloc(dtype, key->byteorder));
+ }
+ 
++static int set_evaluate(struct eval_ctx *ctx, struct set *set);
+ static struct expr *implicit_set_declaration(struct eval_ctx *ctx,
+ 					     const char *name,
+ 					     struct expr *key,
+@@ -105,6 +106,8 @@ static struct expr *implicit_set_declaration(struct eval_ctx *ctx,
+ 		list_add_tail(&cmd->list, &ctx->cmd->list);
+ 	}
+ 
++	set_evaluate(ctx, set);
++
+ 	return set_ref_expr_alloc(&expr->location, set);
+ }
+ 
+@@ -3171,12 +3174,6 @@ static int stmt_evaluate_objref_map(struct eval_ctx *ctx, struct stmt *stmt)
+ 
+ 		mappings = implicit_set_declaration(ctx, "__objmap%d",
+ 						    key, mappings);
+-
+-		mappings->set->data = constant_expr_alloc(&netlink_location,
+-							  &string_type,
+-							  BYTEORDER_HOST_ENDIAN,
+-							  NFT_OBJ_MAXNAMELEN * BITS_PER_BYTE,
+-							  NULL);
+ 		mappings->set->objtype  = stmt->objref.type;
+ 
+ 		map->mappings = mappings;
+@@ -3381,6 +3378,13 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set)
+ 
+ 	}
+ 
++	/* Default timeout value implies timeout support */
++	if (set->timeout)
++		set->flags |= NFT_SET_TIMEOUT;
++
++	if (set_is_anonymous(set->flags))
++		return 0;
++
+ 	ctx->set = set;
+ 	if (set->init != NULL) {
+ 		expr_set_context(&ctx->ectx, set->key->dtype, set->key->len);
+@@ -3392,10 +3396,6 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set)
+ 	if (set_lookup(table, set->handle.set.name) == NULL)
+ 		set_add_hash(set_get(set), table);
+ 
+-	/* Default timeout value implies timeout support */
+-	if (set->timeout)
+-		set->flags |= NFT_SET_TIMEOUT;
+-
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

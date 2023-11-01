@@ -1,0 +1,46 @@
+From 99d51194569f2784261f452ee821c42c3a7a6808 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 6 Oct 2021 17:32:04 +0200
+Subject: [PATCH] parser_json: Fix for memleak in tcp option error path
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1999059
+Upstream Status: nftables commit f7b0eef8391ae
+
+commit f7b0eef8391ae7f89a3a82f6eeecaebe199224d7
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Jun 11 16:07:02 2021 +0200
+
+    parser_json: Fix for memleak in tcp option error path
+
+    If 'kind' value is invalid, the function returned without freeing 'expr'
+    first. Fix this by performing the check before allocation.
+
+    Fixes: cb21869649208 ("json: tcp: add raw tcp option match support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/parser_json.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index ef4d4fb..2250be9 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -610,12 +610,12 @@ static struct expr *json_parse_tcp_option_expr(struct json_ctx *ctx,
+ 			"base", &kind, "offset", &offset, "len", &len)) {
+ 		uint32_t flag = 0;
+ 
+-		expr = tcpopt_expr_alloc(int_loc, kind,
+-					 TCPOPT_COMMON_KIND);
+-
+ 		if (kind < 0 || kind > 255)
+ 			return NULL;
+ 
++		expr = tcpopt_expr_alloc(int_loc, kind,
++					 TCPOPT_COMMON_KIND);
++
+ 		if (offset == TCPOPT_COMMON_KIND && len == 8)
+ 			flag = NFT_EXTHDR_F_PRESENT;
+ 
+-- 
+2.31.1
+
