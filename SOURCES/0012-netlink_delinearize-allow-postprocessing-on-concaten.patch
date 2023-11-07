@@ -1,0 +1,76 @@
+From cff78b77d409445b0490e67bf9329e69e0bbc872 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:27:57 +0100
+Subject: [PATCH] netlink_delinearize: allow postprocessing on concatenated
+ elements
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2094887
+Upstream Status: nftables commit 0542a431e8dcc
+
+commit 0542a431e8dccfa86fa5b1744f536e61a0b204f3
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Jun 14 21:57:58 2022 +0200
+
+    netlink_delinearize: allow postprocessing on concatenated elements
+
+    Currently there is no case where the individual expressions inside a
+    mapped concatenation need to be munged.
+
+    However, to support proper delinearization for an input like
+    'rule netdev nt nc set update ether saddr . vlan id timeout 5s @macset'
+
+    we need to allow this.
+
+    Right now, this gets listed as:
+
+    update @macset { @ll,48,48 . @ll,112,16 & 0xfff timeout 5s }
+
+    because the ethernet protocol is replaced by vlan beforehand,
+    so we fail to map @ll,48,48 to a vlan protocol.
+
+    Likewise, we can't map the vlan info either because we cannot
+    cope with the 'and' operation properly, nor is it removed.
+
+    Prepare for this by deleting and re-adding so that we do not
+    corrupt the linked list.
+
+    After this, the list can be safely changed and a followup patch
+    can start to delete/reallocate expressions.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink_delinearize.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index 068c3bb..2f13990 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -2538,16 +2538,21 @@ static void expr_postprocess(struct rule_pp_ctx *ctx, struct expr **exprp)
+ 		unsigned int type = expr->dtype->type, ntype = 0;
+ 		int off = expr->dtype->subtypes;
+ 		const struct datatype *dtype;
++		LIST_HEAD(tmp);
++		struct expr *n;
+ 
+-		list_for_each_entry(i, &expr->expressions, list) {
++		list_for_each_entry_safe(i, n, &expr->expressions, list) {
+ 			if (type) {
+ 				dtype = concat_subtype_lookup(type, --off);
+ 				expr_set_type(i, dtype, dtype->byteorder);
+ 			}
++			list_del(&i->list);
+ 			expr_postprocess(ctx, &i);
++			list_add_tail(&i->list, &tmp);
+ 
+ 			ntype = concat_subtype_add(ntype, i->dtype->type);
+ 		}
++		list_splice(&tmp, &expr->expressions);
+ 		datatype_set(expr, concat_type_alloc(ntype));
+ 		break;
+ 	}
+-- 
+2.39.1
+

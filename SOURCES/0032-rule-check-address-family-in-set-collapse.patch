@@ -1,0 +1,114 @@
+From cd38d8b8d34685d6bcbce4ac259a42c47ff67580 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 21 Sep 2023 17:27:22 +0200
+Subject: [PATCH] rule: check address family in set collapse
+
+JIRA: https://issues.redhat.com/browse/RHEL-5908
+Upstream Status: nftables commit a817ea9655dee
+
+commit a817ea9655dee1915423a802c0133e3611e02b3a
+Author: Derek Hageman <hageman@inthat.cloud>
+Date:   Thu Sep 1 10:10:41 2022 -0600
+
+    rule: check address family in set collapse
+
+    498a5f0c219d added collapsing of set operations in different commands.
+    However, the logic is currently too relaxed.  It is valid to have a
+    table and set with identical names on different address families.
+    For example:
+
+      table ip a {
+        set x {
+          type inet_service;
+        }
+      }
+      table ip6 a {
+          set x {
+            type inet_service;
+          }
+      }
+      add element ip a x { 1 }
+      add element ip a x { 2 }
+      add element ip6 a x { 2 }
+
+    The above currently results in nothing being added to the ip6 family
+    table due to being collapsed into the ip table add. Prior to
+    498a5f0c219d the set add would work. The fix is simply to check the
+    family in addition to the table and set names before allowing a
+    collapse.
+
+    [ Add testcase to tests/shell --pablo ]
+
+    Fixes: 498a5f0c219d ("rule: collapse set element commands")
+    Signed-off-by: Derek Hageman <hageman@inthat.cloud>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c                                    |  3 ++-
+ tests/shell/testcases/sets/collapse_elem_0    | 19 +++++++++++++++++++
+ .../testcases/sets/dumps/collapse_elem_0.nft  | 12 ++++++++++++
+ 3 files changed, 33 insertions(+), 1 deletion(-)
+ create mode 100755 tests/shell/testcases/sets/collapse_elem_0
+ create mode 100644 tests/shell/testcases/sets/dumps/collapse_elem_0.nft
+
+diff --git a/src/rule.c b/src/rule.c
+index 0526a14..3b60cca 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -1409,7 +1409,8 @@ bool nft_cmd_collapse(struct list_head *cmds)
+ 			continue;
+ 		}
+ 
+-		if (strcmp(elems->handle.table.name, cmd->handle.table.name) ||
++		if (elems->handle.family != cmd->handle.family ||
++		    strcmp(elems->handle.table.name, cmd->handle.table.name) ||
+ 		    strcmp(elems->handle.set.name, cmd->handle.set.name)) {
+ 			elems = cmd;
+ 			continue;
+diff --git a/tests/shell/testcases/sets/collapse_elem_0 b/tests/shell/testcases/sets/collapse_elem_0
+new file mode 100755
+index 0000000..7699e9d
+--- /dev/null
++++ b/tests/shell/testcases/sets/collapse_elem_0
+@@ -0,0 +1,19 @@
++#!/bin/bash
++
++set -e
++
++RULESET="table ip a {
++	set x {
++		type inet_service;
++	}
++}
++table ip6 a {
++	set x {
++		type inet_service;
++	}
++}
++add element ip a x { 1 }
++add element ip a x { 2 }
++add element ip6 a x { 2 }"
++
++$NFT -f - <<< $RULESET
+diff --git a/tests/shell/testcases/sets/dumps/collapse_elem_0.nft b/tests/shell/testcases/sets/dumps/collapse_elem_0.nft
+new file mode 100644
+index 0000000..a3244fc
+--- /dev/null
++++ b/tests/shell/testcases/sets/dumps/collapse_elem_0.nft
+@@ -0,0 +1,12 @@
++table ip a {
++	set x {
++		type inet_service
++		elements = { 1, 2 }
++	}
++}
++table ip6 a {
++	set x {
++		type inet_service
++		elements = { 2 }
++	}
++}
+-- 
+2.41.0
+

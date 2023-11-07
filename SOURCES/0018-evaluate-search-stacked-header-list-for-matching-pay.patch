@@ -1,0 +1,198 @@
+From 71fb4e3be07548216a831dda28f4aedfc37b2df1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:27:58 +0100
+Subject: [PATCH] evaluate: search stacked header list for matching payload dep
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2094887
+Upstream Status: nftables commit 87c3041bfd244
+
+commit 87c3041bfd244aaf39e644d33c0df4fe04079e1c
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Jul 25 20:02:28 2022 +0200
+
+    evaluate: search stacked header list for matching payload dep
+
+    "ether saddr 0:1:2:3:4:6 vlan id 2" works, but reverse fails:
+
+    "vlan id 2 ether saddr 0:1:2:3:4:6" will give
+    Error: conflicting protocols specified: vlan vs. ether
+
+    After "proto: track full stack of seen l2 protocols, not just cumulative offset",
+    we have a list of all l2 headers, so search those to see if we had this
+    proto base in the past before rejecting this.
+
+    Reported-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                        | 21 +++++++---
+ tests/py/bridge/vlan.t                |  3 ++
+ tests/py/bridge/vlan.t.json           | 56 +++++++++++++++++++++++++++
+ tests/py/bridge/vlan.t.payload        | 16 ++++++++
+ tests/py/bridge/vlan.t.payload.netdev | 20 ++++++++++
+ 5 files changed, 110 insertions(+), 6 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 9246064..d67f915 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -659,13 +659,22 @@ static int resolve_protocol_conflict(struct eval_ctx *ctx,
+ 	struct stmt *nstmt = NULL;
+ 	int link, err;
+ 
+-	if (payload->payload.base == PROTO_BASE_LL_HDR &&
+-	    proto_is_dummy(desc)) {
+-		err = meta_iiftype_gen_dependency(ctx, payload, &nstmt);
+-		if (err < 0)
+-			return err;
++	if (payload->payload.base == PROTO_BASE_LL_HDR) {
++		if (proto_is_dummy(desc)) {
++			err = meta_iiftype_gen_dependency(ctx, payload, &nstmt);
++			if (err < 0)
++				return err;
+ 
+-		rule_stmt_insert_at(ctx->rule, nstmt, ctx->stmt);
++			rule_stmt_insert_at(ctx->rule, nstmt, ctx->stmt);
++		} else {
++			unsigned int i;
++
++			/* payload desc stored in the L2 header stack? No conflict. */
++			for (i = 0; i < ctx->pctx.stacked_ll_count; i++) {
++				if (ctx->pctx.stacked_ll[i] == payload->payload.desc)
++					return 0;
++			}
++		}
+ 	}
+ 
+ 	assert(base <= PROTO_BASE_MAX);
+diff --git a/tests/py/bridge/vlan.t b/tests/py/bridge/vlan.t
+index 924ed4e..4920601 100644
+--- a/tests/py/bridge/vlan.t
++++ b/tests/py/bridge/vlan.t
+@@ -47,3 +47,6 @@ ether type ip vlan id 1 ip saddr 10.0.0.1;fail
+ 
+ # mangling
+ vlan id 1 vlan id set 2;ok
++
++ether saddr 00:01:02:03:04:05 vlan id 1;ok
++vlan id 2 ether saddr 0:1:2:3:4:6;ok;ether saddr 00:01:02:03:04:06 vlan id 2
+diff --git a/tests/py/bridge/vlan.t.json b/tests/py/bridge/vlan.t.json
+index e7640f9..58d4a40 100644
+--- a/tests/py/bridge/vlan.t.json
++++ b/tests/py/bridge/vlan.t.json
+@@ -761,3 +761,59 @@
+         }
+     }
+ ]
++
++# ether saddr 00:01:02:03:04:05 vlan id 1
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "saddr",
++                    "protocol": "ether"
++                }
++            },
++            "op": "==",
++            "right": "00:01:02:03:04:05"
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "id",
++                    "protocol": "vlan"
++                }
++            },
++            "op": "==",
++            "right": 1
++        }
++    }
++]
++
++# vlan id 2 ether saddr 0:1:2:3:4:6
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "saddr",
++                    "protocol": "ether"
++                }
++            },
++            "op": "==",
++            "right": "00:01:02:03:04:06"
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "id",
++                    "protocol": "vlan"
++                }
++            },
++            "op": "==",
++            "right": 2
++        }
++    }
++]
+diff --git a/tests/py/bridge/vlan.t.payload b/tests/py/bridge/vlan.t.payload
+index 6c8d595..713670e 100644
+--- a/tests/py/bridge/vlan.t.payload
++++ b/tests/py/bridge/vlan.t.payload
+@@ -276,3 +276,19 @@ bridge
+   [ payload load 2b @ link header + 14 => reg 1 ]
+   [ bitwise reg 1 = ( reg 1 & 0x000000f0 ) ^ 0x00000200 ]
+   [ payload write reg 1 => 2b @ link header + 14 csum_type 0 csum_off 0 csum_flags 0x0 ]
++
++# ether saddr 00:01:02:03:04:05 vlan id 1
++bridge test-bridge input
++  [ payload load 8b @ link header + 6 => reg 1 ]
++  [ cmp eq reg 1 0x03020100 0x00810504 ]
++  [ payload load 2b @ link header + 14 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000ff0f ) ^ 0x00000000 ]
++  [ cmp eq reg 1 0x00000100 ]
++
++# vlan id 2 ether saddr 0:1:2:3:4:6
++bridge test-bridge input
++  [ payload load 8b @ link header + 6 => reg 1 ]
++  [ cmp eq reg 1 0x03020100 0x00810604 ]
++  [ payload load 2b @ link header + 14 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000ff0f ) ^ 0x00000000 ]
++  [ cmp eq reg 1 0x00000200 ]
+diff --git a/tests/py/bridge/vlan.t.payload.netdev b/tests/py/bridge/vlan.t.payload.netdev
+index d2c7d74..98a2a2b 100644
+--- a/tests/py/bridge/vlan.t.payload.netdev
++++ b/tests/py/bridge/vlan.t.payload.netdev
+@@ -322,3 +322,23 @@ netdev
+   [ payload load 2b @ link header + 14 => reg 1 ]
+   [ bitwise reg 1 = ( reg 1 & 0x000000f0 ) ^ 0x00000200 ]
+   [ payload write reg 1 => 2b @ link header + 14 csum_type 0 csum_off 0 csum_flags 0x0 ]
++
++# vlan id 2 ether saddr 0:1:2:3:4:6
++netdev test-netdev ingress
++  [ meta load iiftype => reg 1 ]
++  [ cmp eq reg 1 0x00000001 ]
++  [ payload load 8b @ link header + 6 => reg 1 ]
++  [ cmp eq reg 1 0x03020100 0x00810604 ]
++  [ payload load 2b @ link header + 14 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000ff0f ) ^ 0x00000000 ]
++  [ cmp eq reg 1 0x00000200 ]
++
++# ether saddr 00:01:02:03:04:05 vlan id 1
++netdev test-netdev ingress
++  [ meta load iiftype => reg 1 ]
++  [ cmp eq reg 1 0x00000001 ]
++  [ payload load 8b @ link header + 6 => reg 1 ]
++  [ cmp eq reg 1 0x03020100 0x00810504 ]
++  [ payload load 2b @ link header + 14 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000ff0f ) ^ 0x00000000 ]
++  [ cmp eq reg 1 0x00000100 ]
+-- 
+2.39.1
+

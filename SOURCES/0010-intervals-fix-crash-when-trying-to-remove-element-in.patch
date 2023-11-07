@@ -1,0 +1,67 @@
+From 70732ebb3cd1b847e72dce5ae8fe3c69580bd778 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:25:59 +0100
+Subject: [PATCH] intervals: fix crash when trying to remove element in empty
+ set
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2115627
+Upstream Status: nftables commit 5357cb7b5cb93
+
+commit 5357cb7b5cb93fc9b20d4d95b093d6b9f86b7727
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jun 23 14:20:17 2022 +0200
+
+    intervals: fix crash when trying to remove element in empty set
+
+    The set deletion routine expects an initialized set, otherwise it crashes.
+
+    Fixes: 3e8d934e4f72 ("intervals: support to partial deletion with automerge")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c                     |  6 +++++-
+ tests/shell/testcases/sets/errors_0 | 14 ++++++++++++++
+ 2 files changed, 19 insertions(+), 1 deletion(-)
+ create mode 100755 tests/shell/testcases/sets/errors_0
+
+diff --git a/src/intervals.c b/src/intervals.c
+index dcc06d1..c21b3ee 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -475,7 +475,11 @@ int set_delete(struct list_head *msgs, struct cmd *cmd, struct set *set,
+ 	if (set->automerge)
+ 		automerge_delete(msgs, set, init, debug_mask);
+ 
+-	set_to_range(existing_set->init);
++	if (existing_set->init) {
++		set_to_range(existing_set->init);
++	} else {
++		existing_set->init = set_expr_alloc(&internal_location, set);
++	}
+ 
+ 	list_splice_init(&init->expressions, &del_list);
+ 
+diff --git a/tests/shell/testcases/sets/errors_0 b/tests/shell/testcases/sets/errors_0
+new file mode 100755
+index 0000000..2960b69
+--- /dev/null
++++ b/tests/shell/testcases/sets/errors_0
+@@ -0,0 +1,14 @@
++#!/bin/bash
++
++set -e
++
++RULESET="table ip x {
++	set y {
++		type ipv4_addr
++		flags interval
++	}
++}
++
++delete element ip x y { 2.3.4.5 }"
++
++$NFT -f - <<< $RULESET || exit 0
+-- 
+2.39.1
+

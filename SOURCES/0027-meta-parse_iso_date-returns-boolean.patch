@@ -1,0 +1,41 @@
+From dc8cd3f9cc5ad2eddba03bad86ce975d28513534 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Feb 2023 19:50:41 +0100
+Subject: [PATCH] meta: parse_iso_date() returns boolean
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2160049
+Upstream Status: nftables commit db6e97bd667bf
+
+commit db6e97bd667bf205cee22049f9d0fd6550cb43a7
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jan 11 11:26:41 2023 +0100
+
+    meta: parse_iso_date() returns boolean
+
+    Returning ts if 'ts == (time_t) -1' signals success to caller despite
+    failure.
+
+    Fixes: 4460b839b945a ("meta: fix compiler warning in date_type_parse()")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/meta.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/meta.c b/src/meta.c
+index 80ace25..73bd1c4 100644
+--- a/src/meta.c
++++ b/src/meta.c
+@@ -433,7 +433,7 @@ success:
+ 	cur_tm = localtime(&ts);
+ 
+ 	if (ts == (time_t) -1 || cur_tm == NULL)
+-		return ts;
++		return false;
+ 
+ 	/* Substract tm_gmtoff to get the current time */
+ 	*tstamp = ts - cur_tm->tm_gmtoff;
+-- 
+2.39.2
+
