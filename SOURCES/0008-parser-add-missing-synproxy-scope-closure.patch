@@ -1,0 +1,38 @@
+From d0d4d54136f10c23e279da40aae188b8fdc09293 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:18:10 +0100
+Subject: [PATCH] parser: add missing synproxy scope closure
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit 994bf5004b365
+
+commit 994bf5004b365904029f0fe8c2de587178583712
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Jun 23 18:28:14 2022 +0200
+
+    parser: add missing synproxy scope closure
+
+    Fixes: 232f2c3287fc ("scanner: synproxy: Move to own scope")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index ca5c488..b548d5b 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -2016,7 +2016,7 @@ map_block_obj_type	:	COUNTER	close_scope_counter { $$ = NFT_OBJECT_COUNTER; }
+ 			|	QUOTA	close_scope_quota { $$ = NFT_OBJECT_QUOTA; }
+ 			|	LIMIT	close_scope_limit { $$ = NFT_OBJECT_LIMIT; }
+ 			|	SECMARK close_scope_secmark { $$ = NFT_OBJECT_SECMARK; }
+-			|	SYNPROXY { $$ = NFT_OBJECT_SYNPROXY; }
++			|	SYNPROXY close_scope_synproxy { $$ = NFT_OBJECT_SYNPROXY; }
+ 			;
+ 
+ map_block		:	/* empty */	{ $$ = $<set>-1; }
+-- 
+2.41.0.rc1
+

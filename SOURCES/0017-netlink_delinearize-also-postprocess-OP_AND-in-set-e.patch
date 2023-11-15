@@ -1,0 +1,99 @@
+From bba1a2086ec7bcc0cfa8df9e12c6cc1375180011 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:27:57 +0100
+Subject: [PATCH] netlink_delinearize: also postprocess OP_AND in set element
+ context
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit b1e3ed0335d13
+
+commit b1e3ed0335d13d206a2a2698a1ba189fa396dbf3
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Aug 1 13:03:18 2022 +0200
+
+    netlink_delinearize: also postprocess OP_AND in set element context
+
+    Pablo reports:
+    add rule netdev nt y update @macset { vlan id timeout 5s }
+
+    listing still shows the raw expression:
+     update @macset { @ll,112,16 & 0xfff timeout 5s }
+
+    so also cover the 'set element' case.
+
+    Reported-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/netlink.h                                  |  4 +++-
+ src/netlink_delinearize.c                          |  2 ++
+ .../sets/dumps/0070stacked_l2_headers.nft          | 14 ++++++++++++++
+ 3 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/include/netlink.h b/include/netlink.h
+index 71c888f..63d07ed 100644
+--- a/include/netlink.h
++++ b/include/netlink.h
+@@ -44,8 +44,10 @@ struct netlink_parse_ctx {
+ 
+ 
+ #define RULE_PP_IN_CONCATENATION	(1 << 0)
++#define RULE_PP_IN_SET_ELEM		(1 << 1)
+ 
+-#define RULE_PP_REMOVE_OP_AND		(RULE_PP_IN_CONCATENATION)
++#define RULE_PP_REMOVE_OP_AND		(RULE_PP_IN_CONCATENATION | \
++					 RULE_PP_IN_SET_ELEM)
+ 
+ struct rule_pp_ctx {
+ 	struct proto_ctx	pctx;
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index 0b5519d..c6ad84d 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -2660,7 +2660,9 @@ static void expr_postprocess(struct rule_pp_ctx *ctx, struct expr **exprp)
+ 		expr_postprocess(ctx, &expr->prefix);
+ 		break;
+ 	case EXPR_SET_ELEM:
++		ctx->flags |= RULE_PP_IN_SET_ELEM;
+ 		expr_postprocess(ctx, &expr->key);
++		ctx->flags &= ~RULE_PP_IN_SET_ELEM;
+ 		break;
+ 	case EXPR_EXTHDR:
+ 		exthdr_dependency_kill(&ctx->pdctx, expr, ctx->pctx.family);
+diff --git a/tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft b/tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft
+index ef254b9..0057e9c 100644
+--- a/tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft
++++ b/tests/shell/testcases/sets/dumps/0070stacked_l2_headers.nft
+@@ -1,14 +1,28 @@
+ table netdev nt {
++	set vlanidset {
++		typeof vlan id
++		size 1024
++		flags dynamic,timeout
++	}
++
+ 	set macset {
+ 		typeof ether saddr . vlan id
+ 		size 1024
+ 		flags dynamic,timeout
+ 	}
+ 
++	set ipset {
++		typeof vlan id . ip saddr
++		size 1024
++		flags dynamic,timeout
++	}
++
+ 	chain nc {
+ 		update @macset { ether saddr . vlan id timeout 5s } counter packets 0 bytes 0
+ 		ether saddr . vlan id @macset
+ 		vlan pcp 1
+ 		ether saddr 0a:0b:0c:0d:0e:0f vlan id 42
++		update @vlanidset { vlan id timeout 5s } counter packets 0 bytes 0
++		update @ipset { vlan id . ip saddr timeout 5s } counter packets 0 bytes 0
+ 	}
+ }
+-- 
+2.41.0.rc1
+

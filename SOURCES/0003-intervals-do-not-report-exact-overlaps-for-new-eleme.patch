@@ -1,0 +1,84 @@
+From af9045e2f2029b6573db32bd15ab861d797b86a6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 24 Jun 2022 16:02:59 +0200
+Subject: [PATCH] intervals: do not report exact overlaps for new elements
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit 87ba510fc704f
+
+commit 87ba510fc704f766b5417d3bfc326e8ab9378c2a
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Jun 13 17:22:47 2022 +0200
+
+    intervals: do not report exact overlaps for new elements
+
+    Two new elements that represent an exact overlap should not trigger an error.
+
+       add table t
+       add set t s { type ipv4_addr; flags interval; }
+       add element t s { 1.0.1.0/24 }
+       ...
+       add element t s { 1.0.1.0/24 }
+
+    result in a bogus error.
+
+     # nft -f set.nft
+     set.nft:1002:19-28: Error: conflicting intervals specified
+     add element t s { 1.0.1.0/24 }
+                       ^^^^^^^^^^
+
+    Fixes: 3da9643fb9ff ("intervals: add support to automerge with kernel elements")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c                            |  3 +--
+ tests/shell/testcases/sets/exact_overlap_0 | 22 ++++++++++++++++++++++
+ 2 files changed, 23 insertions(+), 2 deletions(-)
+ create mode 100755 tests/shell/testcases/sets/exact_overlap_0
+
+diff --git a/src/intervals.c b/src/intervals.c
+index bc414d6..89f5c33 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -540,8 +540,7 @@ static int setelem_overlap(struct list_head *msgs, struct set *set,
+ 		}
+ 
+ 		if (mpz_cmp(prev_range.low, range.low) == 0 &&
+-		    mpz_cmp(prev_range.high, range.high) == 0 &&
+-		    (elem->flags & EXPR_F_KERNEL || prev->flags & EXPR_F_KERNEL))
++		    mpz_cmp(prev_range.high, range.high) == 0)
+ 			goto next;
+ 
+ 		if (mpz_cmp(prev_range.low, range.low) <= 0 &&
+diff --git a/tests/shell/testcases/sets/exact_overlap_0 b/tests/shell/testcases/sets/exact_overlap_0
+new file mode 100755
+index 0000000..1ce9304
+--- /dev/null
++++ b/tests/shell/testcases/sets/exact_overlap_0
+@@ -0,0 +1,22 @@
++#!/bin/bash
++
++RULESET="add table t
++add set t s { type ipv4_addr; flags interval; }
++add element t s { 1.0.1.0/24 }
++add element t s { 1.0.2.0/23 }
++add element t s { 1.0.8.0/21 }
++add element t s { 1.0.32.0/19 }
++add element t s { 1.1.0.0/24 }
++add element t s { 1.1.2.0/23 }
++add element t s { 1.1.4.0/22 }
++add element t s { 1.1.8.0/24 }
++add element t s { 1.1.9.0/24 }
++add element t s { 1.1.10.0/23 }
++add element t s { 1.1.12.0/22 }
++add element t s { 1.1.16.0/20 }
++add element t s { 1.1.32.0/19 }
++add element t s { 1.0.1.0/24 }"
++
++$NFT -f - <<< $RULESET || exit 1
++
++$NFT add element t s { 1.0.1.0/24 }
+-- 
+2.41.0.rc1
+

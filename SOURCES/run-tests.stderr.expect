@@ -1,0 +1,27 @@
+W: [FAILED]	././tests/shell/testcases/cache/0008_delete_by_handle_0
+W: [FAILED]	././tests/shell/testcases/cache/0010_implicit_chain_0
+W: [FAILED]	././tests/shell/testcases/chains/0021prio_0
+W: [FAILED]	././tests/shell/testcases/chains/0040mark_shift_0
+W: [FAILED]	././tests/shell/testcases/chains/0040mark_shift_1
+W: [FAILED]	././tests/shell/testcases/chains/0041chain_binding_0
+W: [FAILED]	././tests/shell/testcases/chains/0043chain_ingress_0
+W: [FAILED]	././tests/shell/testcases/flowtable/0013addafterdelete_0
+W: [FAILED]	././tests/shell/testcases/flowtable/0014addafterdelete_0
+W: [FAILED]	././tests/shell/testcases/listing/0013objects_0
+W: [FAILED]	././tests/shell/testcases/maps/0011vmap_0
+W: [FAILED]	././tests/shell/testcases/maps/typeof_integer_0
+W: [FAILED]	././tests/shell/testcases/maps/typeof_maps_0
+W: [FAILED]	././tests/shell/testcases/maps/typeof_raw_0
+W: [FAILED]	././tests/shell/testcases/nft-f/0017ct_timeout_obj_0
+W: [FAILED]	././tests/shell/testcases/nft-f/0018ct_expectation_obj_0
+W: [DUMP FAIL]	././tests/shell/testcases/optionals/comments_chain_0
+W: [FAILED]	././tests/shell/testcases/optionals/comments_objects_0
+W: [DUMP FAIL]	././tests/shell/testcases/optionals/comments_table_0
+W: [FAILED]	././tests/shell/testcases/owner/0001-flowtable-uaf
+W: [FAILED]	././tests/shell/testcases/sets/0024named_objects_0
+W: [FAILED]	././tests/shell/testcases/sets/0044interval_overlap_0
+W: [FAILED]	././tests/shell/testcases/sets/0046netmap_0
+W: [FAILED]	././tests/shell/testcases/sets/0063set_catchall_0
+W: [FAILED]	././tests/shell/testcases/sets/0064map_catchall_0
+W: [FAILED]	././tests/shell/testcases/sets/typeof_raw_0
+W: [FAILED]	././tests/shell/testcases/sets/typeof_sets_0

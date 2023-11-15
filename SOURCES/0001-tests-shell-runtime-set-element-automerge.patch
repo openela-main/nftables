@@ -1,0 +1,97 @@
+From c994f1d2a31a2b03557b3eb1c8c2de34b97edce1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 24 Jun 2022 16:02:59 +0200
+Subject: [PATCH] tests: shell: runtime set element automerge
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit 8fafe4e6b5b30
+
+commit 8fafe4e6b5b30f2539f16403da8d5c5f819e523b
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Jun 13 17:05:22 2022 +0200
+
+    tests: shell: runtime set element automerge
+
+    Add a test to cover runtime set element automerge.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/sets/automerge_0 | 64 ++++++++++++++++++++++++++
+ 1 file changed, 64 insertions(+)
+ create mode 100755 tests/shell/testcases/sets/automerge_0
+
+diff --git a/tests/shell/testcases/sets/automerge_0 b/tests/shell/testcases/sets/automerge_0
+new file mode 100755
+index 0000000..c9fb609
+--- /dev/null
++++ b/tests/shell/testcases/sets/automerge_0
+@@ -0,0 +1,64 @@
++#!/bin/bash
++
++set -e
++
++RULESET="table inet x {
++	set y {
++		type inet_service
++		flags interval
++		auto-merge
++	}
++}"
++
++$NFT -f - <<< $RULESET
++
++tmpfile=$(mktemp)
++echo -n "add element inet x y { " > $tmpfile
++for ((i=0;i<65535;i+=2))
++do
++	echo -n "$i, " >> $tmpfile
++	if [ $i -eq 65534 ]
++	then
++		echo -n "$i" >> $tmpfile
++	fi
++done
++echo "}" >> $tmpfile
++
++$NFT -f $tmpfile
++
++tmpfile2=$(mktemp)
++for ((i=1;i<65535;i+=2))
++do
++	echo "$i" >> $tmpfile2
++done
++
++tmpfile3=$(mktemp)
++shuf $tmpfile2 > $tmpfile3
++i=0
++cat $tmpfile3 | while read line && [ $i -lt 10 ]
++do
++	$NFT add element inet x y { $line }
++	i=$((i+1))
++done
++
++for ((i=0;i<10;i++))
++do
++	from=$(($RANDOM%65535))
++	to=$(($from+100))
++	$NFT add element inet x y { $from-$to }
++	if [ $? -ne 0 ]
++	then
++		echo "failed to add $from-$to"
++		exit 1
++	fi
++	$NFT get element inet x y { $from-$to }
++	if [ $? -ne 0 ]
++	then
++		echo "failed to get $from-$to"
++		exit 1
++	fi
++done
++
++rm -f $tmpfile
++rm -f $tmpfile2
++rm -f $tmpfile3
+-- 
+2.41.0.rc1
+

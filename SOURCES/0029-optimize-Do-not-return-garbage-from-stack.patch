@@ -1,0 +1,42 @@
+From 8bdba078567b879054880ec957a78842c5a18848 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Feb 2023 19:50:41 +0100
+Subject: [PATCH] optimize: Do not return garbage from stack
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit d4d47e5bdf943
+
+commit d4d47e5bdf943be494aeb5d5a29b8f5212acbddf
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Jan 13 17:09:53 2023 +0100
+
+    optimize: Do not return garbage from stack
+
+    If input does not contain a single 'add' command (unusual, but
+    possible), 'ret' value was not initialized by nft_optimize() before
+    returning its value.
+
+    Fixes: fb298877ece27 ("src: add ruleset optimization infrastructure")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/optimize.c b/src/optimize.c
+index 3a3049d..6514cbb 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -1017,7 +1017,7 @@ static int cmd_optimize(struct nft_ctx *nft, struct cmd *cmd)
+ int nft_optimize(struct nft_ctx *nft, struct list_head *cmds)
+ {
+ 	struct cmd *cmd;
+-	int ret;
++	int ret = 0;
+ 
+ 	list_for_each_entry(cmd, cmds, list) {
+ 		switch (cmd->op) {
+-- 
+2.41.0.rc1
+

@@ -1,0 +1,6 @@
+monitor: 2 tests from file object.t failed
+monitor: 3 tests from file set-interval.t failed
+monitor: 3 tests from file simple.t failed
+echo: 2 tests from file object.t failed
+echo: 3 tests from file set-interval.t failed
+echo: 3 tests from file simple.t failed

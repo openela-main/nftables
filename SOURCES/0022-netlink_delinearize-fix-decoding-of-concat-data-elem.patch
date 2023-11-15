@@ -1,0 +1,53 @@
+From 9126153259c891ef55571f358d1e56b3f2274fc4 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Feb 2023 17:52:16 +0100
+Subject: [PATCH] netlink_delinearize: fix decoding of concat data element
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit db59a5c1204c9
+
+commit db59a5c1204c9246a82a115a8761f15809578479
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Dec 12 11:04:34 2022 +0100
+
+    netlink_delinearize: fix decoding of concat data element
+
+    Its possible to use update as follows:
+
+     meta l4proto tcp update @pinned { ip saddr . ct original proto-src : ip daddr . ct original proto-dst }
+
+    ... but when listing, only the first element of the concatenation is
+    shown.
+
+    Check if the element size is too small and parse subsequent registers as
+    well.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink_delinearize.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index 1d47c74..e9e0845 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -1659,6 +1659,14 @@ static void netlink_parse_dynset(struct netlink_parse_ctx *ctx,
+ 	if (nftnl_expr_is_set(nle, NFTNL_EXPR_DYNSET_SREG_DATA)) {
+ 		sreg_data = netlink_parse_register(nle, NFTNL_EXPR_DYNSET_SREG_DATA);
+ 		expr_data = netlink_get_register(ctx, loc, sreg_data);
++
++		if (expr_data->len < set->data->len) {
++			expr_free(expr_data);
++			expr_data = netlink_parse_concat_expr(ctx, loc, sreg_data, set->data->len);
++			if (expr_data == NULL)
++				netlink_error(ctx, loc,
++					      "Could not parse dynset map data expressions");
++		}
+ 	}
+ 
+ 	if (expr_data != NULL) {
+-- 
+2.41.0.rc1
+
