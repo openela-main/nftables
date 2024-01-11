@@ -1,0 +1,44 @@
+From f999616d8248bf51831c4eef4ea5a2fd57805857 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:15:02 +0100
+Subject: [PATCH] doc: Document limitations of ipsec expression with
+ xfrm_interface
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1806431
+Upstream Status: nftables commit 446e76dbde713
+
+commit 446e76dbde713327358f17a8af6ce86b8541c836
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jun 23 17:49:20 2022 +0200
+
+    doc: Document limitations of ipsec expression with xfrm_interface
+
+    Point at a possible solution to match IPsec info of locally generated
+    traffic routed to an xfrm-type interface.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/primary-expression.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/doc/primary-expression.txt b/doc/primary-expression.txt
+index f97778b..4d6b087 100644
+--- a/doc/primary-expression.txt
++++ b/doc/primary-expression.txt
+@@ -428,6 +428,10 @@ Destination address of the tunnel|
+ ipv4_addr/ipv6_addr
+ |=================================
+ 
++*Note:* When using xfrm_interface, this expression is not useable in output
++hook as the plain packet does not traverse it with IPsec info attached - use a
++chain in postrouting hook instead.
++
+ NUMGEN EXPRESSION
+ ~~~~~~~~~~~~~~~~~
+ 
+-- 
+2.39.1
+

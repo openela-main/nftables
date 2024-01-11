@@ -1,0 +1,51 @@
+From 9a41628f4206efe645f5a058a7d71a4503b5869a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Feb 2023 19:50:41 +0100
+Subject: [PATCH] optimize: Clarify chain_optimize() array allocations
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2160049
+Upstream Status: nftables commit b83a0416cdc88
+
+commit b83a0416cdc881c6ac35739cd858e4fe5fb2e04f
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Jan 10 22:13:44 2023 +0100
+
+    optimize: Clarify chain_optimize() array allocations
+
+    Arguments passed to sizeof() where deemed suspicious by covscan due to
+    the different type. Consistently specify size of an array 'a' using
+    'sizeof(*a) * nmemb'.
+
+    For the statement arrays in stmt_matrix, even use xzalloc_array() since
+    the item count is fixed and therefore can't be zero.
+
+    Fixes: fb298877ece27 ("src: add ruleset optimization infrastructure")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/optimize.c b/src/optimize.c
+index 6514cbb..baa6abc 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -918,10 +918,11 @@ static int chain_optimize(struct nft_ctx *nft, struct list_head *rules)
+ 		ctx->num_rules++;
+ 	}
+ 
+-	ctx->rule = xzalloc(sizeof(ctx->rule) * ctx->num_rules);
+-	ctx->stmt_matrix = xzalloc(sizeof(struct stmt *) * ctx->num_rules);
++	ctx->rule = xzalloc(sizeof(*ctx->rule) * ctx->num_rules);
++	ctx->stmt_matrix = xzalloc(sizeof(*ctx->stmt_matrix) * ctx->num_rules);
+ 	for (i = 0; i < ctx->num_rules; i++)
+-		ctx->stmt_matrix[i] = xzalloc(sizeof(struct stmt *) * MAX_STMTS);
++		ctx->stmt_matrix[i] = xzalloc_array(MAX_STMTS,
++						    sizeof(**ctx->stmt_matrix));
+ 
+ 	merge = xzalloc(sizeof(*merge) * ctx->num_rules);
+ 
+-- 
+2.39.2
+

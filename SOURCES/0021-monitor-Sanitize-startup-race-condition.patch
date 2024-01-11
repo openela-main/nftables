@@ -1,0 +1,107 @@
+From ef0f28bc8efdc5292ceb593c9c5a646f030e0994 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 15:25:37 +0100
+Subject: [PATCH] monitor: Sanitize startup race condition
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2130721
+Upstream Status: nftables commit 545edb7a8ef0a
+
+commit 545edb7a8ef0a8acf991b1b7857fddc24d7b151a
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Sep 28 23:26:42 2022 +0200
+
+    monitor: Sanitize startup race condition
+
+    During startup, 'nft monitor' first fetches the current ruleset and then
+    keeps this cache up to date based on received events. This is racey, as
+    any ruleset changes in between the initial fetch and the socket opening
+    are not recognized.
+
+    This script demonstrates the problem:
+
+    | #!/bin/bash
+    |
+    | while true; do
+    |       nft flush ruleset
+    |       iptables-nft -A FORWARD
+    | done &
+    | maniploop=$!
+    |
+    | trap "kill $maniploop; kill \$!; wait" EXIT
+    |
+    | while true; do
+    |       nft monitor rules >/dev/null &
+    |       sleep 0.2
+    |       kill $!
+    | done
+
+    If the table add event is missed, the rule add event callback fails to
+    deserialize the rule and calls abort().
+
+    Avoid the inconvenient program exit by returning NULL from
+    netlink_delinearize_rule() instead of aborting and make callers check
+    the return value.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c               | 1 +
+ src/monitor.c             | 5 +++++
+ src/netlink_delinearize.c | 5 ++++-
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index fd8df88..701aec6 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -490,6 +490,7 @@ static int list_rule_cb(struct nftnl_rule *nlr, void *data)
+ 
+ 	netlink_dump_rule(nlr, ctx);
+ 	rule = netlink_delinearize_rule(ctx, nlr);
++	assert(rule);
+ 	list_add_tail(&rule->list, &ctx->list);
+ 
+ 	return 0;
+diff --git a/src/monitor.c b/src/monitor.c
+index 7fa92eb..a6b30a1 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -551,6 +551,10 @@ static int netlink_events_rule_cb(const struct nlmsghdr *nlh, int type,
+ 
+ 	nlr = netlink_rule_alloc(nlh);
+ 	r = netlink_delinearize_rule(monh->ctx, nlr);
++	if (!r) {
++		fprintf(stderr, "W: Received event for an unknown table.\n");
++		goto out_free_nlr;
++	}
+ 	nlr_for_each_set(nlr, rule_map_decompose_cb, NULL,
+ 			 &monh->ctx->nft->cache);
+ 	cmd = netlink_msg2cmd(type, nlh->nlmsg_flags);
+@@ -587,6 +591,7 @@ static int netlink_events_rule_cb(const struct nlmsghdr *nlh, int type,
+ 		break;
+ 	}
+ 	rule_free(r);
++out_free_nlr:
+ 	nftnl_rule_free(nlr);
+ 	return MNL_CB_OK;
+ }
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index c6ad84d..1d47c74 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -3194,7 +3194,10 @@ struct rule *netlink_delinearize_rule(struct netlink_ctx *ctx,
+ 	pctx->rule = rule_alloc(&netlink_location, &h);
+ 	pctx->table = table_cache_find(&ctx->nft->cache.table_cache,
+ 				       h.table.name, h.family);
+-	assert(pctx->table != NULL);
++	if (!pctx->table) {
++		errno = ENOENT;
++		return NULL;
++	}
+ 
+ 	pctx->rule->comment = nftnl_rule_get_comment(nlr);
+ 
+-- 
+2.39.1
+

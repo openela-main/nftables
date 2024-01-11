@@ -1,0 +1,66 @@
+From 7cb1f51b1791434fa513b516e416a18d27ad1eb9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Feb 2023 17:52:16 +0100
+Subject: [PATCH] netlink_linearize: fix timeout with map updates
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2094894
+Upstream Status: nftables commit 284c038ef4c69
+
+commit 284c038ef4c69d042ef91272d90c143019ecea1f
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Dec 12 11:04:35 2022 +0100
+
+    netlink_linearize: fix timeout with map updates
+
+    Map updates can use timeouts, just like with sets, but the
+    linearization step did not pass this info to the kernel.
+
+    meta l4proto tcp update @pinned { ip saddr . ct original proto-src timeout 90s : ip daddr . tcp dport
+
+    Listing this won't show the "timeout 90s" because kernel never saw it to
+    begin with.
+
+    Also update evaluation step to reject a timeout that was set on
+    the data part: Timeouts are only allowed for the key-value pair
+    as a whole.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c          | 3 +++
+ src/netlink_linearize.c | 4 ++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 7f81411..6d0a0f5 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -3858,6 +3858,9 @@ static int stmt_evaluate_map(struct eval_ctx *ctx, struct stmt *stmt)
+ 	if (stmt->map.data->comment != NULL)
+ 		return expr_error(ctx->msgs, stmt->map.data,
+ 				  "Data expression comments are not supported");
++	if (stmt->map.data->timeout > 0)
++		return expr_error(ctx->msgs, stmt->map.data,
++				  "Data expression timeouts are not supported");
+ 
+ 	list_for_each_entry(this, &stmt->map.stmt_list, list) {
+ 		if (stmt_evaluate(ctx, this) < 0)
+diff --git a/src/netlink_linearize.c b/src/netlink_linearize.c
+index c8bbcb7..6de0a96 100644
+--- a/src/netlink_linearize.c
++++ b/src/netlink_linearize.c
+@@ -1520,6 +1520,10 @@ static void netlink_gen_map_stmt(struct netlink_linearize_ctx *ctx,
+ 	nftnl_expr_set_u32(nle, NFTNL_EXPR_DYNSET_SET_ID, set->handle.set_id);
+ 	nft_rule_add_expr(ctx, nle, &stmt->location);
+ 
++	if (stmt->map.key->timeout > 0)
++		nftnl_expr_set_u64(nle, NFTNL_EXPR_DYNSET_TIMEOUT,
++				   stmt->map.key->timeout);
++
+ 	list_for_each_entry(this, &stmt->map.stmt_list, list)
+ 		num_stmts++;
+ 
+-- 
+2.39.2
+

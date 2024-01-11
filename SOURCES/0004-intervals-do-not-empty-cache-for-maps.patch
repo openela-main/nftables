@@ -1,0 +1,55 @@
+From 5a1d00b37a06bdf37bf392af05236469b6636fb9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 24 Jun 2022 16:02:59 +0200
+Subject: [PATCH] intervals: do not empty cache for maps
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1917398
+Upstream Status: nftables commit d434de8b50dcf
+
+commit d434de8b50dcf3f5f4ca027e122a7df9d4e5d8e1
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jun 16 10:53:56 2022 +0200
+
+    intervals: do not empty cache for maps
+
+    Translate set element to range and sort in maps for the NFT_SET_MAP
+    case, which does not support for automerge yet.
+
+    Fixes: 81e36530fcac ("src: replace interval segment tree overlap and automerge")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/src/intervals.c b/src/intervals.c
+index 89f5c33..e203413 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -216,6 +216,12 @@ int set_automerge(struct list_head *msgs, struct cmd *cmd, struct set *set,
+ 	struct cmd *purge_cmd;
+ 	struct handle h = {};
+ 
++	if (set->flags & NFT_SET_MAP) {
++		set_to_range(init);
++		list_expr_sort(&init->expressions);
++		return 0;
++	}
++
+ 	if (existing_set) {
+ 		if (existing_set->init) {
+ 			list_splice_init(&existing_set->init->expressions,
+@@ -229,9 +235,6 @@ int set_automerge(struct list_head *msgs, struct cmd *cmd, struct set *set,
+ 	set_to_range(init);
+ 	list_expr_sort(&init->expressions);
+ 
+-	if (set->flags & NFT_SET_MAP)
+-		return 0;
+-
+ 	ctx.purge = set_expr_alloc(&internal_location, set);
+ 
+ 	setelem_automerge(&ctx);
+-- 
+2.36.1
+
