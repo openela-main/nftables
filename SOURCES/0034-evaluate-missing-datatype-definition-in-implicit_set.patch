@@ -1,0 +1,167 @@
+From 3193f74613b16a42d7784452ebf4d53ccd33b887 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 12 Jan 2021 10:34:35 +0100
+Subject: [PATCH] evaluate: missing datatype definition in
+ implicit_set_declaration()
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1877022
+Upstream Status: nftables commit 54eb1e16cc478
+
+commit 54eb1e16cc4787906fe8206858f0ea0bfb9c1209
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sun Jun 7 15:23:21 2020 +0200
+
+    evaluate: missing datatype definition in implicit_set_declaration()
+
+    set->data from implicit_set_declaration(), otherwise, set_evaluation()
+    bails out with:
+
+     # nft -f /etc/nftables/inet-filter.nft
+     /etc/nftables/inet-filter.nft:8:32-54: Error: map definition does not specify
+     mapping data type
+                    tcp dport vmap { 22 : jump ssh_input }
+                                   ^^^^^^^^^^^^^^^^^^^^^^^
+     /etc/nftables/inet-filter.nft:13:26-52: Error: map definition does not specify
+     mapping data type
+                     iif vmap { "eth0" : jump wan_input }
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    Add a test to cover this case.
+
+    Fixes: 7aa08d45031e ("evaluate: Perform set evaluation on implicitly declared (anonymous) sets")
+    Closes: https://bugzilla.kernel.org/show_bug.cgi?id=208093
+    Reviewed-by: Stefano Brivio <sbrivio@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/evaluate.c                              | 22 +++++++++++----------
+ tests/shell/testcases/maps/0009vmap_0       | 19 ++++++++++++++++++
+ tests/shell/testcases/maps/dumps/0009vmap_0 | 13 ++++++++++++
+ 3 files changed, 44 insertions(+), 10 deletions(-)
+ create mode 100755 tests/shell/testcases/maps/0009vmap_0
+ create mode 100644 tests/shell/testcases/maps/dumps/0009vmap_0
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index fc45cef..a966ed4 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -79,6 +79,7 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set);
+ static struct expr *implicit_set_declaration(struct eval_ctx *ctx,
+ 					     const char *name,
+ 					     struct expr *key,
++					     struct expr *data,
+ 					     struct expr *expr)
+ {
+ 	struct cmd *cmd;
+@@ -92,6 +93,7 @@ static struct expr *implicit_set_declaration(struct eval_ctx *ctx,
+ 	set->flags	= NFT_SET_ANONYMOUS | expr->set_flags;
+ 	set->handle.set.name = xstrdup(name);
+ 	set->key	= key;
++	set->data	= data;
+ 	set->init	= expr;
+ 	set->automerge	= set->flags & NFT_SET_INTERVAL;
+ 
+@@ -1387,7 +1389,7 @@ static int expr_evaluate_map(struct eval_ctx *ctx, struct expr **expr)
+ 	struct expr_ctx ectx = ctx->ectx;
+ 	struct expr *map = *expr, *mappings;
+ 	const struct datatype *dtype;
+-	struct expr *key;
++	struct expr *key, *data;
+ 
+ 	expr_set_context(&ctx->ectx, NULL, 0);
+ 	if (expr_evaluate(ctx, &map->map) < 0)
+@@ -1406,15 +1408,14 @@ static int expr_evaluate_map(struct eval_ctx *ctx, struct expr **expr)
+ 					  ctx->ectx.byteorder,
+ 					  ctx->ectx.len, NULL);
+ 
++		dtype = set_datatype_alloc(ectx.dtype, ectx.byteorder);
++		data = constant_expr_alloc(&netlink_location, dtype,
++					   dtype->byteorder, ectx.len, NULL);
++
+ 		mappings = implicit_set_declaration(ctx, "__map%d",
+-						    key,
++						    key, data,
+ 						    mappings);
+ 
+-		dtype = set_datatype_alloc(ectx.dtype, ectx.byteorder);
+-
+-		mappings->set->data = constant_expr_alloc(&netlink_location,
+-							  dtype, dtype->byteorder,
+-							  ectx.len, NULL);
+ 		if (ectx.len && mappings->set->data->len != ectx.len)
+ 			BUG("%d vs %d\n", mappings->set->data->len, ectx.len);
+ 
+@@ -1857,7 +1858,8 @@ static int expr_evaluate_relational(struct eval_ctx *ctx, struct expr **expr)
+ 		case EXPR_SET:
+ 			right = rel->right =
+ 				implicit_set_declaration(ctx, "__set%d",
+-							 expr_get(left), right);
++							 expr_get(left), NULL,
++							 right);
+ 			/* fall through */
+ 		case EXPR_SET_REF:
+ 			/* Data for range lookups needs to be in big endian order */
+@@ -2335,7 +2337,7 @@ static int stmt_evaluate_meter(struct eval_ctx *ctx, struct stmt *stmt)
+ 		set->set_flags |= NFT_SET_TIMEOUT;
+ 
+ 	setref = implicit_set_declaration(ctx, stmt->meter.name,
+-					  expr_get(key), set);
++					  expr_get(key), NULL, set);
+ 
+ 	setref->set->desc.size = stmt->meter.size;
+ 	stmt->meter.set = setref;
+@@ -3173,7 +3175,7 @@ static int stmt_evaluate_objref_map(struct eval_ctx *ctx, struct stmt *stmt)
+ 					  ctx->ectx.len, NULL);
+ 
+ 		mappings = implicit_set_declaration(ctx, "__objmap%d",
+-						    key, mappings);
++						    key, NULL, mappings);
+ 		mappings->set->objtype  = stmt->objref.type;
+ 
+ 		map->mappings = mappings;
+diff --git a/tests/shell/testcases/maps/0009vmap_0 b/tests/shell/testcases/maps/0009vmap_0
+new file mode 100755
+index 0000000..7627c81
+--- /dev/null
++++ b/tests/shell/testcases/maps/0009vmap_0
+@@ -0,0 +1,19 @@
++#!/bin/bash
++
++set -e
++
++EXPECTED="table inet filter {
++        chain ssh_input {
++        }
++
++        chain wan_input {
++                tcp dport vmap { 22 : jump ssh_input }
++        }
++
++        chain prerouting {
++                type filter hook prerouting priority -300; policy accept;
++                iif vmap { "lo" : jump wan_input }
++        }
++}"
++
++$NFT -f - <<< "$EXPECTED"
+diff --git a/tests/shell/testcases/maps/dumps/0009vmap_0 b/tests/shell/testcases/maps/dumps/0009vmap_0
+new file mode 100644
+index 0000000..540a8af
+--- /dev/null
++++ b/tests/shell/testcases/maps/dumps/0009vmap_0
+@@ -0,0 +1,13 @@
++table inet filter {
++	chain ssh_input {
++	}
++
++	chain wan_input {
++		tcp dport vmap { 22 : jump ssh_input }
++	}
++
++	chain prerouting {
++		type filter hook prerouting priority -300; policy accept;
++		iif vmap { "lo" : jump wan_input }
++	}
++}
+-- 
+2.31.1
+

@@ -1,0 +1,53 @@
+From 58d8baa70172bb9862276ac5f542248c88d3faf4 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 24 Jun 2020 18:48:14 +0200
+Subject: [PATCH] JSON: Improve performance of json_events_cb()
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1835300
+Upstream Status: nftables commit c96c7da272e33
+
+commit c96c7da272e33a34770c4de4e3e50f7ed264672e
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed May 13 16:29:51 2020 +0200
+
+    JSON: Improve performance of json_events_cb()
+
+    The function tries to insert handles into JSON input for echo option.
+    Yet there may be nothing to do if the given netlink message doesn't
+    contain a handle, e.g. if it is an 'add element' command. Calling
+    seqnum_to_json() is pointless overhead in that case, and if input is
+    large this overhead is significant. Better wait with that call until
+    after checking if the message is relevant at all.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Eric Garver <eric@garver.life>
+---
+ src/parser_json.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index c48faa8..ce8e566 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -3845,12 +3845,15 @@ static uint64_t handle_from_nlmsg(const struct nlmsghdr *nlh)
+ }
+ int json_events_cb(const struct nlmsghdr *nlh, struct netlink_mon_handler *monh)
+ {
+-	json_t *tmp, *json = seqnum_to_json(nlh->nlmsg_seq);
+ 	uint64_t handle = handle_from_nlmsg(nlh);
++	json_t *tmp, *json;
+ 	void *iter;
+ 
+-	/* might be anonymous set, ignore message */
+-	if (!json || !handle)
++	if (!handle)
++		return MNL_CB_OK;
++
++	json = seqnum_to_json(nlh->nlmsg_seq);
++	if (!json)
+ 		return MNL_CB_OK;
+ 
+ 	tmp = json_object_get(json, "add");
+-- 
+2.31.1
+

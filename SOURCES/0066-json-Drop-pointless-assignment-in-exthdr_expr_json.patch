@@ -1,0 +1,37 @@
+From 5f30a3447d28381fdf534ff4ed90167455d1283b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 6 Oct 2021 17:32:04 +0200
+Subject: [PATCH] json: Drop pointless assignment in exthdr_expr_json()
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1999059
+Upstream Status: nftables commit c1616dfd1ce40
+
+commit c1616dfd1ce40bac197924c8947e1c646e915dca
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Jun 11 16:23:22 2021 +0200
+
+    json: Drop pointless assignment in exthdr_expr_json()
+
+    The updated value of 'is_exists' is no longer read at this point.
+
+    Fixes: cb21869649208 ("json: tcp: add raw tcp option match support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/json.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/json.c b/src/json.c
+index dfc9031..ecec51c 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -679,7 +679,6 @@ json_t *exthdr_expr_json(const struct expr *expr, struct output_ctx *octx)
+ 					 "base", expr->exthdr.raw_type,
+ 					 "offset", expr->exthdr.offset,
+ 					 "len", expr->len);
+-			is_exists = false;
+ 		}
+ 
+ 		return json_pack("{s:o}", "tcp option", root);
+-- 
+2.31.1
+

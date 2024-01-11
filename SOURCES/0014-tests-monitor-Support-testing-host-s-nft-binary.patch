@@ -1,0 +1,40 @@
+From 18e1b545cbd2d055b16ec3bf5f481d8032dc5dbe Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 12 Feb 2020 22:35:27 +0100
+Subject: [PATCH] tests: monitor: Support testing host's nft binary
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1754047
+Upstream Status: nftables commit 15ede6857c8c5
+
+commit 15ede6857c8c578ec6211c8b68424183ba1baf1a
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Feb 5 19:48:53 2020 +0100
+
+    tests: monitor: Support testing host's nft binary
+
+    Add support for -H/--host flag to use 'nft' tool from $PATH instead of
+    the local one.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ tests/monitor/run-tests.sh | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index efacdaa..ffb833a 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -119,6 +119,10 @@ while [ -n "$1" ]; do
+ 		test_json=true
+ 		shift
+ 		;;
++	-H|--host)
++		nft=nft
++		shift
++		;;
+ 	testcases/*.t)
+ 		testcases+=" $1"
+ 		shift
+-- 
+2.31.1
+

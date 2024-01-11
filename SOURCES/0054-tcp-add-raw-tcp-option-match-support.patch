@@ -1,0 +1,137 @@
+From 267d86b62132a009badd57b2ffcffed6ae682a1e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Mon, 12 Jul 2021 17:44:08 +0200
+Subject: [PATCH] tcp: add raw tcp option match support
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1979334
+Upstream Status: nftables commit 881d8cb21c0b9
+
+commit 881d8cb21c0b9168787b932f41b801593bde2216
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Nov 2 20:10:25 2020 +0100
+
+    tcp: add raw tcp option match support
+
+    tcp option @42,16,4 (@kind,offset,length).
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+---
+ doc/payload-expression.txt    |  6 ++++++
+ src/exthdr.c                  | 13 +++++++++----
+ src/parser_bison.y            |  5 +++++
+ src/tcpopt.c                  |  2 ++
+ tests/py/any/tcpopt.t         |  2 ++
+ tests/py/any/tcpopt.t.payload |  7 +++++++
+ 6 files changed, 31 insertions(+), 4 deletions(-)
+
+diff --git a/doc/payload-expression.txt b/doc/payload-expression.txt
+index 3a07321..b6d2a28 100644
+--- a/doc/payload-expression.txt
++++ b/doc/payload-expression.txt
+@@ -591,6 +591,12 @@ TCP Timestamps |
+ kind, length, tsval, tsecr
+ |============================
+ 
++TCP option matching also supports raw expression syntax to access arbitrary options:
++[verse]
++*tcp option*
++[verse]
++*tcp option* *@*'number'*,*'offset'*,*'length'
++
+ .IP Options
+ [options="header"]
+ |==================
+diff --git a/src/exthdr.c b/src/exthdr.c
+index 68d5aa5..5c75720 100644
+--- a/src/exthdr.c
++++ b/src/exthdr.c
+@@ -32,10 +32,15 @@ static void exthdr_expr_print(const struct expr *expr, struct output_ctx *octx)
+ 		 */
+ 		unsigned int offset = expr->exthdr.offset / 64;
+ 
+-		if (expr->exthdr.desc == NULL &&
+-		    expr->exthdr.offset == 0 &&
+-		    expr->exthdr.flags & NFT_EXTHDR_F_PRESENT) {
+-			nft_print(octx, "tcp option %d", expr->exthdr.raw_type);
++		if (expr->exthdr.desc == NULL) {
++			if (expr->exthdr.offset == 0 &&
++			    expr->exthdr.flags & NFT_EXTHDR_F_PRESENT) {
++				nft_print(octx, "tcp option %d", expr->exthdr.raw_type);
++				return;
++			}
++
++			nft_print(octx, "tcp option @%u,%u,%u", expr->exthdr.raw_type,
++								expr->exthdr.offset, expr->len);
+ 			return;
+ 		}
+ 
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 4ea9364..5aedc55 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -4718,6 +4718,11 @@ tcp_hdr_expr		:	TCP	tcp_hdr_field
+ 				$$ = tcpopt_expr_alloc(&@$, $3, TCPOPT_COMMON_KIND);
+ 				$$->exthdr.flags = NFT_EXTHDR_F_PRESENT;
+ 			}
++			|	TCP	OPTION	AT tcp_hdr_option_type	COMMA	NUM	COMMA	NUM
++			{
++				$$ = tcpopt_expr_alloc(&@$, $4, 0);
++				tcpopt_init_raw($$, $4, $6, $8, 0);
++			}
+ 			;
+ 
+ tcp_hdr_field		:	SPORT		{ $$ = TCPHDR_SPORT; }
+diff --git a/src/tcpopt.c b/src/tcpopt.c
+index 1cf97a5..05b5ee6 100644
+--- a/src/tcpopt.c
++++ b/src/tcpopt.c
+@@ -197,6 +197,8 @@ void tcpopt_init_raw(struct expr *expr, uint8_t type, unsigned int off,
+ 
+ 	if (flags & NFT_EXTHDR_F_PRESENT)
+ 		datatype_set(expr, &boolean_type);
++	else
++		datatype_set(expr, &integer_type);
+ 
+ 	if (type >= array_size(tcpopt_protocols))
+ 		return;
+diff --git a/tests/py/any/tcpopt.t b/tests/py/any/tcpopt.t
+index 7b17014..e759ac6 100644
+--- a/tests/py/any/tcpopt.t
++++ b/tests/py/any/tcpopt.t
+@@ -31,6 +31,7 @@ tcp option timestamp length 1;ok
+ tcp option timestamp tsval 1;ok
+ tcp option timestamp tsecr 1;ok
+ tcp option 255 missing;ok
++tcp option @255,8,8 255;ok
+ 
+ tcp option foobar;fail
+ tcp option foo bar;fail
+@@ -40,6 +41,7 @@ tcp option eol left 1;fail
+ tcp option sack window;fail
+ tcp option sack window 1;fail
+ tcp option 256 exists;fail
++tcp option @255,8,8 256;fail
+ 
+ tcp option window exists;ok
+ tcp option window missing;ok
+diff --git a/tests/py/any/tcpopt.t.payload b/tests/py/any/tcpopt.t.payload
+index 34f8e26..cddba61 100644
+--- a/tests/py/any/tcpopt.t.payload
++++ b/tests/py/any/tcpopt.t.payload
+@@ -523,6 +523,13 @@ inet
+   [ exthdr load tcpopt 1b @ 255 + 0 present => reg 1 ]
+   [ cmp eq reg 1 0x00000000 ]
+ 
++# tcp option @255,8,8 255
++inet
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ exthdr load tcpopt 1b @ 255 + 1 => reg 1 ]
++  [ cmp eq reg 1 0x000000ff ]
++
+ # tcp option window exists
+ inet 
+   [ meta load l4proto => reg 1 ]
+-- 
+2.31.1
+

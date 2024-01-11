@@ -1,0 +1,53 @@
+From bc2bfe4b68d213c74c634e87dee0116c066209e4 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 27 Apr 2022 14:46:47 +0200
+Subject: [PATCH] rule: memleak in __do_add_setelems()
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2073287
+Upstream Status: nftables commit b6d50bfde21b5
+
+commit b6d50bfde21b5a24a606cbf22137e04e8e0f195d
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Apr 30 14:18:45 2020 +0200
+
+    rule: memleak in __do_add_setelems()
+
+    This patch invokes interval_map_decompose() with named sets:
+
+    ==3402== 2,352 (128 direct, 2,224 indirect) bytes in 1 blocks are definitely lost in loss record 9 of 9
+    ==3402==    at 0x483577F: malloc (vg_replace_malloc.c:299)
+    ==3402==    by 0x48996A8: xmalloc (utils.c:36)
+    ==3402==    by 0x4899778: xzalloc (utils.c:65)
+    ==3402==    by 0x487CB46: expr_alloc (expression.c:45)
+    ==3402==    by 0x487E2A0: mapping_expr_alloc (expression.c:1140)
+    ==3402==    by 0x4898AA8: interval_map_decompose (segtree.c:1095)
+    ==3402==    by 0x4872BDF: __do_add_setelems (rule.c:1569)
+    ==3402==    by 0x4872BDF: __do_add_setelems (rule.c:1559)
+    ==3402==    by 0x4877936: do_command (rule.c:2710)
+    ==3402==    by 0x489F1CB: nft_netlink.isra.5 (libnftables.c:42)
+    ==3402==    by 0x489FB07: nft_run_cmd_from_filename (libnftables.c:508)
+    ==3402==    by 0x10A9AA: main (main.c:455)
+
+    Fixes: dd44081d91ce ("segtree: Fix add and delete of element in same batch")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/rule.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/rule.c b/src/rule.c
+index f7d888b..b2aa1d7 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -1511,7 +1511,8 @@ static int __do_add_setelems(struct netlink_ctx *ctx, struct set *set,
+ 	if (mnl_nft_setelem_add(ctx, set, expr, flags) < 0)
+ 		return -1;
+ 
+-	if (set->init != NULL &&
++	if (!set_is_anonymous(set->flags) &&
++	    set->init != NULL &&
+ 	    set->flags & NFT_SET_INTERVAL &&
+ 	    set->desc.field_count <= 1) {
+ 		interval_map_decompose(expr);
+-- 
+2.34.1
+

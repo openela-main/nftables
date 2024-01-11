@@ -1,0 +1,42 @@
+From 55c537734f476d04c18f67083642b96bbead6219 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Mon, 27 Jan 2020 16:11:41 +0100
+Subject: [PATCH] netlink: Avoid potential NULL-pointer deref in
+ netlink_gen_payload_stmt()
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1793030
+Upstream Status: nftables commit c9ddf0bff363f
+
+commit c9ddf0bff363fc9101b563b592db600bdf4d65c5
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Mon Jan 20 16:32:40 2020 +0100
+
+    netlink: Avoid potential NULL-pointer deref in netlink_gen_payload_stmt()
+
+    With payload_needs_l4csum_update_pseudohdr() unconditionally
+    dereferencing passed 'desc' parameter and a previous check for it to be
+    non-NULL, make sure to call the function only if input is sane.
+
+    Fixes: 68de70f2b3fc6 ("netlink_linearize: fix IPv6 layer 4 checksum mangling")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/netlink_linearize.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/netlink_linearize.c b/src/netlink_linearize.c
+index 498326d..cb1b7fe 100644
+--- a/src/netlink_linearize.c
++++ b/src/netlink_linearize.c
+@@ -941,7 +941,7 @@ static void netlink_gen_payload_stmt(struct netlink_linearize_ctx *ctx,
+ 		nftnl_expr_set_u32(nle, NFTNL_EXPR_PAYLOAD_CSUM_OFFSET,
+ 				   csum_off / BITS_PER_BYTE);
+ 	}
+-	if (expr->payload.base == PROTO_BASE_NETWORK_HDR &&
++	if (expr->payload.base == PROTO_BASE_NETWORK_HDR && desc &&
+ 	    payload_needs_l4csum_update_pseudohdr(expr, desc))
+ 		nftnl_expr_set_u32(nle, NFTNL_EXPR_PAYLOAD_FLAGS,
+ 				   NFT_PAYLOAD_L4CSUM_PSEUDOHDR);
+-- 
+2.31.1
+

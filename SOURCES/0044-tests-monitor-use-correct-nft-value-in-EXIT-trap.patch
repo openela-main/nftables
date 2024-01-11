@@ -1,0 +1,44 @@
+From 4ee4ed8d54a8b9f0f0a2b195b3b95b892e4e79a3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 18 May 2021 18:06:50 +0200
+Subject: [PATCH] tests: monitor: use correct $nft value in EXIT trap
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1919203
+Upstream Status: nftables commit 990cbbf75c40b
+
+commit 990cbbf75c40b92e6d6dc66721dfbedf33cacf8f
+Author: Štěpán Němec <snemec@redhat.com>
+Date:   Wed Jan 27 15:02:03 2021 +0100
+
+    tests: monitor: use correct $nft value in EXIT trap
+
+    With double quotes, $nft was being expanded to the default value even
+    in presence of the -H option.
+
+    Signed-off-by: Štěpán Němec <snemec@redhat.com>
+    Helped-by: Tomáš Doležal <todoleza@redhat.com>
+    Acked-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ tests/monitor/run-tests.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index ffb833a..c1cacb4 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -19,7 +19,7 @@ if [ ! -d $testdir ]; then
+ 	echo "Failed to create test directory" >&2
+ 	exit 1
+ fi
+-trap "rm -rf $testdir; $nft flush ruleset" EXIT
++trap 'rm -rf $testdir; $nft flush ruleset' EXIT
+ 
+ command_file=$(mktemp -p $testdir)
+ output_file=$(mktemp -p $testdir)
+-- 
+2.31.1
+

@@ -1,0 +1,233 @@
+From 70dc225b23708c6ac96e2895488f3c6dea9e201d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Mon, 7 Dec 2020 18:28:27 +0100
+Subject: [PATCH] proto: Fix ARP header field ordering
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1896334
+Upstream Status: nftables commit f751753f92ea7
+
+commit f751753f92ea76f582f7d5d1fef8b4d5677ba589
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Nov 10 13:07:49 2020 +0100
+
+    proto: Fix ARP header field ordering
+
+    In ARP header, destination ether address sits between source IP and
+    destination IP addresses. Enum arp_hdr_fields had this wrong, which
+    in turn caused wrong ordering of entries in proto_arp->templates. When
+    expanding a combined payload expression, code assumes that template
+    entries are ordered by header offset, therefore the destination ether
+    address match was printed as raw if an earlier field was matched as
+    well:
+
+    | arp saddr ip 192.168.1.1 arp daddr ether 3e:d1:3f:d6:12:0b
+
+    was printed as:
+
+    | arp saddr ip 192.168.1.1 @nh,144,48 69068440080907
+
+    Note: Although strictly not necessary, reorder fields in
+    proto_arp->templates as well to match their actual ordering, just to
+    avoid confusion.
+
+    Fixes: 4b0f2a712b579 ("src: support for arp sender and target ethernet and IPv4 addresses")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ include/proto.h                   |  2 +-
+ src/proto.c                       |  2 +-
+ tests/py/arp/arp.t                |  3 ++
+ tests/py/arp/arp.t.json           | 56 +++++++++++++++++++++++++++++++
+ tests/py/arp/arp.t.json.output    | 28 ++++++++++++++++
+ tests/py/arp/arp.t.payload        | 10 ++++++
+ tests/py/arp/arp.t.payload.netdev | 14 ++++++++
+ 7 files changed, 113 insertions(+), 2 deletions(-)
+
+diff --git a/include/proto.h b/include/proto.h
+index 436cbe3..5a50059 100644
+--- a/include/proto.h
++++ b/include/proto.h
+@@ -184,8 +184,8 @@ enum arp_hdr_fields {
+ 	ARPHDR_PLN,
+ 	ARPHDR_OP,
+ 	ARPHDR_SADDR_ETHER,
+-	ARPHDR_DADDR_ETHER,
+ 	ARPHDR_SADDR_IP,
++	ARPHDR_DADDR_ETHER,
+ 	ARPHDR_DADDR_IP,
+ };
+ 
+diff --git a/src/proto.c b/src/proto.c
+index 8360abf..49c8c92 100644
+--- a/src/proto.c
++++ b/src/proto.c
+@@ -908,8 +908,8 @@ const struct proto_desc proto_arp = {
+ 		[ARPHDR_PLN]		= ARPHDR_FIELD("plen", plen),
+ 		[ARPHDR_OP]		= ARPHDR_TYPE("operation", &arpop_type, oper),
+ 		[ARPHDR_SADDR_ETHER]	= ARPHDR_TYPE("saddr ether", &etheraddr_type, sha),
+-		[ARPHDR_DADDR_ETHER]	= ARPHDR_TYPE("daddr ether", &etheraddr_type, tha),
+ 		[ARPHDR_SADDR_IP]	= ARPHDR_TYPE("saddr ip", &ipaddr_type, spa),
++		[ARPHDR_DADDR_ETHER]	= ARPHDR_TYPE("daddr ether", &etheraddr_type, tha),
+ 		[ARPHDR_DADDR_IP]	= ARPHDR_TYPE("daddr ip", &ipaddr_type, tpa),
+ 	},
+ 	.format		= {
+diff --git a/tests/py/arp/arp.t b/tests/py/arp/arp.t
+index 2540c0a..109d01d 100644
+--- a/tests/py/arp/arp.t
++++ b/tests/py/arp/arp.t
+@@ -61,4 +61,7 @@ arp daddr ip 4.3.2.1;ok
+ arp saddr ether aa:bb:cc:aa:bb:cc;ok
+ arp daddr ether aa:bb:cc:aa:bb:cc;ok
+ 
++arp saddr ip 192.168.1.1 arp daddr ether fe:ed:00:c0:ff:ee;ok
++arp daddr ether fe:ed:00:c0:ff:ee arp saddr ip 192.168.1.1;ok;arp saddr ip 192.168.1.1 arp daddr ether fe:ed:00:c0:ff:ee
++
+ meta iifname "invalid" arp ptype 0x0800 arp htype 1 arp hlen 6 arp plen 4 @nh,192,32 0xc0a88f10 @nh,144,48 set 0x112233445566;ok;iifname "invalid" arp htype 1 arp ptype ip arp hlen 6 arp plen 4 arp daddr ip 192.168.143.16 arp daddr ether set 11:22:33:44:55:66
+diff --git a/tests/py/arp/arp.t.json b/tests/py/arp/arp.t.json
+index 5f2f6cd..8508c17 100644
+--- a/tests/py/arp/arp.t.json
++++ b/tests/py/arp/arp.t.json
+@@ -901,6 +901,62 @@
+     }
+ ]
+ 
++# arp saddr ip 192.168.1.1 arp daddr ether fe:ed:00:c0:ff:ee
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "saddr ip",
++                    "protocol": "arp"
++                }
++            },
++            "op": "==",
++            "right": "192.168.1.1"
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "daddr ether",
++                    "protocol": "arp"
++                }
++            },
++            "op": "==",
++            "right": "fe:ed:00:c0:ff:ee"
++        }
++    }
++]
++
++# arp daddr ether fe:ed:00:c0:ff:ee arp saddr ip 192.168.1.1
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "daddr ether",
++                    "protocol": "arp"
++                }
++            },
++            "op": "==",
++            "right": "fe:ed:00:c0:ff:ee"
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "saddr ip",
++                    "protocol": "arp"
++                }
++            },
++            "op": "==",
++            "right": "192.168.1.1"
++        }
++    }
++]
++
+ # meta iifname "invalid" arp ptype 0x0800 arp htype 1 arp hlen 6 arp plen 4 @nh,192,32 0xc0a88f10 @nh,144,48 set 0x112233445566
+ [
+     {
+diff --git a/tests/py/arp/arp.t.json.output b/tests/py/arp/arp.t.json.output
+index b8507bf..afa75b2 100644
+--- a/tests/py/arp/arp.t.json.output
++++ b/tests/py/arp/arp.t.json.output
+@@ -66,6 +66,34 @@
+     }
+ ]
+ 
++# arp daddr ether fe:ed:00:c0:ff:ee arp saddr ip 192.168.1.1
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "saddr ip",
++                    "protocol": "arp"
++                }
++            },
++            "op": "==",
++            "right": "192.168.1.1"
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "daddr ether",
++                    "protocol": "arp"
++                }
++            },
++            "op": "==",
++            "right": "fe:ed:00:c0:ff:ee"
++        }
++    }
++]
++
+ # meta iifname "invalid" arp ptype 0x0800 arp htype 1 arp hlen 6 arp plen 4 @nh,192,32 0xc0a88f10 @nh,144,48 set 0x112233445566
+ [
+     {
+diff --git a/tests/py/arp/arp.t.payload b/tests/py/arp/arp.t.payload
+index 52c9932..f819853 100644
+--- a/tests/py/arp/arp.t.payload
++++ b/tests/py/arp/arp.t.payload
+@@ -307,3 +307,13 @@ arp test-arp input
+   [ payload load 6b @ network header + 18 => reg 1 ]
+   [ cmp eq reg 1 0xaaccbbaa 0x0000ccbb ]
+ 
++# arp saddr ip 192.168.1.1 arp daddr ether fe:ed:00:c0:ff:ee
++arp 
++  [ payload load 10b @ network header + 14 => reg 1 ]
++  [ cmp eq reg 1 0x0101a8c0 0xc000edfe 0x0000eeff ]
++
++# arp daddr ether fe:ed:00:c0:ff:ee arp saddr ip 192.168.1.1
++arp 
++  [ payload load 10b @ network header + 14 => reg 1 ]
++  [ cmp eq reg 1 0x0101a8c0 0xc000edfe 0x0000eeff ]
++
+diff --git a/tests/py/arp/arp.t.payload.netdev b/tests/py/arp/arp.t.payload.netdev
+index 667691f..f57610c 100644
+--- a/tests/py/arp/arp.t.payload.netdev
++++ b/tests/py/arp/arp.t.payload.netdev
+@@ -409,3 +409,17 @@ netdev test-netdev ingress
+   [ payload load 6b @ network header + 18 => reg 1 ]
+   [ cmp eq reg 1 0xaaccbbaa 0x0000ccbb ]
+ 
++# arp saddr ip 192.168.1.1 arp daddr ether fe:ed:00:c0:ff:ee
++netdev 
++  [ meta load protocol => reg 1 ]
++  [ cmp eq reg 1 0x00000608 ]
++  [ payload load 10b @ network header + 14 => reg 1 ]
++  [ cmp eq reg 1 0x0101a8c0 0xc000edfe 0x0000eeff ]
++
++# arp daddr ether fe:ed:00:c0:ff:ee arp saddr ip 192.168.1.1
++netdev 
++  [ meta load protocol => reg 1 ]
++  [ cmp eq reg 1 0x00000608 ]
++  [ payload load 10b @ network header + 14 => reg 1 ]
++  [ cmp eq reg 1 0x0101a8c0 0xc000edfe 0x0000eeff ]
++
+-- 
+2.31.1
+

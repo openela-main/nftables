@@ -1,0 +1,108 @@
+From 26c4f15080663a12006abf8539ebf28bb223e6d9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Mon, 7 Dec 2020 18:29:15 +0100
+Subject: [PATCH] json: echo: Speedup seqnum_to_json()
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1900565
+Upstream Status: nftables commit 389a0e1edc89a
+
+commit 389a0e1edc89a4048a272e569d3349b1d43bc567
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Nov 20 20:01:59 2020 +0100
+
+    json: echo: Speedup seqnum_to_json()
+
+    Derek Dai reports:
+    "If there are a lot of command in JSON node, seqnum_to_json() will slow
+    down application (eg: firewalld) dramatically since it iterate whole
+    command list every time."
+
+    He sent a patch implementing a lookup table, but we can do better: Speed
+    this up by introducing a hash table to store the struct json_cmd_assoc
+    objects in, taking their netlink sequence number as key.
+
+    Quickly tested restoring a ruleset containing about 19k rules:
+
+    | # time ./before/nft -jeaf large_ruleset.json >/dev/null
+    | 4.85user 0.47system 0:05.48elapsed 97%CPU (0avgtext+0avgdata 69732maxresident)k
+    | 0inputs+0outputs (15major+16937minor)pagefaults 0swaps
+
+    | # time ./after/nft -jeaf large_ruleset.json >/dev/null
+    | 0.18user 0.44system 0:00.70elapsed 89%CPU (0avgtext+0avgdata 68484maxresident)k
+    | 0inputs+0outputs (15major+16645minor)pagefaults 0swaps
+
+    Bugzilla: https://bugzilla.netfilter.org/show_bug.cgi?id=1479
+    Reported-by: Derek Dai <daiderek@gmail.com>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ src/parser_json.c | 28 ++++++++++++++++++----------
+ 1 file changed, 18 insertions(+), 10 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index ddc694f..107dc38 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -3646,42 +3646,50 @@ static int json_verify_metainfo(struct json_ctx *ctx, json_t *root)
+ }
+ 
+ struct json_cmd_assoc {
+-	struct json_cmd_assoc *next;
++	struct hlist_node hnode;
+ 	const struct cmd *cmd;
+ 	json_t *json;
+ };
+ 
+-static struct json_cmd_assoc *json_cmd_list = NULL;
++#define CMD_ASSOC_HSIZE		512
++static struct hlist_head json_cmd_assoc_hash[CMD_ASSOC_HSIZE];
+ 
+ static void json_cmd_assoc_free(void)
+ {
+ 	struct json_cmd_assoc *cur;
++	struct hlist_node *pos, *n;
++	int i;
+ 
+-	while (json_cmd_list) {
+-		cur = json_cmd_list;
+-		json_cmd_list = cur->next;
+-		free(cur);
++	for (i = 0; i < CMD_ASSOC_HSIZE; i++) {
++		hlist_for_each_entry_safe(cur, pos, n,
++					  &json_cmd_assoc_hash[i], hnode)
++			free(cur);
+ 	}
+ }
+ 
+ static void json_cmd_assoc_add(json_t *json, const struct cmd *cmd)
+ {
+ 	struct json_cmd_assoc *new = xzalloc(sizeof *new);
++	int key = cmd->seqnum % CMD_ASSOC_HSIZE;
+ 
+-	new->next	= json_cmd_list;
+ 	new->json	= json;
+ 	new->cmd	= cmd;
+-	json_cmd_list	= new;
++
++	hlist_add_head(&new->hnode, &json_cmd_assoc_hash[key]);
+ }
+ 
+ static json_t *seqnum_to_json(const uint32_t seqnum)
+ {
+-	const struct json_cmd_assoc *cur;
++	int key = seqnum % CMD_ASSOC_HSIZE;
++	struct json_cmd_assoc *cur;
++	struct hlist_node *n;
+ 
+-	for (cur = json_cmd_list; cur; cur = cur->next) {
++
++	hlist_for_each_entry(cur, n, &json_cmd_assoc_hash[key], hnode) {
+ 		if (cur->cmd->seqnum == seqnum)
+ 			return cur->json;
+ 	}
++
+ 	return NULL;
+ }
+ 
+-- 
+2.31.1
+

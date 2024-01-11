@@ -1,0 +1,49 @@
+From 1fe92af5a03608b94e8e1e2ff26e24adfe2ea09a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 21 Jan 2022 12:35:39 +0100
+Subject: [PATCH] evaluate: fix inet nat with no layer 3 info
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2030773
+Upstream Status: nftables commit 9a36033ce5063
+
+commit 9a36033ce50638a403d1421935cdd1287ee5de6b
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Jul 20 18:59:44 2021 +0200
+
+    evaluate: fix inet nat with no layer 3 info
+
+    nft currently reports:
+
+     Error: Could not process rule: Protocol error
+     add rule inet x y meta l4proto tcp dnat to :80
+                                        ^^^^
+
+    default to NFPROTO_INET family, otherwise kernel bails out EPROTO when
+    trying to load the conntrack helper.
+
+    Closes: https://bugzilla.netfilter.org/show_bug.cgi?id=1428
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/evaluate.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 9381f23..e495faf 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -2757,9 +2757,10 @@ static int nat_evaluate_family(struct eval_ctx *ctx, struct stmt *stmt)
+ 			stmt->nat.family = ctx->pctx.family;
+ 		return 0;
+ 	case NFPROTO_INET:
+-		if (!stmt->nat.addr)
++		if (!stmt->nat.addr) {
++			stmt->nat.family = NFPROTO_INET;
+ 			return 0;
+-
++		}
+ 		if (stmt->nat.family != NFPROTO_UNSPEC)
+ 			return 0;
+ 
+-- 
+2.31.1
+

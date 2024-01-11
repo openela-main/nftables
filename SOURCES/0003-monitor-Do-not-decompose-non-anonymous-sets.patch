@@ -1,0 +1,68 @@
+From 13bd961c3ba83e4189dcffdcf570c5a4391fd5f9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 10 Jan 2020 19:58:29 +0100
+Subject: [PATCH] monitor: Do not decompose non-anonymous sets
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1774742
+Upstream Status: nftables commit 5d57fa3e99bb9
+
+commit 5d57fa3e99bb9f2044e236d4ddb7d874cfefe1dd
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jan 9 13:34:20 2020 +0100
+
+    monitor: Do not decompose non-anonymous sets
+
+    They have been decomposed already, trying to do that again causes a
+    segfault. This is a similar fix as in commit 8ecb885589591 ("src:
+    restore --echo with anonymous sets").
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/monitor.c                          |  2 +-
+ tests/monitor/testcases/set-interval.t | 20 ++++++++++++++++++++
+ 2 files changed, 21 insertions(+), 1 deletion(-)
+ create mode 100644 tests/monitor/testcases/set-interval.t
+
+diff --git a/src/monitor.c b/src/monitor.c
+index ea0393c..0da9858 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -500,7 +500,7 @@ static int netlink_events_obj_cb(const struct nlmsghdr *nlh, int type,
+ 
+ static void rule_map_decompose_cb(struct set *s, void *data)
+ {
+-	if (s->flags & NFT_SET_INTERVAL)
++	if (s->flags & (NFT_SET_INTERVAL & NFT_SET_ANONYMOUS))
+ 		interval_map_decompose(s->init);
+ }
+ 
+diff --git a/tests/monitor/testcases/set-interval.t b/tests/monitor/testcases/set-interval.t
+new file mode 100644
+index 0000000..59930c5
+--- /dev/null
++++ b/tests/monitor/testcases/set-interval.t
+@@ -0,0 +1,20 @@
++# setup first
++I add table ip t
++I add chain ip t c
++O -
++J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
++J {"add": {"chain": {"family": "ip", "table": "t", "name": "c", "handle": 0}}}
++
++# add set with elements, monitor output expectedly differs
++I add set ip t s { type inet_service; flags interval; elements = { 20, 30-40 }; }
++O add set ip t s { type inet_service; flags interval; }
++O add element ip t s { 20 }
++O add element ip t s { 30-40 }
++J {"add": {"set": {"family": "ip", "name": "s", "table": "t", "type": "inet_service", "handle": 0, "flags": ["interval"]}}}
++J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [20]}}}}
++J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [{"range": [30, 40]}]}}}}
++
++# this would crash nft
++I add rule ip t c tcp dport @s
++O -
++J {"add": {"rule": {"family": "ip", "table": "t", "chain": "c", "handle": 0, "expr": [{"match": {"op": "==", "left": {"payload": {"protocol": "tcp", "field": "dport"}}, "right": "@s"}}]}}}
+-- 
+2.31.1
+

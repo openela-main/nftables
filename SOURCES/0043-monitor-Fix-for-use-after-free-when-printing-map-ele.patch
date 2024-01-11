@@ -1,0 +1,41 @@
+From 1490609a3d82e494168a390b34094bacc5e83c02 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 18 May 2021 18:06:50 +0200
+Subject: [PATCH] monitor: Fix for use after free when printing map elements
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1919203
+Upstream Status: nftables commit 02174ffad484d
+
+commit 02174ffad484d9711678e5d415c32307efc39857
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jan 9 17:43:11 2020 +0100
+
+    monitor: Fix for use after free when printing map elements
+
+    When populating the dummy set, 'data' field must be cloned just like
+    'key' field.
+
+    Fixes: 343a51702656a ("src: store expr, not dtype to track data in sets")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/monitor.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/monitor.c b/src/monitor.c
+index 7927b6f..142cc92 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -401,7 +401,8 @@ static int netlink_events_setelem_cb(const struct nlmsghdr *nlh, int type,
+ 	 */
+ 	dummyset = set_alloc(monh->loc);
+ 	dummyset->key = expr_clone(set->key);
+-	dummyset->data = set->data;
++	if (set->data)
++		dummyset->data = expr_clone(set->data);
+ 	dummyset->flags = set->flags;
+ 	dummyset->init = set_expr_alloc(monh->loc, set);
+ 
+-- 
+2.31.1
+

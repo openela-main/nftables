@@ -1,0 +1,85 @@
+From a44bd9f4b6cf77cb75c5f596908100270893e8d5 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jan 2020 12:50:23 +0100
+Subject: [PATCH] cache: Fix for doubled output after reset command
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1790793
+Upstream Status: nftables commit 7def18395d118
+
+commit 7def18395d118e22a009de7e2e8de7f77906580b
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Jan 14 17:25:35 2020 +0100
+
+    cache: Fix for doubled output after reset command
+
+    Reset command causes a dump of the objects to reset and adds those to
+    cache. Yet it ignored if the object in question was already there and up
+    to now CMD_RESET was flagged as NFT_CACHE_FULL.
+
+    Tackle this from two angles: First, reduce cache requirements of reset
+    command to the necessary bits which is table cache. This alone would
+    suffice if there wasn't interactive mode (and other libnftables users):
+    A cache containing the objects to reset might be in place already, so
+    add dumped objects to cache only if they don't exist already.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ src/cache.c                                    |  4 +++-
+ src/rule.c                                     |  3 ++-
+ tests/shell/testcases/sets/0024named_objects_0 | 12 +++++++++++-
+ 3 files changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 0c28a28..05f0d68 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -138,8 +138,10 @@ unsigned int cache_evaluate(struct nft_ctx *nft, struct list_head *cmds)
+ 		case CMD_GET:
+ 			flags = evaluate_cache_get(cmd, flags);
+ 			break;
+-		case CMD_LIST:
+ 		case CMD_RESET:
++			flags |= NFT_CACHE_TABLE;
++			break;
++		case CMD_LIST:
+ 		case CMD_EXPORT:
+ 		case CMD_MONITOR:
+ 			flags |= NFT_CACHE_FULL;
+diff --git a/src/rule.c b/src/rule.c
+index d985d3a..3ca1805 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -2554,7 +2554,8 @@ static int do_command_reset(struct netlink_ctx *ctx, struct cmd *cmd)
+ 	ret = netlink_reset_objs(ctx, cmd, type, dump);
+ 	list_for_each_entry_safe(obj, next, &ctx->list, list) {
+ 		table = table_lookup(&obj->handle, &ctx->nft->cache);
+-		list_move(&obj->list, &table->objs);
++		if (!obj_lookup(table, obj->handle.obj.name, obj->type))
++			list_move(&obj->list, &table->objs);
+ 	}
+ 	if (ret < 0)
+ 		return ret;
+diff --git a/tests/shell/testcases/sets/0024named_objects_0 b/tests/shell/testcases/sets/0024named_objects_0
+index 3bd16f2..21200c3 100755
+--- a/tests/shell/testcases/sets/0024named_objects_0
++++ b/tests/shell/testcases/sets/0024named_objects_0
+@@ -35,4 +35,14 @@ table inet x {
+ set -e
+ $NFT -f - <<< "$RULESET"
+ 
+-$NFT reset counter inet x user321
++EXPECTED="table inet x {
++	counter user321 {
++		packets 12 bytes 1433
++	}
++}"
++
++GET="$($NFT reset counter inet x user321)"
++if [ "$EXPECTED" != "$GET" ] ; then
++	$DIFF -u <(echo "$EXPECTED") <(echo "$GET")
++	exit 1
++fi
+-- 
+2.31.1
+
