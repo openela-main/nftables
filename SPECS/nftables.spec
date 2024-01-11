@@ -1,9 +1,9 @@
-%define rpmversion 1.0.4
-%define specrelease 10
+%define nft_rpmversion 1.0.4
+%define nft_specrelease 11
 
 Name:           nftables
-Version:        %{rpmversion}
-Release:        %{specrelease}%{?dist}%{?buildid}
+Version:        %{nft_rpmversion}
+Release:        %{nft_specrelease}%{?dist}%{?buildid}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utillites
@@ -50,6 +50,7 @@ Patch28:            0028-netlink-Fix-for-potential-NULL-pointer-deref.patch
 Patch29:            0029-optimize-Do-not-return-garbage-from-stack.patch
 Patch30:            0030-optimize-Clarify-chain_optimize-array-allocations.patch
 Patch31:            0031-netlink_delinearize-Sanitize-concat-data-element-dec.patch
+Patch32:            0032-rule-check-address-family-in-set-collapse.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -161,6 +162,10 @@ sed -i -e 's/\(sofile=\)".*"/\1"'$sofile'"/' \
 %{python3_sitelib}/nftables/
 
 %changelog
+* Thu Sep 21 2023 Phil Sutter <psutter@redhat.com> [1.0.4-11.el9]
+- rule: check address family in set collapse (Phil Sutter) [RHEL-5908]
+- spec: Rename variables to avoid a clash (Phil Sutter) [INTERNAL]
+
 * Tue Feb 21 2023 Phil Sutter <psutter@redhat.com> [1.0.4-10.el9]
 - netlink_delinearize: Sanitize concat data element decoding (Phil Sutter) [2160049]
 - optimize: Clarify chain_optimize() array allocations (Phil Sutter) [2160049]
