@@ -1,0 +1,73 @@
+From 254a7ef45c890e297d9390a6f20b9132ad17c5d1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Feb 2023 17:52:16 +0100
+Subject: [PATCH] tests: add a test case for map update from packet path with
+ concat
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit b8e1940aa1907
+
+commit b8e1940aa190773b23b3ee9349beb20c31f42bdb
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Dec 12 11:04:36 2022 +0100
+
+    tests: add a test case for map update from packet path with concat
+
+    add a second test case for map updates, this time with both
+    a timeout and a data element that consists of a concatenation.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ .../maps/dumps/typeof_maps_concat_update_0.nft | 12 ++++++++++++
+ .../testcases/maps/typeof_maps_concat_update_0 | 18 ++++++++++++++++++
+ 2 files changed, 30 insertions(+)
+ create mode 100644 tests/shell/testcases/maps/dumps/typeof_maps_concat_update_0.nft
+ create mode 100755 tests/shell/testcases/maps/typeof_maps_concat_update_0
+
+diff --git a/tests/shell/testcases/maps/dumps/typeof_maps_concat_update_0.nft b/tests/shell/testcases/maps/dumps/typeof_maps_concat_update_0.nft
+new file mode 100644
+index 0000000..d91b795
+--- /dev/null
++++ b/tests/shell/testcases/maps/dumps/typeof_maps_concat_update_0.nft
+@@ -0,0 +1,12 @@
++table ip foo {
++	map pinned {
++		typeof ip daddr . tcp dport : ip daddr . tcp dport
++		size 65535
++		flags dynamic,timeout
++		timeout 6m
++	}
++
++	chain pr {
++		update @pinned { ip saddr . ct original proto-dst timeout 1m30s : ip daddr . tcp dport }
++	}
++}
+diff --git a/tests/shell/testcases/maps/typeof_maps_concat_update_0 b/tests/shell/testcases/maps/typeof_maps_concat_update_0
+new file mode 100755
+index 0000000..645ae14
+--- /dev/null
++++ b/tests/shell/testcases/maps/typeof_maps_concat_update_0
+@@ -0,0 +1,18 @@
++#!/bin/bash
++
++# check update statement does print both concatentations (key and data).
++
++EXPECTED="table ip foo {
++ map pinned {
++	typeof ip daddr . tcp dport : ip daddr . tcp dport
++	size 65535
++	flags dynamic,timeout
++        timeout 6m
++  }
++  chain pr {
++     meta l4proto tcp update @pinned { ip saddr . ct original proto-dst timeout 1m30s : ip daddr . tcp dport }
++  }
++}"
++
++set -e
++$NFT -f - <<< $EXPECTED
+-- 
+2.41.0.rc1
+

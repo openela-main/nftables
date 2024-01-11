@@ -1,0 +1,57 @@
+From b5fd150a3fbad94381276bedc816d4a6fdecfaf9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Feb 2023 19:50:41 +0100
+Subject: [PATCH] mnl: dump_nf_hooks() leaks memory in error path
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit ef66f321e49b3
+
+commit ef66f321e49b337c7e678bb90d6acb94f331dfc4
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jan 11 12:28:15 2023 +0100
+
+    mnl: dump_nf_hooks() leaks memory in error path
+
+    Have to free the basehook object before returning to caller.
+
+    Fixes: 4694f7230195b ("src: add support for base hook dumping")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mnl.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/mnl.c b/src/mnl.c
+index 7dd77be..269d3f1 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -2211,16 +2211,23 @@ static int dump_nf_hooks(const struct nlmsghdr *nlh, void *_data)
+ 		struct nlattr *nested[NFNLA_HOOK_INFO_MAX + 1] = {};
+ 		uint32_t type;
+ 
+-		if (mnl_attr_parse_nested(tb[NFNLA_HOOK_CHAIN_INFO], dump_nf_chain_info_cb, nested) < 0)
++		if (mnl_attr_parse_nested(tb[NFNLA_HOOK_CHAIN_INFO],
++					  dump_nf_chain_info_cb, nested) < 0) {
++			basehook_free(hook);
+ 			return -1;
++		}
+ 
+ 		type = ntohl(mnl_attr_get_u32(nested[NFNLA_HOOK_INFO_TYPE]));
+ 		if (type == NFNL_HOOK_TYPE_NFTABLES) {
+ 			struct nlattr *info[NFNLA_CHAIN_MAX + 1] = {};
+ 			const char *tablename, *chainname;
+ 
+-			if (mnl_attr_parse_nested(nested[NFNLA_HOOK_INFO_DESC], dump_nf_attr_chain_cb, info) < 0)
++			if (mnl_attr_parse_nested(nested[NFNLA_HOOK_INFO_DESC],
++						  dump_nf_attr_chain_cb,
++						  info) < 0) {
++				basehook_free(hook);
+ 				return -1;
++			}
+ 
+ 			tablename = mnl_attr_get_str(info[NFNLA_CHAIN_TABLE]);
+ 			chainname = mnl_attr_get_str(info[NFNLA_CHAIN_NAME]);
+-- 
+2.41.0.rc1
+

@@ -1,121 +1,74 @@
-%define rpmversion 0.9.3
-%define specrelease 26
-%define libnftnl_ver 1.1.5-5
+%define nft_rpmversion 1.0.4
+%define nft_specrelease 3
+%define libnftnl_ver 1.2.2-1
 
 Name:           nftables
-Version:        %{rpmversion}
-Release:        %{specrelease}%{?dist}%{?buildid}
+Version:        %{nft_rpmversion}
+Release:        %{nft_specrelease}%{?dist}%{?buildid}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utillites
 
 License:        GPLv2
-URL:            http://netfilter.org/projects/nftables/
-Source0:        http://ftp.netfilter.org/pub/nftables/nftables-%{version}.tar.bz2
+URL:            https://netfilter.org/projects/nftables/
+Source0:        %{url}/files/%{name}-%{version}.tar.bz2
 Source1:        nftables.service
 Source2:        nftables.conf
 Source3:        main.nft
 Source4:        router.nft
 Source5:        nat.nft
+Source6:        nft-test.stderr.expect
+Source7:        run-tests.stderr.expect
+Source8:        monitor-run-tests.stderr.expect
 
-Patch1:             0001-main-enforce-options-before-commands.patch
-Patch2:             0002-main-restore-debug.patch
-Patch3:             0003-monitor-Do-not-decompose-non-anonymous-sets.patch
-Patch4:             0004-monitor-Fix-output-for-ranges-in-anonymous-sets.patch
-Patch5:             0005-xfrm-spi-is-big-endian.patch
-Patch6:             0006-tests-shell-Search-diff-tool-once-and-for-all.patch
-Patch7:             0007-cache-Fix-for-doubled-output-after-reset-command.patch
-Patch8:             0008-netlink-Fix-leak-in-unterminated-string-deserializer.patch
-Patch9:             0009-netlink-Fix-leaks-in-netlink_parse_cmp.patch
-Patch10:            0010-netlink-Avoid-potential-NULL-pointer-deref-in-netlin.patch
-Patch11:            0011-tests-json_echo-Fix-for-Python3.patch
-Patch12:            0012-tests-json_echo-Support-testing-host-binaries.patch
-Patch13:            0013-tests-monitor-Support-running-individual-test-cases.patch
-Patch14:            0014-tests-monitor-Support-testing-host-s-nft-binary.patch
-Patch15:            0015-tests-py-Support-testing-host-binaries.patch
-Patch16:            0016-doc-nft.8-Mention-wildcard-interface-matching.patch
-Patch17:            0017-scanner-Extend-asteriskstring-definition.patch
-Patch18:            0018-parser-add-a-helper-for-concat-expression-handling.patch
-Patch19:            0019-include-resync-nf_tables.h-cache-copy.patch
-Patch20:            0020-src-Add-support-for-NFTNL_SET_DESC_CONCAT.patch
-Patch21:            0021-src-Add-support-for-concatenated-set-ranges.patch
-Patch22:            0022-parser_json-Support-ranges-in-concat-expressions.patch
-Patch23:            0023-doc-Document-notrack-statement.patch
-Patch24:            0024-JSON-Improve-performance-of-json_events_cb.patch
-Patch25:            0025-segtree-Fix-missing-expires-value-in-prefixes.patch
-Patch26:            0026-segtree-Use-expr_clone-in-get_set_interval_.patch
-Patch27:            0027-segtree-Merge-get_set_interval_find-and-get_set_inte.patch
-Patch28:            0028-tests-0034get_element_0-do-not-discard-stderr.patch
-Patch29:            0029-segtree-Fix-get-element-command-with-prefixes.patch
-Patch30:            0030-include-Resync-nf_tables.h-cache-copy.patch
-Patch31:            0031-src-Set-NFT_SET_CONCAT-flag-for-sets-with-concatenat.patch
-Patch32:            0032-src-store-expr-not-dtype-to-track-data-in-sets.patch
-Patch33:            0033-evaluate-Perform-set-evaluation-on-implicitly-declar.patch
-Patch34:            0034-evaluate-missing-datatype-definition-in-implicit_set.patch
-Patch35:            0035-mergesort-unbreak-listing-with-binops.patch
-Patch36:            0036-proto-add-sctp-crc32-checksum-fixup.patch
-Patch37:            0037-proto-Fix-ARP-header-field-ordering.patch
-Patch38:            0038-json-echo-Speedup-seqnum_to_json.patch
-Patch39:            0039-json-Fix-seqnum_to_json-functionality.patch
-Patch40:            0040-json-don-t-leave-dangling-pointers-on-hlist.patch
-Patch41:            0041-json-init-parser-state-for-every-new-buffer-file.patch
-Patch42:            0042-tests-Disable-tests-known-to-fail-on-RHEL8.patch
-Patch43:            0043-monitor-Fix-for-use-after-free-when-printing-map-ele.patch
-Patch44:            0044-tests-monitor-use-correct-nft-value-in-EXIT-trap.patch
-Patch45:            0045-evaluate-Reject-quoted-strings-containing-only-wildc.patch
-Patch46:            0046-src-Support-odd-sized-payload-matches.patch
-Patch47:            0047-src-Optimize-prefix-matches-on-byte-boundaries.patch
-Patch48:            0048-tests-py-Move-tcpopt.t-to-any-directory.patch
-Patch49:            0049-parser-merge-sack-perm-sack-permitted-and-maxseg-mss.patch
-Patch50:            0050-tcpopts-clean-up-parser-tcpopt.c-plumbing.patch
-Patch51:            0051-tcpopt-rename-noop-to-nop.patch
-Patch52:            0052-tcpopt-split-tcpopt_hdr_fields-into-per-option-enum.patch
-Patch53:            0053-tcpopt-allow-to-check-for-presence-of-any-tcp-option.patch
-Patch54:            0054-tcp-add-raw-tcp-option-match-support.patch
-Patch55:            0055-json-tcp-add-raw-tcp-option-match-support.patch
-Patch56:            0056-json-Simplify-non-tcpopt-exthdr-printing-a-bit.patch
-Patch57:            0057-scanner-introduce-start-condition-stack.patch
-Patch58:            0058-scanner-sctp-Move-to-own-scope.patch
-Patch59:            0059-exthdr-Implement-SCTP-Chunk-matching.patch
-Patch60:            0060-include-missing-sctp_chunk.h-in-Makefile.am.patch
-Patch61:            0061-doc-nft.8-Extend-monitor-description-by-trace.patch
-Patch62:            0062-tests-shell-Fix-bogus-testsuite-failure-with-100Hz.patch
-Patch63:            0063-parser_json-Fix-error-reporting-for-invalid-syntax.patch
-Patch64:            0064-parser_bison-Fix-for-implicit-declaration-of-isalnum.patch
-Patch65:            0065-parser_json-Fix-for-memleak-in-tcp-option-error-path.patch
-Patch66:            0066-json-Drop-pointless-assignment-in-exthdr_expr_json.patch
-Patch67:            0067-segtree-Fix-segfault-when-restoring-a-huge-interval-.patch
-Patch68:            0068-tests-cover-baecd1cf2685-segtree-Fix-segfault-when-r.patch
-Patch69:            0069-tests-shell-NFT-needs-to-be-invoked-unquoted.patch
-Patch70:            0070-tests-shell-better-parameters-for-the-interval-stack.patch
-Patch71:            0071-netlink-remove-unused-parameter-from-netlink_gen_stm.patch
-Patch72:            0072-src-support-for-restoring-element-counters.patch
-Patch73:            0073-evaluate-attempt-to-set_eval-flag-if-dynamic-updates.patch
-Patch74:            0074-evaluate-fix-inet-nat-with-no-layer-3-info.patch
-Patch75:            0075-tests-py-add-dnat-to-port-without-defining-destinati.patch
-Patch76:            0076-mnl-do-not-build-nftnl_set-element-list.patch
-Patch77:            0077-mnl-do-not-use-expr-identifier-to-fetch-device-name.patch
-Patch78:            0078-tests-shell-auto-removal-of-chain-hook-on-netns-remo.patch
-Patch79:            0079-rule-memleak-in-__do_add_setelems.patch
-Patch80:            0080-rule-fix-element-cache-update-in-__do_add_setelems.patch
-Patch81:            0081-src-rename-CMD_OBJ_SETELEM-to-CMD_OBJ_ELEMENTS.patch
-Patch82:            0082-src-add-CMD_OBJ_SETELEMS.patch
-Patch83:            0083-libnftables-call-nft_cmd_expand-only-with-CMD_ADD.patch
+Patch1:             0001-tests-shell-runtime-set-element-automerge.patch
+Patch2:             0002-rule-collapse-set-element-commands.patch
+Patch3:             0003-intervals-do-not-report-exact-overlaps-for-new-eleme.patch
+Patch4:             0004-intervals-do-not-empty-cache-for-maps.patch
+Patch5:             0005-intervals-Do-not-sort-cached-set-elements-over-and-o.patch
+Patch6:             0006-doc-Document-limitations-of-ipsec-expression-with-xf.patch
+Patch7:             0007-tests-py-Add-a-test-for-failing-ipsec-after-counter.patch
+Patch8:             0008-parser-add-missing-synproxy-scope-closure.patch
+Patch9:             0009-scanner-don-t-pop-active-flex-scanner-scope.patch
+Patch10:            0010-intervals-fix-crash-when-trying-to-remove-element-in.patch
+Patch11:            0011-intervals-check-for-EXPR_F_REMOVE-in-case-of-element.patch
+Patch12:            0012-netlink_delinearize-allow-postprocessing-on-concaten.patch
+Patch13:            0013-netlink_delinearize-postprocess-binary-ands-in-conca.patch
+Patch14:            0014-proto-track-full-stack-of-seen-l2-protocols-not-just.patch
+Patch15:            0015-debug-dump-the-l2-protocol-stack.patch
+Patch16:            0016-tests-add-a-test-case-for-ether-and-vlan-listing.patch
+Patch17:            0017-netlink_delinearize-also-postprocess-OP_AND-in-set-e.patch
+Patch18:            0018-evaluate-search-stacked-header-list-for-matching-pay.patch
+Patch19:            0019-src-allow-anon-set-concatenation-with-ether-and-vlan.patch
+Patch20:            0020-evaluate-set-eval-ctx-for-add-update-statements-with.patch
+Patch21:            0021-monitor-Sanitize-startup-race-condition.patch
+Patch22:            0022-netlink_delinearize-fix-decoding-of-concat-data-elem.patch
+Patch23:            0023-netlink_linearize-fix-timeout-with-map-updates.patch
+Patch24:            0024-tests-add-a-test-case-for-map-update-from-packet-pat.patch
+Patch25:            0025-owner-Fix-potential-array-out-of-bounds-access.patch
+Patch26:            0026-mnl-dump_nf_hooks-leaks-memory-in-error-path.patch
+Patch27:            0027-meta-parse_iso_date-returns-boolean.patch
+Patch28:            0028-netlink-Fix-for-potential-NULL-pointer-deref.patch
+Patch29:            0029-optimize-Do-not-return-garbage-from-stack.patch
+Patch30:            0030-optimize-Clarify-chain_optimize-array-allocations.patch
+Patch31:            0031-netlink_delinearize-Sanitize-concat-data-element-dec.patch
+Patch32:            0032-tests-monitor-Summarize-failures-per-test-case.patch
+Patch33:            0033-rule-check-address-family-in-set-collapse.patch
 
-BuildRequires: autogen
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: libtool
+BuildRequires: make
 BuildRequires: gcc
 BuildRequires: flex
 BuildRequires: bison
-BuildRequires: libmnl-devel
+BuildRequires: pkgconfig(libmnl) >= 1.0.4
 BuildRequires: gmp-devel
 BuildRequires: readline-devel
 BuildRequires: pkgconfig(libnftnl) >= %{libnftnl_ver}
 BuildRequires: systemd
 BuildRequires: asciidoc
-BuildRequires: iptables-devel
+BuildRequires: pkgconfig(xtables) >= 1.6.1
 BuildRequires: jansson-devel
 BuildRequires: python3-devel
 
@@ -142,12 +95,15 @@ The nftables python module provides an interface to libnftables via ctypes.
 
 %prep
 %autosetup -p1
+cp -a %{SOURCE6} ./tests/py/
+cp -a %{SOURCE7} ./tests/shell/
+cp -a %{SOURCE8} ./tests/monitor/run-tests.stderr.expect
 
 %build
 autoreconf -fi
 rm -Rf autom4te*.cache config.h.in~
 %configure --disable-silent-rules --with-json --with-xtables \
-	--enable-python --with-python-bin=%{__python3}
+	--enable-python --with-python-bin=%{__python3} --with-cli=readline
 make %{?_smp_mflags}
 
 %install
@@ -165,7 +121,7 @@ cp -a %{SOURCE1} $RPM_BUILD_ROOT/%{_unitdir}/
 mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig
 cp -a %{SOURCE2} $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/
 
-rm $RPM_BUILD_ROOT/%{_sysconfdir}/nftables/*.nft
+rm $RPM_BUILD_ROOT/%{_datadir}/nftables/*.nft
 cp %{SOURCE3} %{SOURCE4} %{SOURCE5} \
 	$RPM_BUILD_ROOT/%{_sysconfdir}/nftables/
 
@@ -217,6 +173,18 @@ touch -r %{SOURCE2} $RPM_BUILD_ROOT/%{python3_sitelib}/nftables/nftables.py
 %{python3_sitelib}/nftables/
 
 %changelog
+* Thu Sep 21 2023 Phil Sutter <psutter@redhat.com> [1.0.4-3.el8]
+- spec: Rename variables to avoid a clash (Phil Sutter) [INTERNAL]
+- rule: check address family in set collapse (Phil Sutter) [RHEL-5160]
+
+* Thu Jul 20 2023 Phil Sutter <psutter@redhat.com> [1.0.4-2.el8]
+- Add expected error records for testsuite runs (Phil Sutter) [2211076]
+- tests: monitor: Summarize failures per test case (Phil Sutter) [2211076]
+
+* Tue May 30 2023 Phil Sutter <psutter@redhat.com> [1.0.4-1.el8]
+- Synchronize patch level with nftables-1.0.4-10.el9 (Phil Sutter) [2211076]
+- Rebase onto version 1.0.4 (Phil Sutter) [2211076]
+
 * Thu Apr 28 2022 Phil Sutter <psutter@redhat.com> [0.9.3-26.el8]
 - libnftables: call nft_cmd_expand() only with CMD_ADD (Phil Sutter) [2073287]
 - src: add CMD_OBJ_SETELEMS (Phil Sutter) [2073287]

@@ -1,0 +1,139 @@
+From 5c5128094c75a184e54e82f2ad43c67423184c3e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 24 Jun 2022 16:02:59 +0200
+Subject: [PATCH] intervals: Do not sort cached set elements over and over
+ again
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit 59e3a59221fb8
+
+commit 59e3a59221fb81c289a0868a85140dd452fb1c30
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jun 16 10:56:12 2022 +0200
+
+    intervals: Do not sort cached set elements over and over again
+
+    When adding element(s) to a non-empty set, code merged the two lists and
+    sorted the result. With many individual 'add element' commands this
+    causes substantial overhead. Make use of the fact that
+    existing_set->init is sorted already, sort only the list of new elements
+    and use list_splice_sorted() to merge the two sorted lists.
+
+    Add set_sort_splice() and use it for set element overlap detection and
+    automerge.
+
+    A test case adding ~25k elements in individual commands completes in
+    about 1/4th of the time with this patch applied.
+
+    Joint work with Pablo.
+
+    Fixes: 3da9643fb9ff9 ("intervals: add support to automerge with kernel elements")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/expression.h |  1 +
+ src/intervals.c      | 46 +++++++++++++++++++++-----------------------
+ src/mergesort.c      |  2 +-
+ 3 files changed, 24 insertions(+), 25 deletions(-)
+
+diff --git a/include/expression.h b/include/expression.h
+index 53194c9..cf7319b 100644
+--- a/include/expression.h
++++ b/include/expression.h
+@@ -481,6 +481,7 @@ extern struct expr *compound_expr_alloc(const struct location *loc,
+ extern void compound_expr_add(struct expr *compound, struct expr *expr);
+ extern void compound_expr_remove(struct expr *compound, struct expr *expr);
+ extern void list_expr_sort(struct list_head *head);
++extern void list_splice_sorted(struct list_head *list, struct list_head *head);
+ 
+ extern struct expr *concat_expr_alloc(const struct location *loc);
+ 
+diff --git a/src/intervals.c b/src/intervals.c
+index e203413..dcc06d1 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -118,6 +118,26 @@ static bool merge_ranges(struct set_automerge_ctx *ctx,
+ 	return false;
+ }
+ 
++static void set_sort_splice(struct expr *init, struct set *set)
++{
++	struct set *existing_set = set->existing_set;
++
++	set_to_range(init);
++	list_expr_sort(&init->expressions);
++
++	if (!existing_set)
++		return;
++
++	if (existing_set->init) {
++		set_to_range(existing_set->init);
++		list_splice_sorted(&existing_set->init->expressions,
++				   &init->expressions);
++		init_list_head(&existing_set->init->expressions);
++	} else {
++		existing_set->init = set_expr_alloc(&internal_location, set);
++	}
++}
++
+ static void setelem_automerge(struct set_automerge_ctx *ctx)
+ {
+ 	struct expr *i, *next, *prev = NULL;
+@@ -222,18 +242,7 @@ int set_automerge(struct list_head *msgs, struct cmd *cmd, struct set *set,
+ 		return 0;
+ 	}
+ 
+-	if (existing_set) {
+-		if (existing_set->init) {
+-			list_splice_init(&existing_set->init->expressions,
+-					 &init->expressions);
+-		} else {
+-			existing_set->init = set_expr_alloc(&internal_location,
+-							    set);
+-		}
+-	}
+-
+-	set_to_range(init);
+-	list_expr_sort(&init->expressions);
++	set_sort_splice(init, set);
+ 
+ 	ctx.purge = set_expr_alloc(&internal_location, set);
+ 
+@@ -591,18 +600,7 @@ int set_overlap(struct list_head *msgs, struct set *set, struct expr *init)
+ 	struct expr *i, *n, *clone;
+ 	int err;
+ 
+-	if (existing_set) {
+-		if (existing_set->init) {
+-			list_splice_init(&existing_set->init->expressions,
+-					 &init->expressions);
+-		} else {
+-			existing_set->init = set_expr_alloc(&internal_location,
+-							    set);
+-		}
+-	}
+-
+-	set_to_range(init);
+-	list_expr_sort(&init->expressions);
++	set_sort_splice(init, set);
+ 
+ 	err = setelem_overlap(msgs, set, init);
+ 
+diff --git a/src/mergesort.c b/src/mergesort.c
+index 8e6aac5..dca7142 100644
+--- a/src/mergesort.c
++++ b/src/mergesort.c
+@@ -70,7 +70,7 @@ static int expr_msort_cmp(const struct expr *e1, const struct expr *e2)
+ 	return ret;
+ }
+ 
+-static void list_splice_sorted(struct list_head *list, struct list_head *head)
++void list_splice_sorted(struct list_head *list, struct list_head *head)
+ {
+ 	struct list_head *h = head->next;
+ 	struct list_head *l = list->next;
+-- 
+2.41.0.rc1
+

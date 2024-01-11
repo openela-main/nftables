@@ -1,0 +1,144 @@
+From 80b1505ca2ef8432375dc524cc6763e7ef795b1a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 9 Feb 2023 10:18:10 +0100
+Subject: [PATCH] scanner: don't pop active flex scanner scope
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit 8623772af0610
+
+commit 8623772af06103ed4ccca3d07e55afbf3d952d6d
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Jun 23 19:56:19 2022 +0200
+
+    scanner: don't pop active flex scanner scope
+
+    Currently we can pop a flex scope that is still active, i.e. the
+    scanner_pop_start_cond() for the scope has not been done.
+
+    Example:
+      counter ipsec out ip daddr 192.168.1.2 counter name "ipsec_out"
+
+    Here, parser fails because 'daddr' is parsed as STRING, not as DADDR token.
+
+    Bug is as follows:
+    COUNTER changes scope to COUNTER. (COUNTER).
+    Next, IPSEC scope gets pushed, stack is: COUNTER, IPSEC.
+
+    Then, the 'COUNTER' scope close happens.  Because active scope has changed,
+    we cannot pop (we would pop the 'ipsec' scope in flex).
+    The pop operation gets delayed accordingly.
+
+    Next, IP gets pushed, stack is: COUNTER, IPSEC, IP, plus the information
+    that one scope closure/pop was delayed.
+
+    Then, the IP scope is closed.  Because a pop operation was delayed, we pop again,
+    which brings us back to COUNTER state.
+
+    This is bogus: The pop operation CANNOT be done yet, because the ipsec scope
+    is still open, but the existing code lacks the information to detect this.
+
+    After popping the IP scope, we must remain in IPSEC scope until bison
+    parser calls scanner_pop_start_cond(, IPSEC).
+
+    This adds a counter per flex scope so that we can detect this case.
+    In above case, after the IP scope gets closed, the "new" (previous)
+    scope (IPSEC) will be treated as active and its close is attempted again
+    on the next call to scanner_pop_start_cond().
+
+    After this patch, transition in above rule is:
+
+    push counter (COUNTER)
+    push IPSEC (COUNTER, IPSEC)
+    pop COUNTER (delayed: COUNTER, IPSEC, pending-pop for COUNTER),
+    push IP (COUNTER, IPSEC, IP, pending-pop for COUNTER)
+    pop IP (COUNTER, IPSEC, pending-pop for COUNTER)
+    parse DADDR (we're in IPSEC scope, its valid token)
+    pop IPSEC (pops all remaining scopes).
+
+    We could also resurrect the commit:
+    "scanner: flags: move to own scope", the test case passes with the
+    new scope closure logic.
+
+    Fixes: bff106c5b277 ("scanner: add support for scope nesting")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/parser.h |  3 +++
+ src/scanner.l    | 11 +++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/include/parser.h b/include/parser.h
+index f32154c..5e5ad28 100644
+--- a/include/parser.h
++++ b/include/parser.h
+@@ -26,6 +26,7 @@ struct parser_state {
+ 	unsigned int			flex_state_pop;
+ 	unsigned int			startcond_type;
+ 	struct list_head		*cmds;
++	unsigned int			*startcond_active;
+ };
+ 
+ enum startcond_type {
+@@ -82,6 +83,8 @@ enum startcond_type {
+ 	PARSER_SC_STMT_REJECT,
+ 	PARSER_SC_STMT_SYNPROXY,
+ 	PARSER_SC_STMT_TPROXY,
++
++	__SC_MAX
+ };
+ 
+ struct mnl_socket;
+diff --git a/src/scanner.l b/src/scanner.l
+index 2154281..ed7256b 100644
+--- a/src/scanner.l
++++ b/src/scanner.l
+@@ -1148,6 +1148,8 @@ void *scanner_init(struct parser_state *state)
+ 	yylex_init_extra(state, &scanner);
+ 	yyset_out(NULL, scanner);
+ 
++	state->startcond_active = xzalloc_array(__SC_MAX,
++						sizeof(*state->startcond_active));
+ 	return scanner;
+ }
+ 
+@@ -1177,6 +1179,8 @@ void scanner_destroy(struct nft_ctx *nft)
+ 	struct parser_state *state = yyget_extra(nft->scanner);
+ 
+ 	input_descriptor_list_destroy(state);
++	xfree(state->startcond_active);
++
+ 	yylex_destroy(nft->scanner);
+ }
+ 
+@@ -1185,6 +1189,7 @@ static void scanner_push_start_cond(void *scanner, enum startcond_type type)
+ 	struct parser_state *state = yyget_extra(scanner);
+ 
+ 	state->startcond_type = type;
++	state->startcond_active[type]++;
+ 
+ 	yy_push_state((int)type, scanner);
+ }
+@@ -1193,6 +1198,8 @@ void scanner_pop_start_cond(void *scanner, enum startcond_type t)
+ {
+ 	struct parser_state *state = yyget_extra(scanner);
+ 
++	state->startcond_active[t]--;
++
+ 	if (state->startcond_type != t) {
+ 		state->flex_state_pop++;
+ 		return; /* Can't pop just yet! */
+@@ -1202,6 +1209,10 @@ void scanner_pop_start_cond(void *scanner, enum startcond_type t)
+ 		state->flex_state_pop--;
+ 		state->startcond_type = yy_top_state(scanner);
+ 		yy_pop_state(scanner);
++
++		t = state->startcond_type;
++		if (state->startcond_active[t])
++			return;
+ 	}
+ 
+ 	state->startcond_type = yy_top_state(scanner);
+-- 
+2.41.0.rc1
+

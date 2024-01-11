@@ -1,0 +1,54 @@
+From a2446688362b6b81bd0fa0dc22cb5cc2fa3378c1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Jul 2023 15:55:05 +0200
+Subject: [PATCH] tests: monitor: Summarize failures per test case
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2211076
+Upstream Status: nftables commit c2b28dcebd058
+
+commit c2b28dcebd058b978692b8e1899e79b96c025396
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jul 20 12:08:45 2023 +0200
+
+    tests: monitor: Summarize failures per test case
+
+    Explicitly print when tests from a file fail in addition to the diff +
+    "output differs" message.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index b5ca47d..f1ac790 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -161,7 +161,10 @@ for variant in $variants; do
+ 	output_append=${variant}_output_append
+ 
+ 	for testcase in ${testcases:-testcases/*.t}; do
+-		echo "$variant: running tests from file $(basename $testcase)"
++		filename=$(basename $testcase)
++		echo "$variant: running tests from file $filename"
++		rc_start=$rc
++
+ 		# files are like this:
+ 		#
+ 		# I add table ip t
+@@ -199,6 +202,10 @@ for variant in $variants; do
+ 			$run_test
+ 			let "rc += $?"
+ 		}
++
++		let "rc_diff = rc - rc_start"
++		[[ $rc_diff -ne 0 ]] && \
++			echo "$variant: $rc_diff tests from file $filename failed"
+ 	done
+ done
+ exit $rc
+-- 
+2.41.0
+
