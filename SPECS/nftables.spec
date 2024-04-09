@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.4
-%define nft_specrelease 3
+%define nft_specrelease 4
 %define libnftnl_ver 1.2.2-1
 
 Name:           nftables
@@ -54,6 +54,7 @@ Patch30:            0030-optimize-Clarify-chain_optimize-array-allocations.patch
 Patch31:            0031-netlink_delinearize-Sanitize-concat-data-element-dec.patch
 Patch32:            0032-tests-monitor-Summarize-failures-per-test-case.patch
 Patch33:            0033-rule-check-address-family-in-set-collapse.patch
+Patch34:            0034-parser_bison-Fix-for-broken-compatibility-with-older.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -173,6 +174,9 @@ touch -r %{SOURCE2} $RPM_BUILD_ROOT/%{python3_sitelib}/nftables/nftables.py
 %{python3_sitelib}/nftables/
 
 %changelog
+* Wed Nov 15 2023 Phil Sutter <psutter@redhat.com> [1.0.4-4.el8]
+- parser_bison: Fix for broken compatibility with older dumps (Phil Sutter) [RHEL-2596]
+
 * Thu Sep 21 2023 Phil Sutter <psutter@redhat.com> [1.0.4-3.el8]
 - spec: Rename variables to avoid a clash (Phil Sutter) [INTERNAL]
 - rule: check address family in set collapse (Phil Sutter) [RHEL-5160]

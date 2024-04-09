@@ -1,0 +1,86 @@
+From fa2b3f20274f5e66b67e2c3d2b7d957b9200473e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 15 Nov 2023 17:06:19 +0100
+Subject: [PATCH] parser_bison: Fix for broken compatibility with older dumps
+
+JIRA: https://issues.redhat.com/browse/RHEL-2596
+Upstream Status: nftables commit 22fab8681a50014174cdd02ace90f74b9e9eefe9
+
+commit 22fab8681a50014174cdd02ace90f74b9e9eefe9
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Oct 19 18:40:04 2023 +0200
+
+    parser_bison: Fix for broken compatibility with older dumps
+
+    Commit e6d1d0d611958 ("src: add set element multi-statement
+    support") changed the order of expressions and other state attached to set
+    elements are expected in input. This broke parsing of ruleset dumps
+    created by nft commands prior to that commit.
+
+    Restore compatibility by also accepting the old ordering.
+
+    Fixes: e6d1d0d611958 ("src: add set element multi-statement support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y                            |  6 ++++
+ tests/shell/testcases/sets/elem_opts_compat_0 | 29 +++++++++++++++++++
+ 2 files changed, 35 insertions(+)
+ create mode 100755 tests/shell/testcases/sets/elem_opts_compat_0
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index b548d5b..b882f3b 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -4283,6 +4283,12 @@ meter_key_expr_alloc	:	concat_expr
+ 
+ set_elem_expr		:	set_elem_expr_alloc
+ 			|	set_elem_expr_alloc		set_elem_expr_options
++			|	set_elem_expr_alloc		set_elem_expr_options	set_elem_stmt_list
++			{
++				$$ = $1;
++				list_splice_tail($3, &$$->stmt_list);
++				xfree($3);
++			}
+ 			;
+ 
+ set_elem_key_expr	:	set_lhs_expr		{ $$ = $1; }
+diff --git a/tests/shell/testcases/sets/elem_opts_compat_0 b/tests/shell/testcases/sets/elem_opts_compat_0
+new file mode 100755
+index 0000000..e012953
+--- /dev/null
++++ b/tests/shell/testcases/sets/elem_opts_compat_0
+@@ -0,0 +1,29 @@
++#!/bin/sh
++
++# ordering of element options and expressions has changed, make sure parser
++# accepts both ways
++
++set -e
++
++$NFT -f - <<EOF
++table t {
++	set s {
++		type inet_service
++		counter;
++		timeout 30s;
++	}
++}
++EOF
++
++check() {
++	out=$($NFT list ruleset)
++	secs=$(sed -n 's/.*expires \([0-9]\+\)s.*/\1/p' <<< "$out")
++	[[ $secs -lt 11 ]]
++	grep -q 'counter packets 10 bytes 20' <<< "$out"
++}
++
++$NFT add element t s '{ 23 counter packets 10 bytes 20 expires 10s }'
++check
++$NFT flush set t s
++$NFT add element t s '{ 42 expires 10s counter packets 10 bytes 20 }'
++check
+-- 
+2.41.0
+
