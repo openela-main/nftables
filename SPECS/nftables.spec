@@ -1,5 +1,5 @@
-%define nft_rpmversion 1.0.4
-%define nft_specrelease 11
+%define nft_rpmversion 1.0.9
+%define nft_specrelease 1
 
 Name:           nftables
 Version:        %{nft_rpmversion}
@@ -10,7 +10,7 @@ Summary:        Netfilter Tables userspace utillites
 
 License:        GPLv2
 URL:            https://netfilter.org/projects/nftables/
-Source0:        %{url}/files/%{name}-%{version}.tar.bz2
+Source0:        %{url}/files/%{name}-%{version}.tar.xz
 Source1:        nftables.service
 Source2:        nftables.conf
 Source3:        main.nft
@@ -19,38 +19,6 @@ Source5:        nat.nft
 Source6:        nft-test.stderr.expect
 Source7:        run-tests.stderr.expect
 
-Patch1:             0001-tests-shell-runtime-set-element-automerge.patch
-Patch2:             0002-rule-collapse-set-element-commands.patch
-Patch3:             0003-intervals-do-not-report-exact-overlaps-for-new-eleme.patch
-Patch4:             0004-intervals-do-not-empty-cache-for-maps.patch
-Patch5:             0005-intervals-Do-not-sort-cached-set-elements-over-and-o.patch
-Patch6:             0006-doc-Document-limitations-of-ipsec-expression-with-xf.patch
-Patch7:             0007-tests-py-Add-a-test-for-failing-ipsec-after-counter.patch
-Patch8:             0008-parser-add-missing-synproxy-scope-closure.patch
-Patch9:             0009-scanner-don-t-pop-active-flex-scanner-scope.patch
-Patch10:            0010-intervals-fix-crash-when-trying-to-remove-element-in.patch
-Patch11:            0011-intervals-check-for-EXPR_F_REMOVE-in-case-of-element.patch
-Patch12:            0012-netlink_delinearize-allow-postprocessing-on-concaten.patch
-Patch13:            0013-netlink_delinearize-postprocess-binary-ands-in-conca.patch
-Patch14:            0014-proto-track-full-stack-of-seen-l2-protocols-not-just.patch
-Patch15:            0015-debug-dump-the-l2-protocol-stack.patch
-Patch16:            0016-tests-add-a-test-case-for-ether-and-vlan-listing.patch
-Patch17:            0017-netlink_delinearize-also-postprocess-OP_AND-in-set-e.patch
-Patch18:            0018-evaluate-search-stacked-header-list-for-matching-pay.patch
-Patch19:            0019-src-allow-anon-set-concatenation-with-ether-and-vlan.patch
-Patch20:            0020-evaluate-set-eval-ctx-for-add-update-statements-with.patch
-Patch21:            0021-monitor-Sanitize-startup-race-condition.patch
-Patch22:            0022-netlink_delinearize-fix-decoding-of-concat-data-elem.patch
-Patch23:            0023-netlink_linearize-fix-timeout-with-map-updates.patch
-Patch24:            0024-tests-add-a-test-case-for-map-update-from-packet-pat.patch
-Patch25:            0025-owner-Fix-potential-array-out-of-bounds-access.patch
-Patch26:            0026-mnl-dump_nf_hooks-leaks-memory-in-error-path.patch
-Patch27:            0027-meta-parse_iso_date-returns-boolean.patch
-Patch28:            0028-netlink-Fix-for-potential-NULL-pointer-deref.patch
-Patch29:            0029-optimize-Do-not-return-garbage-from-stack.patch
-Patch30:            0030-optimize-Clarify-chain_optimize-array-allocations.patch
-Patch31:            0031-netlink_delinearize-Sanitize-concat-data-element-dec.patch
-Patch32:            0032-rule-check-address-family-in-set-collapse.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -62,12 +30,16 @@ BuildRequires: bison
 BuildRequires: pkgconfig(libmnl) >= 1.0.4
 BuildRequires: gmp-devel
 BuildRequires: readline-devel
-BuildRequires: pkgconfig(libnftnl) >= 1.2.2
+BuildRequires: pkgconfig(libnftnl) >= 1.2.6
 BuildRequires: systemd
 BuildRequires: asciidoc
 BuildRequires: pkgconfig(xtables) >= 1.6.1
 BuildRequires: jansson-devel
 BuildRequires: python3-devel
+
+%generate_buildrequires
+cd py/
+%pyproject_buildrequires
 
 %description
 Netfilter Tables userspace utilities.
@@ -96,9 +68,10 @@ cp -a %{SOURCE7} ./tests/shell/
 %build
 autoreconf -fi
 rm -Rf autom4te*.cache config.h.in~
-%configure --disable-silent-rules --with-xtables --with-json \
-	--enable-python --with-python-bin=%{__python3} --with-cli=readline
+%configure --disable-silent-rules --with-xtables --with-json --with-cli=readline
 %make_build
+cd py/
+%pyproject_wheel
 
 %install
 %make_install
@@ -123,11 +96,9 @@ find $RPM_BUILD_ROOT/%{_sysconfdir} \
 	\( -type d -exec chmod 0700 {} \; \) , \
 	\( -type f -exec chmod 0600 {} \; \)
 
-# make nftables.py use the real library file name
-# to avoid nftables-devel package dependency
-sofile=$(readlink $RPM_BUILD_ROOT/%{_libdir}/libnftables.so)
-sed -i -e 's/\(sofile=\)".*"/\1"'$sofile'"/' \
-	$RPM_BUILD_ROOT/%{python3_sitelib}/nftables/nftables.py
+cd py/
+%pyproject_install
+%pyproject_save_files nftables
 
 %post
 %systemd_post nftables.service
@@ -157,11 +128,13 @@ sed -i -e 's/\(sofile=\)".*"/\1"'$sofile'"/' \
 %{_includedir}/nftables/libnftables.h
 %{_mandir}/man3/libnftables.3*
 
-%files -n python3-nftables
-%{python3_sitelib}/nftables-*.egg-info
-%{python3_sitelib}/nftables/
+%files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Fri Oct 27 2023 Phil Sutter <psutter@redhat.com> [1.0.9-1.el9]
+- spec: Utilize pyproject-rpm-macros for the python sub-package (Phil Sutter) [RHEL-14191]
+- Rebase onto version 1.0.9 (Phil Sutter) [RHEL-14191]
+
 * Thu Sep 21 2023 Phil Sutter <psutter@redhat.com> [1.0.4-11.el9]
 - rule: check address family in set collapse (Phil Sutter) [RHEL-5908]
 - spec: Rename variables to avoid a clash (Phil Sutter) [INTERNAL]
