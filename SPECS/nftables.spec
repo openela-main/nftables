@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.9
-%define nft_specrelease 1
+%define nft_specrelease 3
 
 Name:           nftables
 Version:        %{nft_rpmversion}
@@ -19,6 +19,8 @@ Source5:        nat.nft
 Source6:        nft-test.stderr.expect
 Source7:        run-tests.stderr.expect
 
+Patch1:             0001-Add-support-for-table-s-persist-flag.patch
+Patch2:             0002-cache-Always-set-NFT_CACHE_TERSE-for-list-cmd-with-t.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -131,6 +133,12 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Tue Jul 02 2024 Phil Sutter <psutter@redhat.com> [1.0.9-3.el9]
+- cache: Always set NFT_CACHE_TERSE for list cmd with --terse (Phil Sutter) [RHEL-45633]
+
+* Fri Jun 14 2024 Phil Sutter <psutter@redhat.com> [1.0.9-2.el9]
+- Add support for table's persist flag (Phil Sutter) [RHEL-32122]
+
 * Fri Oct 27 2023 Phil Sutter <psutter@redhat.com> [1.0.9-1.el9]
 - spec: Utilize pyproject-rpm-macros for the python sub-package (Phil Sutter) [RHEL-14191]
 - Rebase onto version 1.0.9 (Phil Sutter) [RHEL-14191]

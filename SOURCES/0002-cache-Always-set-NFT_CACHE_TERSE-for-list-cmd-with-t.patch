@@ -1,0 +1,65 @@
+From 2ef49849b901184c3d97c98c05ffa6418b50af1e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 2 Jul 2024 16:41:22 +0200
+Subject: [PATCH] cache: Always set NFT_CACHE_TERSE for list cmd with --terse
+
+JIRA: https://issues.redhat.com/browse/RHEL-45633
+Upstream Status: nftables commit cd4e947032a57a585b1a457ce03f546afc7ba033
+
+commit cd4e947032a57a585b1a457ce03f546afc7ba033
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Feb 8 02:10:48 2024 +0100
+
+    cache: Always set NFT_CACHE_TERSE for list cmd with --terse
+
+    This fixes at least 'nft -t list table ...' and 'nft -t list set ...'.
+
+    Note how --terse handling for 'list sets/maps' remains in place since
+    setting NFT_CACHE_TERSE does not fully undo NFT_CACHE_SETELEM: setting
+    both enables fetching of anonymous sets which is pointless for that
+    command.
+
+    Reported-by: anton.khazan@gmail.com
+    Link: https://bugzilla.netfilter.org/show_bug.cgi?id=1735
+    Suggested-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 4e89fe1..0ac0f7c 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -230,8 +230,6 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 		}
+ 		if (filter->list.table && filter->list.set)
+ 			flags |= NFT_CACHE_TABLE | NFT_CACHE_SET | NFT_CACHE_SETELEM;
+-		else if (nft_output_terse(&nft->output))
+-			flags |= NFT_CACHE_FULL | NFT_CACHE_TERSE;
+ 		else
+ 			flags |= NFT_CACHE_FULL;
+ 		break;
+@@ -257,17 +255,15 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 		flags |= NFT_CACHE_TABLE | NFT_CACHE_FLOWTABLE;
+ 		break;
+ 	case CMD_OBJ_RULESET:
+-		if (nft_output_terse(&nft->output))
+-			flags |= NFT_CACHE_FULL | NFT_CACHE_TERSE;
+-		else
+-			flags |= NFT_CACHE_FULL;
+-		break;
+ 	default:
+ 		flags |= NFT_CACHE_FULL;
+ 		break;
+ 	}
+ 	flags |= NFT_CACHE_REFRESH;
+ 
++	if (nft_output_terse(&nft->output))
++		flags |= NFT_CACHE_TERSE;
++
+ 	return flags;
+ }
+ 
