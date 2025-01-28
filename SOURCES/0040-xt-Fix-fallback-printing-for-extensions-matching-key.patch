@@ -1,0 +1,71 @@
+From eafc3f2d2dbc367b022a51a9208cc6d861b9e10d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 14 Aug 2024 16:21:19 +0200
+Subject: [PATCH] xt: Fix fallback printing for extensions matching keywords
+
+JIRA: https://issues.redhat.com/browse/RHEL-5806
+Upstream Status: nftables commit aef5330fe7827f760b70d5d27010445c3adb3d3c
+
+commit aef5330fe7827f760b70d5d27010445c3adb3d3c
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Mar 9 14:31:31 2023 +0100
+
+    xt: Fix fallback printing for extensions matching keywords
+
+    Yet another Bison workaround: Instead of the fancy error message, an
+    incomprehensible syntax error is emitted:
+
+    | # iptables-nft -A FORWARD -p tcp -m osf --genre linux
+    | # nft list ruleset | nft -f -
+    | # Warning: table ip filter is managed by iptables-nft, do not touch!
+    | /dev/stdin:4:29-31: Error: syntax error, unexpected osf, expecting string
+    |               meta l4proto tcp xt match osf counter packets 0 bytes 0
+    |                                         ^^^
+
+    Avoid this by quoting the extension name when printing:
+
+    | # nft list ruleset | sudo ./src/nft -f -
+    | # Warning: table ip filter is managed by iptables-nft, do not touch!
+    | /dev/stdin:4:20-33: Error: unsupported xtables compat expression, use iptables-nft with this ruleset
+    |               meta l4proto tcp xt match "osf" counter packets 0 bytes 0
+    |                                ^^^^^^^^^^^^^^
+
+    Fixes: 79195a8cc9e9d ("xt: Rewrite unsupported compat expression dumping")
+    Fixes: e41c53ca5b043 ("xt: Fall back to generic printing from translation")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 2 +-
+ src/xt.c           | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index a9d16f8..1ca0c25 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -2870,7 +2870,7 @@ stmt			:	verdict_stmt
+ 			|	xt_stmt		close_scope_xt
+ 			;
+ 
+-xt_stmt			:	XT	STRING	STRING
++xt_stmt			:	XT	STRING	string
+ 			{
+ 				$$ = NULL;
+ 				xfree($2);
+diff --git a/src/xt.c b/src/xt.c
+index b75c94e..31cf40e 100644
+--- a/src/xt.c
++++ b/src/xt.c
+@@ -116,7 +116,7 @@ void xt_stmt_xlate(const struct stmt *stmt, struct output_ctx *octx)
+ 	xfree(entry);
+ #endif
+ 	if (!rc)
+-		nft_print(octx, "xt %s %s",
++		nft_print(octx, "xt %s \"%s\"",
+ 			  typename[stmt->xt.type], stmt->xt.name);
+ }
+ 
+-- 
+2.45.0
+

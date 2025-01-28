@@ -1,0 +1,66 @@
+From 39c9fb961fe827a104e17a8ffa7ed63e51e3f522 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 29 Oct 2024 19:40:56 +0100
+Subject: [PATCH] evaluate: un-break rule insert with intervals
+
+JIRA: https://issues.redhat.com/browse/RHEL-62895
+Upstream Status: nftables commit 91626261c9dfedbd1e8ff40959b453418ebc8fb6
+
+commit 91626261c9dfedbd1e8ff40959b453418ebc8fb6
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Sep 20 15:26:07 2022 +0200
+
+    evaluate: un-break rule insert with intervals
+
+    'rule inet dscpclassify dscp_match  meta l4proto { udp }  th dport { 3478 }  th sport { 3478-3497, 16384-16387 } goto ct_set_ef'
+    works with 'nft add', but not 'nft insert', the latter yields: "BUG: unhandled op 4".
+
+    Fixes: 81e36530fcac ("src: replace interval segment tree overlap and automerge")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Acked-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                               | 1 +
+ tests/shell/testcases/rule_management/0003insert_0           | 4 ++++
+ tests/shell/testcases/rule_management/dumps/0003insert_0.nft | 1 +
+ 3 files changed, 6 insertions(+)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 6d0a0f5..c6d656b 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1505,6 +1505,7 @@ static int interval_set_eval(struct eval_ctx *ctx, struct set *set,
+ 	switch (ctx->cmd->op) {
+ 	case CMD_CREATE:
+ 	case CMD_ADD:
++	case CMD_INSERT:
+ 		if (set->automerge) {
+ 			ret = set_automerge(ctx->msgs, ctx->cmd, set, init,
+ 					    ctx->nft->debug_mask);
+diff --git a/tests/shell/testcases/rule_management/0003insert_0 b/tests/shell/testcases/rule_management/0003insert_0
+index 329ccc2..c343d57 100755
+--- a/tests/shell/testcases/rule_management/0003insert_0
++++ b/tests/shell/testcases/rule_management/0003insert_0
+@@ -9,3 +9,7 @@ $NFT add chain t c
+ $NFT insert rule t c accept
+ $NFT insert rule t c drop
+ $NFT insert rule t c masquerade
++
++# check 'evaluate: un-break rule insert with intervals'
++
++$NFT insert rule t c tcp sport { 3478-3497, 16384-16387 }
+diff --git a/tests/shell/testcases/rule_management/dumps/0003insert_0.nft b/tests/shell/testcases/rule_management/dumps/0003insert_0.nft
+index 9421f4a..b1875ab 100644
+--- a/tests/shell/testcases/rule_management/dumps/0003insert_0.nft
++++ b/tests/shell/testcases/rule_management/dumps/0003insert_0.nft
+@@ -1,5 +1,6 @@
+ table ip t {
+ 	chain c {
++		tcp sport { 3478-3497, 16384-16387 }
+ 		masquerade
+ 		drop
+ 		accept
+-- 
+2.46.2
+

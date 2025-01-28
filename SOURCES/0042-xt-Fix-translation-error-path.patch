@@ -1,0 +1,70 @@
+From 5e5919ad698c6edfd0c1bbbd47d97309c0cb7a83 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 29 Nov 2024 12:01:39 +0100
+Subject: [PATCH] xt: Fix translation error path
+
+JIRA: https://issues.redhat.com/browse/RHEL-5806
+Upstream Status: nftables commit ce3d71348ee77d2d7ffa6a825afbc7471e92bc89
+
+commit ce3d71348ee77d2d7ffa6a825afbc7471e92bc89
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Mar 28 13:46:10 2023 +0200
+
+    xt: Fix translation error path
+
+    If xtables support was compiled in but the required libxtables DSO is
+    not found, nft prints an error message and leaks memory:
+
+    | counter packets 0 bytes 0 XT target MASQUERADE not found
+
+    This is not as bad as it seems, the output combines stdout and stderr.
+    Dropping stderr produces an incomplete ruleset listing, though. While
+    this seemingly inline output can't easily be avoided, fix a few things:
+
+    * Respect octx->error_fp, libnftables might have been configured to
+      redirect stderr somewhere else.
+    * Align error message formatting with others.
+    * Don't return immediately, but free allocated memory and fall back to
+      printing the expression in "untranslated" form.
+
+    Fixes: 5c30feeee5cfe ("xt: Delay libxtables access until translation")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/xt.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/src/xt.c b/src/xt.c
+index 31cf40e..6d5866d 100644
+--- a/src/xt.c
++++ b/src/xt.c
+@@ -56,9 +56,10 @@ void xt_stmt_xlate(const struct stmt *stmt, struct output_ctx *octx)
+ 	case NFT_XT_MATCH:
+ 		mt = xtables_find_match(stmt->xt.name, XTF_TRY_LOAD, NULL);
+ 		if (!mt) {
+-			fprintf(stderr, "XT match %s not found\n",
++			fprintf(octx->error_fp,
++				"# Warning: XT match %s not found\n",
+ 				stmt->xt.name);
+-			return;
++			break;
+ 		}
+ 		size = XT_ALIGN(sizeof(*m)) + stmt->xt.infolen;
+ 
+@@ -83,9 +84,10 @@ void xt_stmt_xlate(const struct stmt *stmt, struct output_ctx *octx)
+ 	case NFT_XT_TARGET:
+ 		tg = xtables_find_target(stmt->xt.name, XTF_TRY_LOAD);
+ 		if (!tg) {
+-			fprintf(stderr, "XT target %s not found\n",
++			fprintf(octx->error_fp,
++				"# Warning: XT target %s not found\n",
+ 				stmt->xt.name);
+-			return;
++			break;
+ 		}
+ 		size = XT_ALIGN(sizeof(*t)) + stmt->xt.infolen;
+ 
+-- 
+2.46.2
+

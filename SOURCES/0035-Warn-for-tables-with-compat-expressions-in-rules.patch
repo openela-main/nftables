@@ -1,0 +1,106 @@
+From 87b57721997aaa9f3938d2f700e13879b5cb9f72 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 14 Aug 2024 16:20:37 +0200
+Subject: [PATCH] Warn for tables with compat expressions in rules
+
+JIRA: https://issues.redhat.com/browse/RHEL-5806
+Upstream Status: nftables commit c327e9331e50d7b4d6cfd0a82fb38bec73703bfb
+
+commit c327e9331e50d7b4d6cfd0a82fb38bec73703bfb
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Oct 11 18:46:55 2022 +0200
+
+    Warn for tables with compat expressions in rules
+
+    While being able to "look inside" compat expressions using nft is a nice
+    feature, it is also (yet another) pitfall for unaware users, deceiving
+    them into assuming interchangeability (or at least compatibility)
+    between iptables-nft and nft.
+
+    In reality, which involves 'nft list ruleset | nft -f -', any correctly
+    translated compat expressions will turn into native nftables ones not
+    understood by (the version of) iptables-nft which created them in the
+    first place. Other compat expressions will vanish, potentially
+    compromising the firewall ruleset.
+
+    Emit a warning (as comment) to give users a chance to stop and
+    reconsider before shooting their own foot.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/rule.h |  1 +
+ src/rule.c     | 16 +++++++++++++---
+ src/xt.c       |  2 ++
+ 3 files changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/include/rule.h b/include/rule.h
+index 9081225..c77146a 100644
+--- a/include/rule.h
++++ b/include/rule.h
+@@ -169,6 +169,7 @@ struct table {
+ 	unsigned int		refcnt;
+ 	uint32_t		owner;
+ 	const char		*comment;
++	bool			has_xt_stmts;
+ };
+ 
+ extern struct table *table_alloc(void);
+diff --git a/src/rule.c b/src/rule.c
+index 3b60cca..2fe29b1 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -1227,6 +1227,11 @@ static void table_print(const struct table *table, struct output_ctx *octx)
+ 	const char *delim = "";
+ 	const char *family = family2str(table->handle.family);
+ 
++	if (table->has_xt_stmts)
++		fprintf(octx->error_fp,
++			"# Warning: table %s %s is managed by iptables-nft, do not touch!\n",
++			family, table->handle.table.name);
++
+ 	nft_print(octx, "table %s %s {", family, table->handle.table.name);
+ 	if (nft_output_handle(octx) || table->flags & TABLE_F_OWNER)
+ 		nft_print(octx, " #");
+@@ -2373,9 +2378,14 @@ static int do_list_tables(struct netlink_ctx *ctx, struct cmd *cmd)
+ static void table_print_declaration(struct table *table,
+ 				    struct output_ctx *octx)
+ {
+-	nft_print(octx, "table %s %s {\n",
+-		  family2str(table->handle.family),
+-		  table->handle.table.name);
++	const char *family = family2str(table->handle.family);
++
++	if (table->has_xt_stmts)
++		fprintf(octx->error_fp,
++			"# Warning: table %s %s is managed by iptables-nft, do not touch!\n",
++			family, table->handle.table.name);
++
++	nft_print(octx, "table %s %s {\n", family, table->handle.table.name);
+ }
+ 
+ static int do_list_chain(struct netlink_ctx *ctx, struct cmd *cmd,
+diff --git a/src/xt.c b/src/xt.c
+index 789de99..a541735 100644
+--- a/src/xt.c
++++ b/src/xt.c
+@@ -238,6 +238,7 @@ void netlink_parse_match(struct netlink_parse_ctx *ctx,
+ 	stmt->xt.name = strdup(name);
+ 	stmt->xt.type = NFT_XT_MATCH;
+ #endif
++	ctx->table->has_xt_stmts = true;
+ 	rule_stmt_append(ctx->rule, stmt);
+ }
+ 
+@@ -283,6 +284,7 @@ void netlink_parse_target(struct netlink_parse_ctx *ctx,
+ 	stmt->xt.name = strdup(name);
+ 	stmt->xt.type = NFT_XT_TARGET;
+ #endif
++	ctx->table->has_xt_stmts = true;
+ 	rule_stmt_append(ctx->rule, stmt);
+ }
+ 
+-- 
+2.45.0
+

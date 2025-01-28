@@ -1,0 +1,54 @@
+From 89e01c6c9c9197193e83ec2b2adf14d1c6eb6f1f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 14 Aug 2024 16:20:37 +0200
+Subject: [PATCH] xt: Purify enum nft_xt_type
+
+JIRA: https://issues.redhat.com/browse/RHEL-5806
+Upstream Status: nftables commit e432477f5c013d0ca56f9fc5f9ac7cf35301b0b9
+
+commit e432477f5c013d0ca56f9fc5f9ac7cf35301b0b9
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Nov 24 16:24:05 2022 +0100
+
+    xt: Purify enum nft_xt_type
+
+    Remove NFT_XT_MAX from the enum, it is not a valid xt type.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/statement.h | 2 +-
+ src/xt.c            | 2 --
+ 2 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/include/statement.h b/include/statement.h
+index 8651fc7..e648fb1 100644
+--- a/include/statement.h
++++ b/include/statement.h
+@@ -255,8 +255,8 @@ enum nft_xt_type {
+ 	NFT_XT_MATCH = 0,
+ 	NFT_XT_TARGET,
+ 	NFT_XT_WATCHER,
+-	NFT_XT_MAX
+ };
++#define NFT_XT_MAX	(NFT_XT_WATCHER + 1)
+ 
+ struct xtables_match;
+ struct xtables_target;
+diff --git a/src/xt.c b/src/xt.c
+index 7880fa1..300416a 100644
+--- a/src/xt.c
++++ b/src/xt.c
+@@ -110,8 +110,6 @@ void xt_stmt_xlate(const struct stmt *stmt, struct output_ctx *octx)
+ 		}
+ 		xfree(t);
+ 		break;
+-	default:
+-		break;
+ 	}
+ 
+ 	xt_xlate_free(xl);
+-- 
+2.45.0
+

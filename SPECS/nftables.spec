@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.4
-%define nft_specrelease 4
+%define nft_specrelease 7
 %define libnftnl_ver 1.2.2-1
 
 Name:           nftables
@@ -55,6 +55,14 @@ Patch31:            0031-netlink_delinearize-Sanitize-concat-data-element-dec.pa
 Patch32:            0032-tests-monitor-Summarize-failures-per-test-case.patch
 Patch33:            0033-rule-check-address-family-in-set-collapse.patch
 Patch34:            0034-parser_bison-Fix-for-broken-compatibility-with-older.patch
+Patch35:            0035-Warn-for-tables-with-compat-expressions-in-rules.patch
+Patch36:            0036-xt-Delay-libxtables-access-until-translation.patch
+Patch37:            0037-xt-Purify-enum-nft_xt_type.patch
+Patch38:            0038-xt-Rewrite-unsupported-compat-expression-dumping.patch
+Patch39:            0039-xt-Fall-back-to-generic-printing-from-translation.patch
+Patch40:            0040-xt-Fix-fallback-printing-for-extensions-matching-key.patch
+Patch41:            0041-evaluate-un-break-rule-insert-with-intervals.patch
+Patch42:            0042-xt-Fix-translation-error-path.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -174,6 +182,20 @@ touch -r %{SOURCE2} $RPM_BUILD_ROOT/%{python3_sitelib}/nftables/nftables.py
 %{python3_sitelib}/nftables/
 
 %changelog
+* Fri Nov 29 2024 Phil Sutter <psutter@redhat.com> [1.0.4-7.el8]
+- xt: Fix translation error path (Phil Sutter) [RHEL-5806]
+
+* Tue Oct 29 2024 Phil Sutter <psutter@redhat.com> [1.0.4-6.el8]
+- evaluate: un-break rule insert with intervals (Phil Sutter) [RHEL-62895]
+
+* Wed Aug 14 2024 Phil Sutter <psutter@redhat.com> [1.0.4-5.el8]
+- xt: Fix fallback printing for extensions matching keywords (Phil Sutter) [RHEL-5806]
+- xt: Fall back to generic printing from translation (Phil Sutter) [RHEL-5806]
+- xt: Rewrite unsupported compat expression dumping (Phil Sutter) [RHEL-5806]
+- xt: Purify enum nft_xt_type (Phil Sutter) [RHEL-5806]
+- xt: Delay libxtables access until translation (Phil Sutter) [RHEL-5806]
+- Warn for tables with compat expressions in rules (Phil Sutter) [RHEL-5806]
+
 * Wed Nov 15 2023 Phil Sutter <psutter@redhat.com> [1.0.4-4.el8]
 - parser_bison: Fix for broken compatibility with older dumps (Phil Sutter) [RHEL-2596]
 
