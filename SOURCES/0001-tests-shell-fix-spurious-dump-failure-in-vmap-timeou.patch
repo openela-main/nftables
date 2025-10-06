@@ -1,0 +1,45 @@
+From 1ce7bc1ca89494fdbb2fa10b176d33a5944ede01 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 7 Nov 2024 18:38:45 +0100
+Subject: [PATCH] tests: shell: fix spurious dump failure in vmap timeout test
+
+JIRA: https://issues.redhat.com/browse/RHEL-65346
+Upstream Status: nftables commit 95017b8c8f10ada09c2faa7e6bae71b60f38f259
+
+commit 95017b8c8f10ada09c2faa7e6bae71b60f38f259
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Oct 11 02:32:08 2024 +0200
+
+    tests: shell: fix spurious dump failure in vmap timeout test
+
+    Blamed commit can update the timeout to 6s, but last line waits
+    for 5 seconds and expects that to be enough to have all elements vanish.
+
+    Fix the typo to limit update timeout also to 5 seconds and not 6.
+    This fixes spurious dump failures like this one:
+
+    -               elements = { 1.2.3.4 . 22 : jump ssh_input }
+    +               elements = { 1.2.3.4 . 22 : jump ssh_input,
+    +                            10.0.95.144 . 38023 timeout 6s expires 545ms : jump other_input }
+
+    Fixes: db80037c0279 ("tests: shell: extend vmap test with updates")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/maps/vmap_timeout | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/shell/testcases/maps/vmap_timeout b/tests/shell/testcases/maps/vmap_timeout
+index 3f0563a..6d73f3c 100755
+--- a/tests/shell/testcases/maps/vmap_timeout
++++ b/tests/shell/testcases/maps/vmap_timeout
+@@ -32,7 +32,7 @@ for i in $(seq 1 100) ; do
+ 		timeout=$((timeout+1))
+ 		expire=$((RANDOM%timeout))
+ 		utimeout=$((RANDOM%5))
+-		utimeout=$((timeout+1))
++		utimeout=$((utimeout+1))
+ 
+ 		timeout_str="timeout ${timeout}s"
+ 		expire_str=""

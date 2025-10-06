@@ -1,0 +1,58 @@
+From 66dc95d7a3f7c0e4527f4e960f5c397fd3b82af5 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 7 Nov 2024 18:38:45 +0100
+Subject: [PATCH] rule: netlink attribute offset is uint32_t for struct
+ nlerr_loc
+
+JIRA: https://issues.redhat.com/browse/RHEL-65346
+Upstream Status: nftables commit 42b081df747729b0d83b69d2816be4091af56a58
+
+commit 42b081df747729b0d83b69d2816be4091af56a58
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Oct 24 00:08:24 2024 +0200
+
+    rule: netlink attribute offset is uint32_t for struct nlerr_loc
+
+    The maximum netlink message length (nlh->nlmsg_len) is uint32_t, struct
+    nlerr_loc stores the offset to the netlink attribute which must be
+    uint32_t, not uint16_t.
+
+    While at it, remove check for zero netlink attribute offset in
+    nft_cmd_error() which should not ever happen, likely this check was
+    there to prevent the uint16_t offset overflow.
+
+    Fixes: f8aec603aa7e ("src: initial extended netlink error reporting")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/rule.h | 2 +-
+ src/cmd.c      | 2 --
+ 2 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/include/rule.h b/include/rule.h
+index a1628d8..3fcfa44 100644
+--- a/include/rule.h
++++ b/include/rule.h
+@@ -695,7 +695,7 @@ void monitor_free(struct monitor *m);
+ #define NFT_NLATTR_LOC_MAX 32
+ 
+ struct nlerr_loc {
+-	uint16_t		offset;
++	uint32_t		offset;
+ 	const struct location	*location;
+ };
+ 
+diff --git a/src/cmd.c b/src/cmd.c
+index 78a2aa3..0c7a43e 100644
+--- a/src/cmd.c
++++ b/src/cmd.c
+@@ -323,8 +323,6 @@ void nft_cmd_error(struct netlink_ctx *ctx, struct cmd *cmd,
+ 	uint32_t i;
+ 
+ 	for (i = 0; i < cmd->num_attrs; i++) {
+-		if (!cmd->attr[i].offset)
+-			break;
+ 		if (cmd->attr[i].offset == err->offset)
+ 			loc = cmd->attr[i].location;
+ 	}
