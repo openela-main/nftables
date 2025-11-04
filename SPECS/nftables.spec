@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.9
-%define nft_specrelease 3
+%define nft_specrelease 4
 
 Name:           nftables
 Version:        %{nft_rpmversion}
@@ -21,6 +21,8 @@ Source7:        run-tests.stderr.expect
 
 Patch1:             0001-Add-support-for-table-s-persist-flag.patch
 Patch2:             0002-cache-Always-set-NFT_CACHE_TERSE-for-list-cmd-with-t.patch
+Patch3:             0003-json-deal-appropriately-with-multidevice-in-chain.patch
+Patch4:             0004-parser_json-fix-handle-memleak-from-error-path.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -133,6 +135,10 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Wed Apr 23 2025 Phil Sutter <psutter@redhat.com> [1.0.9-4.el9]
+- parser_json: fix handle memleak from error path (Phil Sutter) [RHEL-88181]
+- json: deal appropriately with multidevice in chain (Phil Sutter) [RHEL-88181]
+
 * Tue Jul 02 2024 Phil Sutter <psutter@redhat.com> [1.0.9-3.el9]
 - cache: Always set NFT_CACHE_TERSE for list cmd with --terse (Phil Sutter) [RHEL-45633]
 
