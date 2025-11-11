@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.9
-%define nft_specrelease 4
+%define nft_specrelease 5
 
 Name:           nftables
 Version:        %{nft_rpmversion}
@@ -23,6 +23,12 @@ Patch1:             0001-Add-support-for-table-s-persist-flag.patch
 Patch2:             0002-cache-Always-set-NFT_CACHE_TERSE-for-list-cmd-with-t.patch
 Patch3:             0003-json-deal-appropriately-with-multidevice-in-chain.patch
 Patch4:             0004-parser_json-fix-handle-memleak-from-error-path.patch
+Patch5:             0005-tests-shell-Fix-sets-reset_command_0-for-current-ker.patch
+Patch6:             0006-tests-shell-connect-chains-to-hook-point.patch
+Patch7:             0007-datatype-rt_symbol_table_init-to-search-for-iproute2.patch
+Patch8:             0008-tests-py-remove-huge-limit-test-cases.patch
+Patch9:             0009-tests-py-add-missing-json.output-data.patch
+Patch10:            0010-tests-py-missing-json-output-in-never-merge-across-n.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -135,6 +141,14 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Thu Oct 16 2025 Phil Sutter <psutter@redhat.com> [1.0.9-5.el9]
+- tests: py: missing json output in never merge across non-expression statements (Phil Sutter) [RHEL-114095]
+- tests: py: add missing json.output data (Phil Sutter) [RHEL-114095]
+- tests: py: remove huge-limit test cases (Phil Sutter) [RHEL-114095]
+- datatype: rt_symbol_table_init() to search for iproute2 configs (Phil Sutter) [RHEL-114095]
+- tests: shell: connect chains to hook point (Phil Sutter) [RHEL-114095]
+- tests: shell: Fix sets/reset_command_0 for current kernels (Phil Sutter) [RHEL-114095]
+
 * Wed Apr 23 2025 Phil Sutter <psutter@redhat.com> [1.0.9-4.el9]
 - parser_json: fix handle memleak from error path (Phil Sutter) [RHEL-88181]
 - json: deal appropriately with multidevice in chain (Phil Sutter) [RHEL-88181]

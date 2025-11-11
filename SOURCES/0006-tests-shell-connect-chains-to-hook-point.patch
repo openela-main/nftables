@@ -1,0 +1,165 @@
+From 52f4e05d55ef0215dd7df050ff93270f185c07b0 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 16 Oct 2025 16:12:09 +0200
+Subject: [PATCH] tests: shell: connect chains to hook point
+
+JIRA: https://issues.redhat.com/browse/RHEL-114095
+Upstream Status: nftables commit 1fc78397e9a1fb5e41841b8b4e92a9eb9536c6f1
+Conflicts: Dropped changes to .json-nft files missing downstream
+
+commit 1fc78397e9a1fb5e41841b8b4e92a9eb9536c6f1
+Author: Florian Westphal <fw@strlen.de>
+Date:   Wed Jul 10 02:33:37 2024 +0200
+
+    tests: shell: connect chains to hook point
+
+    These tests should fail because they contain a loop or exceed the jump stack.
+
+    But this depends on the kernel validating chains that are not bound to any
+    basechain/hook point.
+
+    Wire up the initial chain to filter type.
+
+    Without this tests will start to fail when kernel stops validating
+    chains that are not reachable by any base chain.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/chains/0003jump_loop_1                   | 3 ++-
+ tests/shell/testcases/chains/0010endless_jump_loop_1           | 2 +-
+ tests/shell/testcases/chains/0011endless_jump_loop_1           | 2 +-
+ tests/shell/testcases/chains/0018check_jump_loop_1             | 2 +-
+ tests/shell/testcases/chains/dumps/0003jump_loop_1.nft         | 1 +
+ tests/shell/testcases/chains/dumps/0010endless_jump_loop_1.nft | 1 +
+ tests/shell/testcases/chains/dumps/0011endless_jump_loop_1.nft | 1 +
+ tests/shell/testcases/chains/dumps/0018check_jump_loop_1.nft   | 1 +
+ tests/shell/testcases/transactions/0023rule_1                  | 2 +-
+ tests/shell/testcases/transactions/anon_chain_loop             | 2 +-
+ 10 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/tests/shell/testcases/chains/0003jump_loop_1 b/tests/shell/testcases/chains/0003jump_loop_1
+index 80e243f..1a8eaf6 100755
+--- a/tests/shell/testcases/chains/0003jump_loop_1
++++ b/tests/shell/testcases/chains/0003jump_loop_1
+@@ -5,8 +5,9 @@ set -e
+ MAX_JUMPS=16
+ 
+ $NFT add table t
++$NFT "add chain t c1 { type filter hook prerouting priority 0; }"
+ 
+-for i in $(seq 1 $MAX_JUMPS)
++for i in $(seq 2 $MAX_JUMPS)
+ do
+ 	$NFT add chain t c${i}
+ done
+diff --git a/tests/shell/testcases/chains/0010endless_jump_loop_1 b/tests/shell/testcases/chains/0010endless_jump_loop_1
+index 5d3ef23..6000e5d 100755
+--- a/tests/shell/testcases/chains/0010endless_jump_loop_1
++++ b/tests/shell/testcases/chains/0010endless_jump_loop_1
+@@ -3,7 +3,7 @@
+ set -e
+ 
+ $NFT add table t
+-$NFT add chain t c
++$NFT add chain "t c { type filter hook input priority 0; }"
+ 
+ # kernel should return ELOOP
+ $NFT add rule t c tcp dport vmap {1 : jump c} 2>/dev/null || exit 0
+diff --git a/tests/shell/testcases/chains/0011endless_jump_loop_1 b/tests/shell/testcases/chains/0011endless_jump_loop_1
+index d75932d..66abf8d 100755
+--- a/tests/shell/testcases/chains/0011endless_jump_loop_1
++++ b/tests/shell/testcases/chains/0011endless_jump_loop_1
+@@ -3,7 +3,7 @@
+ set -e
+ 
+ $NFT add table t
+-$NFT add chain t c1
++$NFT add chain "t c1 { type filter hook forward priority 0; }"
+ $NFT add chain t c2
+ $NFT add map t m {type inet_service : verdict \;}
+ $NFT add element t m {2 : jump c2}
+diff --git a/tests/shell/testcases/chains/0018check_jump_loop_1 b/tests/shell/testcases/chains/0018check_jump_loop_1
+index b87520f..1e674d3 100755
+--- a/tests/shell/testcases/chains/0018check_jump_loop_1
++++ b/tests/shell/testcases/chains/0018check_jump_loop_1
+@@ -3,7 +3,7 @@
+ set -e
+ 
+ $NFT add table ip filter
+-$NFT add chain ip filter ap1
++$NFT add chain ip filter ap1 "{ type filter hook input priority 0; }"
+ $NFT add chain ip filter ap2
+ $NFT add rule ip filter ap1 jump ap2
+ 
+diff --git a/tests/shell/testcases/chains/dumps/0003jump_loop_1.nft b/tests/shell/testcases/chains/dumps/0003jump_loop_1.nft
+index 7054cde..8d89bc4 100644
+--- a/tests/shell/testcases/chains/dumps/0003jump_loop_1.nft
++++ b/tests/shell/testcases/chains/dumps/0003jump_loop_1.nft
+@@ -1,5 +1,6 @@
+ table ip t {
+ 	chain c1 {
++		type filter hook prerouting priority filter; policy accept;
+ 		jump c2
+ 	}
+ 
+diff --git a/tests/shell/testcases/chains/dumps/0010endless_jump_loop_1.nft b/tests/shell/testcases/chains/dumps/0010endless_jump_loop_1.nft
+index 1e0d1d6..62fefaf 100644
+--- a/tests/shell/testcases/chains/dumps/0010endless_jump_loop_1.nft
++++ b/tests/shell/testcases/chains/dumps/0010endless_jump_loop_1.nft
+@@ -1,4 +1,5 @@
+ table ip t {
+ 	chain c {
++		type filter hook input priority filter; policy accept;
+ 	}
+ }
+diff --git a/tests/shell/testcases/chains/dumps/0011endless_jump_loop_1.nft b/tests/shell/testcases/chains/dumps/0011endless_jump_loop_1.nft
+index ca0a737..d35736e 100644
+--- a/tests/shell/testcases/chains/dumps/0011endless_jump_loop_1.nft
++++ b/tests/shell/testcases/chains/dumps/0011endless_jump_loop_1.nft
+@@ -5,6 +5,7 @@ table ip t {
+ 	}
+ 
+ 	chain c1 {
++		type filter hook forward priority filter; policy accept;
+ 		tcp dport vmap @m
+ 	}
+ 
+diff --git a/tests/shell/testcases/chains/dumps/0018check_jump_loop_1.nft b/tests/shell/testcases/chains/dumps/0018check_jump_loop_1.nft
+index 437900b..bdd0ead 100644
+--- a/tests/shell/testcases/chains/dumps/0018check_jump_loop_1.nft
++++ b/tests/shell/testcases/chains/dumps/0018check_jump_loop_1.nft
+@@ -1,5 +1,6 @@
+ table ip filter {
+ 	chain ap1 {
++		type filter hook input priority filter; policy accept;
+ 		jump ap2
+ 	}
+ 
+diff --git a/tests/shell/testcases/transactions/0023rule_1 b/tests/shell/testcases/transactions/0023rule_1
+index e58c088..863bcde 100755
+--- a/tests/shell/testcases/transactions/0023rule_1
++++ b/tests/shell/testcases/transactions/0023rule_1
+@@ -1,7 +1,7 @@
+ #!/bin/bash
+ 
+ RULESET="add table x
+-add chain x y
++add chain x y { type filter hook input priority 0; }
+ add rule x y jump y"
+ 
+ # kernel must return ELOOP
+diff --git a/tests/shell/testcases/transactions/anon_chain_loop b/tests/shell/testcases/transactions/anon_chain_loop
+index 2fd6181..3053d16 100755
+--- a/tests/shell/testcases/transactions/anon_chain_loop
++++ b/tests/shell/testcases/transactions/anon_chain_loop
+@@ -3,7 +3,7 @@
+ # anon chains with c1 -> c2 recursive jump, expect failure
+ $NFT -f - <<EOF
+ table ip t {
+- chain c2 { }
++ chain c2 { type filter hook input priority 0; }
+  chain c1 { }
+ }
+ 

@@ -1,0 +1,63 @@
+From 757dee30af84a3443c6eeb9a3cddf8a5e4f8928a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 16 Oct 2025 16:12:50 +0200
+Subject: [PATCH] tests: py: add missing json.output data
+
+JIRA: https://issues.redhat.com/browse/RHEL-114095
+Upstream Status: nftables commit f58e72a2f5aa134653e7ee8b5432b23eb0674c3c
+
+commit f58e72a2f5aa134653e7ee8b5432b23eb0674c3c
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Feb 26 09:45:43 2024 +0100
+
+    tests: py: add missing json.output data
+
+    Fixes: bridge/vlan.t: WARNING: line 56: ...
+
+    Fixes: 8b9ae77598b4 ("tests: never merge across non-expression statements redux 2")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/bridge/vlan.t.json.output | 31 ++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/tests/py/bridge/vlan.t.json.output b/tests/py/bridge/vlan.t.json.output
+index 2f90c8f..eea2d41 100644
+--- a/tests/py/bridge/vlan.t.json.output
++++ b/tests/py/bridge/vlan.t.json.output
+@@ -202,3 +202,34 @@
+         }
+     }
+ ]
++
++# ether saddr 00:11:22:33:44:55 counter ether type 8021q
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "saddr",
++                    "protocol": "ether"
++                }
++            },
++            "op": "==",
++            "right": "00:11:22:33:44:55"
++        }
++    },
++    {
++        "counter": null
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "type",
++                    "protocol": "ether"
++                }
++            },
++            "op": "==",
++            "right": "8021q"
++        }
++    }
++]

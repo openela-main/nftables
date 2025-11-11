@@ -1,0 +1,64 @@
+From c970cef4925493bc7ef0064896d4b2486bb2fa6a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 16 Oct 2025 16:12:50 +0200
+Subject: [PATCH] tests: py: missing json output in never merge across
+ non-expression statements
+
+JIRA: https://issues.redhat.com/browse/RHEL-114095
+Upstream Status: nftables commit 94fd162ea4d25fe6b0b4d58dcb7ff66dc55f3247
+
+commit 94fd162ea4d25fe6b0b4d58dcb7ff66dc55f3247
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Dec 6 19:30:44 2023 +0100
+
+    tests: py: missing json output in never merge across non-expression statements
+
+    Add missing json output.
+
+    Fixes: 99ab1b8feb16 ("rule: never merge across non-expression statements")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/ip/ip.t.json.output | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/tests/py/ip/ip.t.json.output b/tests/py/ip/ip.t.json.output
+index b201cda..351ae93 100644
+--- a/tests/py/ip/ip.t.json.output
++++ b/tests/py/ip/ip.t.json.output
+@@ -230,3 +230,34 @@
+     }
+ ]
+ 
++# ip saddr 1.2.3.4 counter ip daddr 3.4.5.6
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "saddr",
++                    "protocol": "ip"
++                }
++            },
++            "op": "==",
++            "right": "1.2.3.4"
++        }
++    },
++    {
++        "counter": null
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "daddr",
++                    "protocol": "ip"
++                }
++            },
++            "op": "==",
++            "right": "3.4.5.6"
++        }
++    }
++]
++

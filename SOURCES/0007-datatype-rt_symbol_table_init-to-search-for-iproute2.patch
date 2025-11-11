@@ -1,0 +1,146 @@
+From 5cf419d1ee6579ca404c4e0778713a65fd473a50 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 16 Oct 2025 16:12:50 +0200
+Subject: [PATCH] datatype: rt_symbol_table_init() to search for iproute2
+ configs
+
+JIRA: https://issues.redhat.com/browse/RHEL-114095
+Upstream Status: nftables commit d0f70a1739b8e512986fb460a7fa7ff8a9300b68
+
+commit d0f70a1739b8e512986fb460a7fa7ff8a9300b68
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Dec 15 21:59:44 2023 +0100
+
+    datatype: rt_symbol_table_init() to search for iproute2 configs
+
+    There is an ongoing effort among various distributions to tidy up in
+    /etc. The idea is to reduce contents to just what the admin manually
+    inserted to customize the system, anything else shall move out to /usr
+    (or so). The various files in /etc/iproute2 fall in that category as
+    they are seldomly modified.
+
+    The crux is though that iproute2 project seems not quite sure yet where
+    the files should go. While v6.6.0 installs them into /usr/lib/iproute2,
+    current mast^Wmain branch uses /usr/share/iproute2. Assume this is going
+    to stay as /(usr/)lib does not seem right for such files.
+
+    Note that rt_symbol_table_init() is not just used for
+    iproute2-maintained configs but also for connlabel.conf - so retain the
+    old behaviour when passed an absolute path.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/datatype.c | 38 ++++++++++++++++++++++++++++++++++----
+ src/meta.c     |  2 +-
+ src/rt.c       |  2 +-
+ 3 files changed, 36 insertions(+), 6 deletions(-)
+
+diff --git a/src/datatype.c b/src/datatype.c
+index 64e4647..9530ae7 100644
+--- a/src/datatype.c
++++ b/src/datatype.c
+@@ -855,19 +855,47 @@ const struct datatype inet_service_type = {
+ 
+ #define RT_SYM_TAB_INITIAL_SIZE		16
+ 
++static FILE *open_iproute2_db(const char *filename, char **path)
++{
++	FILE *ret;
++
++	if (filename[0] == '/')
++		return fopen(filename, "r");
++
++	if (asprintf(path, "/etc/iproute2/%s", filename) == -1)
++		goto fail;
++
++	ret = fopen(*path, "r");
++	if (ret)
++		return ret;
++
++	free(*path);
++	if (asprintf(path, "/usr/share/iproute2/%s", filename) == -1)
++		goto fail;
++
++	ret = fopen(*path, "r");
++	if (ret)
++		return ret;
++
++	free(*path);
++fail:
++	*path = NULL;
++	return NULL;
++}
++
+ struct symbol_table *rt_symbol_table_init(const char *filename)
+ {
++	char buf[512], namebuf[512], *p, *path = NULL;
+ 	struct symbolic_constant s;
+ 	struct symbol_table *tbl;
+ 	unsigned int size, nelems, val;
+-	char buf[512], namebuf[512], *p;
+ 	FILE *f;
+ 
+ 	size = RT_SYM_TAB_INITIAL_SIZE;
+ 	tbl = xmalloc(sizeof(*tbl) + size * sizeof(s));
+ 	nelems = 0;
+ 
+-	f = fopen(filename, "r");
++	f = open_iproute2_db(filename, &path);
+ 	if (f == NULL)
+ 		goto out;
+ 
+@@ -882,7 +910,7 @@ struct symbol_table *rt_symbol_table_init(const char *filename)
+ 		    sscanf(p, "%u %511s\n", &val, namebuf) != 2 &&
+ 		    sscanf(p, "%u %511s #", &val, namebuf) != 2) {
+ 			fprintf(stderr, "iproute database '%s' corrupted\n",
+-				filename);
++				path ?: filename);
+ 			break;
+ 		}
+ 
+@@ -899,6 +927,8 @@ struct symbol_table *rt_symbol_table_init(const char *filename)
+ 
+ 	fclose(f);
+ out:
++	if (path)
++		free(path);
+ 	tbl->symbols[nelems] = SYMBOL_LIST_END;
+ 	return tbl;
+ }
+@@ -914,7 +944,7 @@ void rt_symbol_table_free(const struct symbol_table *tbl)
+ 
+ void mark_table_init(struct nft_ctx *ctx)
+ {
+-	ctx->output.tbl.mark = rt_symbol_table_init("/etc/iproute2/rt_marks");
++	ctx->output.tbl.mark = rt_symbol_table_init("rt_marks");
+ }
+ 
+ void mark_table_exit(struct nft_ctx *ctx)
+diff --git a/src/meta.c b/src/meta.c
+index b578d5e..b69dca2 100644
+--- a/src/meta.c
++++ b/src/meta.c
+@@ -336,7 +336,7 @@ const struct datatype pkttype_type = {
+ 
+ void devgroup_table_init(struct nft_ctx *ctx)
+ {
+-	ctx->output.tbl.devgroup = rt_symbol_table_init("/etc/iproute2/group");
++	ctx->output.tbl.devgroup = rt_symbol_table_init("group");
+ }
+ 
+ void devgroup_table_exit(struct nft_ctx *ctx)
+diff --git a/src/rt.c b/src/rt.c
+index f5c8055..3ee710d 100644
+--- a/src/rt.c
++++ b/src/rt.c
+@@ -25,7 +25,7 @@
+ 
+ void realm_table_rt_init(struct nft_ctx *ctx)
+ {
+-	ctx->output.tbl.realm = rt_symbol_table_init("/etc/iproute2/rt_realms");
++	ctx->output.tbl.realm = rt_symbol_table_init("rt_realms");
+ }
+ 
+ void realm_table_rt_exit(struct nft_ctx *ctx)
