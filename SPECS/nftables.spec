@@ -1,6 +1,6 @@
 Name:           nftables
 Version:        1.1.1
-Release:        4%{?dist}
+Release:        5%{?dist}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utilities
@@ -30,6 +30,8 @@ Patch11:            0011-json-Support-typeof-in-set-and-map-types.patch
 Patch12:            0012-tests-py-Fix-for-storing-payload-into-missing-file.patch
 Patch13:            0013-monitor-Recognize-flowtable-add-del-events.patch
 Patch14:            0014-evaluate-allow-to-re-use-existing-metered-set.patch
+Patch15:            0015-src-split-monitor-trace-code-into-new-trace.c.patch
+Patch16:            0016-src-add-conntrack-information-to-trace-monitor-mode.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -144,6 +146,10 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Wed Jul 16 2025 Phil Sutter <psutter@redhat.com> [1.1.1-5.el10]
+- src: add conntrack information to trace monitor mode (Phil Sutter) [RHEL-102994]
+- src: split monitor trace code into new trace.c (Phil Sutter) [RHEL-102994]
+
 * Mon Mar 03 2025 Eric Garver <egarver@redhat.com> [1.1.1-4.el10]
 - evaluate: allow to re-use existing metered set [RHEL-75507]
 

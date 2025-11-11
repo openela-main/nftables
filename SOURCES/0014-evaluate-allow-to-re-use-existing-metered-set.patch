@@ -1,4 +1,4 @@
-From b3c1312b5815b004614d79eae2ad731c6883ce6f Mon Sep 17 00:00:00 2001
+From 75c95b2f59fb09c6375ca1e10277af9d0641e71d Mon Sep 17 00:00:00 2001
 From: Florian Westphal <fw@strlen.de>
 Date: Wed, 22 Jan 2025 10:18:04 +0100
 Subject: [PATCH] evaluate: allow to re-use existing metered set
@@ -41,7 +41,7 @@ Signed-off-by: Eric Garver <egarver@redhat.com>
  create mode 100755 tests/shell/testcases/sets/meter_set_reuse
 
 diff --git a/src/evaluate.c b/src/evaluate.c
-index 593a0140e92a..c9cbaa6ae648 100644
+index 593a014..c9cbaa6 100644
 --- a/src/evaluate.c
 +++ b/src/evaluate.c
 @@ -3338,7 +3338,7 @@ static int stmt_evaluate_payload(struct eval_ctx *ctx, struct stmt *stmt)
@@ -114,7 +114,7 @@ index 593a0140e92a..c9cbaa6ae648 100644
  	if (stmt_evaluate(ctx, stmt->meter.stmt) < 0)
 diff --git a/tests/shell/testcases/sets/dumps/meter_set_reuse.json-nft b/tests/shell/testcases/sets/dumps/meter_set_reuse.json-nft
 new file mode 100644
-index 000000000000..ab4ac06184d0
+index 0000000..ab4ac06
 --- /dev/null
 +++ b/tests/shell/testcases/sets/dumps/meter_set_reuse.json-nft
 @@ -0,0 +1,105 @@
@@ -225,7 +225,7 @@ index 000000000000..ab4ac06184d0
 +}
 diff --git a/tests/shell/testcases/sets/dumps/meter_set_reuse.nft b/tests/shell/testcases/sets/dumps/meter_set_reuse.nft
 new file mode 100644
-index 000000000000..f911acaffb85
+index 0000000..f911aca
 --- /dev/null
 +++ b/tests/shell/testcases/sets/dumps/meter_set_reuse.nft
 @@ -0,0 +1,11 @@
@@ -242,7 +242,7 @@ index 000000000000..f911acaffb85
 +}
 diff --git a/tests/shell/testcases/sets/meter_set_reuse b/tests/shell/testcases/sets/meter_set_reuse
 new file mode 100755
-index 000000000000..94eccc1a7b82
+index 0000000..94eccc1
 --- /dev/null
 +++ b/tests/shell/testcases/sets/meter_set_reuse
 @@ -0,0 +1,20 @@
@@ -266,6 +266,3 @@ index 000000000000..94eccc1a7b82
 +
 +# This re-add should work.
 +addrule
--- 
-2.48.1
-
