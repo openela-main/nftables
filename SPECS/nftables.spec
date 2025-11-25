@@ -1,6 +1,6 @@
 Name:           nftables
 Version:        1.1.1
-Release:        5%{?dist}
+Release:        6%{?dist}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utilities
@@ -32,6 +32,10 @@ Patch13:            0013-monitor-Recognize-flowtable-add-del-events.patch
 Patch14:            0014-evaluate-allow-to-re-use-existing-metered-set.patch
 Patch15:            0015-src-split-monitor-trace-code-into-new-trace.c.patch
 Patch16:            0016-src-add-conntrack-information-to-trace-monitor-mode.patch
+Patch17:            0017-trace-Fix-for-memleak-in-trace_alloc_list-error-path.patch
+Patch18:            0018-doc-nft.8-Minor-NAT-STATEMENTS-section-review.patch
+Patch19:            0019-table-Embed-creating-nft-version-into-userdata.patch
+Patch20:            0020-Makefile-Fix-for-make-CFLAGS.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -146,6 +150,12 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Wed Sep 10 2025 Phil Sutter <psutter@redhat.com> [1.1.1-6.el10]
+- Makefile: Fix for 'make CFLAGS=...' (Phil Sutter) [RHEL-108851]
+- table: Embed creating nft version into userdata (Phil Sutter) [RHEL-108851]
+- doc: nft.8: Minor NAT STATEMENTS section review (Phil Sutter) [RHEL-106743]
+- trace: Fix for memleak in trace_alloc_list() error path (Phil Sutter) [RHEL-111205]
+
 * Wed Jul 16 2025 Phil Sutter <psutter@redhat.com> [1.1.1-5.el10]
 - src: add conntrack information to trace monitor mode (Phil Sutter) [RHEL-102994]
 - src: split monitor trace code into new trace.c (Phil Sutter) [RHEL-102994]

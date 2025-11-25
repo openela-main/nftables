@@ -1,0 +1,52 @@
+From 575c0a20b143f5487a184c2c5c866dd8b14a69f5 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 9 Sep 2025 16:50:13 +0200
+Subject: [PATCH] Makefile: Fix for 'make CFLAGS=...'
+
+JIRA: https://issues.redhat.com/browse/RHEL-108851
+Upstream Status: nftables commit 229fa8b440b67debb12beca830e57a9ea25a2745
+
+commit 229fa8b440b67debb12beca830e57a9ea25a2745
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Sep 9 00:14:16 2025 +0200
+
+    Makefile: Fix for 'make CFLAGS=...'
+
+    Appending to CFLAGS from configure.ac like this was too naive, passing
+    custom CFLAGS in make arguments overwrites it. Extend AM_CFLAGS instead.
+
+    Fixes: 64c07e38f0494 ("table: Embed creating nft version into userdata")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ Makefile.am  | 2 ++
+ configure.ac | 1 -
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index c2a6908..58c6959 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -154,6 +154,8 @@ AM_CFLAGS = \
+ 	\
+ 	$(GCC_FVISIBILITY_HIDDEN) \
+ 	\
++	-DMAKE_STAMP=$(MAKE_STAMP) \
++	\
+ 	$(NULL)
+ 
+ AM_YFLAGS = -d -Wno-yacc
+diff --git a/configure.ac b/configure.ac
+index bac8319..c14aa67 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -136,7 +136,6 @@ AC_CONFIG_COMMANDS([nftversion.h], [
+ # Current date should be fetched exactly once per build,
+ # so have 'make' call date and pass the value to every 'gcc' call
+ AC_SUBST([MAKE_STAMP], ["\$(shell date +%s)"])
+-CFLAGS="${CFLAGS} -DMAKE_STAMP=\${MAKE_STAMP}"
+ 
+ AC_CONFIG_FILES([					\
+ 		Makefile				\

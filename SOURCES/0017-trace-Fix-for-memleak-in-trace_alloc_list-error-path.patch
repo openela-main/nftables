@@ -1,0 +1,38 @@
+From 5ed024ecfaf596ec0298f8ad75c5695f9889464c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 9 Sep 2025 16:27:52 +0200
+Subject: [PATCH] trace: Fix for memleak in trace_alloc_list() error path
+
+JIRA: https://issues.redhat.com/browse/RHEL-111205
+Upstream Status: nftables commit fdbb0ec57b5c891c1de17f367b693ab787ea9c2d
+
+commit fdbb0ec57b5c891c1de17f367b693ab787ea9c2d
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Aug 26 12:57:37 2025 +0200
+
+    trace: Fix for memleak in trace_alloc_list() error path
+
+    The allocated 'list_expr' may leak.
+
+    Fixes: cfd768615235b ("src: add conntrack information to trace monitor mode")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/trace.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/trace.c b/src/trace.c
+index b270951..47f4c21 100644
+--- a/src/trace.c
++++ b/src/trace.c
+@@ -258,6 +258,7 @@ static struct expr *trace_alloc_list(const struct datatype *dtype,
+ 	v = mpz_get_uint32(value);
+ 	if (v == 0) {
+ 		mpz_clear(value);
++		expr_free(list_expr);
+ 		return NULL;
+ 	}
+ 
