@@ -1,0 +1,64 @@
+From dc0320014e2b147479705c5e2f7df7080d27bc66 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 26 Nov 2025 18:36:13 +0100
+Subject: [PATCH] Revert doc/ part of "exthdr: add boolean DCCP option
+ matching"
+
+JIRA: https://issues.redhat.com/browse/RHEL-126817
+Upstream Status: RHEL-only
+
+Revert documentation added by commit
+6ab0fd6c67dbccedb49209b94eb7f740dd32fd2a.
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/libnftables-json.adoc  | 11 -----------
+ doc/payload-expression.txt |  6 ------
+ 2 files changed, 17 deletions(-)
+
+diff --git a/doc/libnftables-json.adoc b/doc/libnftables-json.adoc
+index 0e424c2..c5e5f23 100644
+--- a/doc/libnftables-json.adoc
++++ b/doc/libnftables-json.adoc
+@@ -1235,17 +1235,6 @@ If the *field* property is not given, the expression is to be used as an SCTP
+ chunk existence check in a *match* statement with a boolean on the right hand
+ side.
+ 
+-=== DCCP OPTION
+-[verse]
+-*{ "dccp option": {
+-	"type":* 'NUMBER'*
+-*}}*
+-
+-Create a reference to a DCCP option (*type*).
+-
+-The expression is to be used as a DCCP option existence check in a *match*
+-statement with a boolean on the right hand side.
+-
+ === META
+ [verse]
+ ____
+diff --git a/doc/payload-expression.txt b/doc/payload-expression.txt
+index c7c267d..8afeb71 100644
+--- a/doc/payload-expression.txt
++++ b/doc/payload-expression.txt
+@@ -775,7 +775,6 @@ The following syntaxes are valid only in a relational expression with boolean ty
+ *exthdr* {*hbh* | *frag* | *rt* | *dst* | *mh*}
+ *tcp option* {*eol* | *nop* | *maxseg* | *window* | *sack-perm* | *sack* | *sack0* | *sack1* | *sack2* | *sack3* | *timestamp*}
+ *ip option* { lsrr | ra | rr | ssrr }
+-*dccp option* 'dccp_option_type'
+ 
+ .IPv6 extension headers
+ [options="header"]
+@@ -878,11 +877,6 @@ ip6 filter input frag more-fragments 1 counter
+ filter input ip option lsrr exists counter
+ ---------------------------------------
+ 
+-.finding DCCP option
+-------------------
+-filter input dccp option 40 exists counter
+----------------------------------------
+-
+ CONNTRACK EXPRESSIONS
+ ~~~~~~~~~~~~~~~~~~~~~
+ Conntrack expressions refer to meta data of the connection tracking entry associated with a packet. +

@@ -1,0 +1,39 @@
+From f9387056d058e33ffa48288fcdf5c3468d9ab53c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 26 Nov 2025 18:35:53 +0100
+Subject: [PATCH] Revert doc/ part of "meta: introduce meta broute support"
+
+JIRA: https://issues.redhat.com/browse/RHEL-126817
+Upstream Status: RHEL-only
+
+Revert documentation added by commit
+97672e54518b28923951c96191edb5b7b5f5f294.
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/statements.txt | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/doc/statements.txt b/doc/statements.txt
+index abe9e6d..c29a2ff 100644
+--- a/doc/statements.txt
++++ b/doc/statements.txt
+@@ -289,7 +289,7 @@ A meta statement sets the value of a meta expression. The existing meta fields
+ are: priority, mark, pkttype, nftrace. +
+ 
+ [verse]
+-*meta* {*mark* | *priority* | *pkttype* | *nftrace* | *broute*} *set* 'value'
++*meta* {*mark* | *priority* | *pkttype* | *nftrace*} *set* 'value'
+ 
+ A meta statement sets meta data associated with a packet. +
+ 
+@@ -309,9 +309,6 @@ pkt_type
+ |nftrace |
+ ruleset packet tracing on/off. Use *monitor trace* command to watch traces|
+ 0, 1
+-|broute |
+-broute on/off. packets are routed instead of being bridged|
+-0, 1
+ |==========================
+ 
+ LIMIT STATEMENT

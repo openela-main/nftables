@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.9
-%define nft_specrelease 5
+%define nft_specrelease 6
 
 Name:           nftables
 Version:        %{nft_rpmversion}
@@ -29,6 +29,9 @@ Patch7:             0007-datatype-rt_symbol_table_init-to-search-for-iproute2.pa
 Patch8:             0008-tests-py-remove-huge-limit-test-cases.patch
 Patch9:             0009-tests-py-add-missing-json.output-data.patch
 Patch10:            0010-tests-py-missing-json-output-in-never-merge-across-n.patch
+Patch11:            0011-Revert-doc-part-of-src-add-tcp-option-reset-support.patch
+Patch12:            0012-Revert-doc-part-of-meta-introduce-meta-broute-suppor.patch
+Patch13:            0013-Revert-doc-part-of-exthdr-add-boolean-DCCP-option-ma.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -141,6 +144,12 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Wed Nov 26 2025 Phil Sutter <psutter@redhat.com> [1.0.9-6.el9]
+- Revert doc/ part of "exthdr: add boolean DCCP option matching" (Phil Sutter) [RHEL-126817]
+- Revert doc/ part of "meta: introduce meta broute support" (Phil Sutter) [RHEL-126817]
+- Revert doc/ part of "src: add tcp option reset support" (Phil Sutter) [RHEL-126817]
+- spec: Update expected test suite results (Phil Sutter) [RHEL-126817]
+
 * Thu Oct 16 2025 Phil Sutter <psutter@redhat.com> [1.0.9-5.el9]
 - tests: py: missing json output in never merge across non-expression statements (Phil Sutter) [RHEL-114095]
 - tests: py: add missing json.output data (Phil Sutter) [RHEL-114095]
