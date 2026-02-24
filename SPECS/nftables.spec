@@ -1,6 +1,6 @@
 Name:           nftables
 Version:        1.1.1
-Release:        6%{?dist}
+Release:        9%{?dist}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utilities
@@ -36,6 +36,7 @@ Patch17:            0017-trace-Fix-for-memleak-in-trace_alloc_list-error-path.pa
 Patch18:            0018-doc-nft.8-Minor-NAT-STATEMENTS-section-review.patch
 Patch19:            0019-table-Embed-creating-nft-version-into-userdata.patch
 Patch20:            0020-Makefile-Fix-for-make-CFLAGS.patch
+Patch21:            0021-fib-Fix-for-existence-check-on-Big-Endian.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -46,7 +47,7 @@ BuildRequires: flex
 BuildRequires: bison
 BuildRequires: pkgconfig(libmnl) >= 1.0.4
 BuildRequires: gmp-devel
-BuildRequires: pkgconfig(libnftnl) >= 1.2.8
+BuildRequires: libnftnl-devel >= 1.2.8-4
 BuildRequires: systemd
 BuildRequires: asciidoc
 BuildRequires: pkgconfig(xtables) >= 1.6.1
@@ -150,6 +151,15 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Tue Nov 04 2025 Phil Sutter <psutter@redhat.com> [1.1.1-9.el10]
+- fib: Fix for existence check on Big Endian (Phil Sutter) [RHEL-113851]
+
+* Fri Oct 31 2025 Phil Sutter <psutter@redhat.com> [1.1.1-8.el10]
+- Bump revision for a side-tag build (Phil Sutter) [RHEL-125122]
+
+* Thu Oct 30 2025 Phil Sutter <psutter@redhat.com> [1.1.1-7.el10]
+- spec: BuildRequire libnftnl-devel-1.2.8-4 (Phil Sutter) [RHEL-125122]
+
 * Wed Sep 10 2025 Phil Sutter <psutter@redhat.com> [1.1.1-6.el10]
 - Makefile: Fix for 'make CFLAGS=...' (Phil Sutter) [RHEL-108851]
 - table: Embed creating nft version into userdata (Phil Sutter) [RHEL-108851]
