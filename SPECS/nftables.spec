@@ -1,6 +1,6 @@
 Name:           nftables
-Version:        1.1.1
-Release:        9%{?dist}
+Version:        1.1.5
+Release:        3%{?dist}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utilities
@@ -15,28 +15,34 @@ Source4:        router.nft
 Source5:        nat.nft
 Source6:        nft-test.stderr.expect
 Source7:        run-tests.stderr.expect
+Source8:        monitor_run-tests.stderr.expect
 
-Patch1:             0001-tests-shell-fix-spurious-dump-failure-in-vmap-timeou.patch
-Patch2:             0002-libnftables-json-fix-raw-payload-expression-document.patch
-Patch3:             0003-src-collapse-set-element-commands-from-parser.patch
-Patch4:             0004-mnl-rename-to-mnl_seqnum_alloc-to-mnl_seqnum_inc.patch
-Patch5:             0005-mnl-update-cmd_add_loc-to-take-struct-nlmsghdr.patch
-Patch6:             0006-rule-netlink-attribute-offset-is-uint32_t-for-struct.patch
-Patch7:             0007-src-fix-extended-netlink-error-reporting-with-large-.patch
-Patch8:             0008-tests-monitor-fix-up-test-case-breakage.patch
-Patch9:             0009-doc-extend-description-of-fib-expression.patch
-Patch10:            0010-json-collapse-set-element-commands-from-parser.patch
-Patch11:            0011-json-Support-typeof-in-set-and-map-types.patch
-Patch12:            0012-tests-py-Fix-for-storing-payload-into-missing-file.patch
-Patch13:            0013-monitor-Recognize-flowtable-add-del-events.patch
-Patch14:            0014-evaluate-allow-to-re-use-existing-metered-set.patch
-Patch15:            0015-src-split-monitor-trace-code-into-new-trace.c.patch
-Patch16:            0016-src-add-conntrack-information-to-trace-monitor-mode.patch
-Patch17:            0017-trace-Fix-for-memleak-in-trace_alloc_list-error-path.patch
-Patch18:            0018-doc-nft.8-Minor-NAT-STATEMENTS-section-review.patch
-Patch19:            0019-table-Embed-creating-nft-version-into-userdata.patch
-Patch20:            0020-Makefile-Fix-for-make-CFLAGS.patch
-Patch21:            0021-fib-Fix-for-existence-check-on-Big-Endian.patch
+Patch1:             0001-table-Embed-creating-nft-version-into-userdata.patch
+Patch2:             0002-Makefile-Fix-for-make-CFLAGS.patch
+Patch3:             0003-fib-Fix-for-existence-check-on-Big-Endian.patch
+Patch4:             0004-parser_bison-remove-leftover-utf-8-character-in-erro.patch
+Patch5:             0005-tools-gitignore-nftables.service-file.patch
+Patch6:             0006-monitor-Quote-device-names-in-chain-declarations-too.patch
+Patch7:             0007-tests-monitor-Fix-regex-collecting-expected-echo-out.patch
+Patch8:             0008-tests-shell-skip-two-bitwise-tests-if-multi-register.patch
+Patch9:             0009-monitor-Inform-JSON-printer-when-reporting-an-object.patch
+Patch10:            0010-libnftables-do-not-re-add-default-include-directory-.patch
+Patch11:            0011-doc-fix-tcpdump-example.patch
+Patch12:            0012-src-parser_json-fix-format-string-bugs.patch
+Patch13:            0013-datatype-Fix-boolean-type-on-Big-Endian.patch
+Patch14:            0014-optimize-Fix-verdict-expression-comparison.patch
+Patch15:            0015-tests-py-any-tcpopt.t.json-Fix-JSON-equivalent.patch
+Patch16:            0016-tests-py-any-ct.t.json.output-Drop-leftover-entry.patch
+Patch17:            0017-tests-py-inet-osf.t-Fix-element-ordering-in-JSON-equ.patch
+Patch18:            0018-tests-shell-fix-typo-in-vmap_timeout-test-script.patch
+Patch19:            0019-build-don-t-install-ancillary-files-without-systemd-.patch
+Patch20:            0020-doc-don-t-suggest-to-disable-GSO.patch
+Patch21:            0021-doc-libnftables-json-Describe-RULESET-object.patch
+Patch22:            0022-mnl-Support-simple-wildcards-in-netdev-hooks.patch
+Patch23:            0023-parser_bison-Accept-ASTERISK_STRING-in-flowtable_exp.patch
+Patch24:            0024-tests-shell-Test-ifname-based-hooks.patch
+Patch25:            0025-mnl-Drop-asterisk-from-end-of-NFTA_DEVICE_PREFIX-str.patch
+Patch26:            0026-tests-monitor-Fix-for-out-of-path-call.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -47,13 +53,15 @@ BuildRequires: flex
 BuildRequires: bison
 BuildRequires: pkgconfig(libmnl) >= 1.0.4
 BuildRequires: gmp-devel
-BuildRequires: libnftnl-devel >= 1.2.8-4
+BuildRequires: libnftnl-devel >= 1.3.0-1
 BuildRequires: systemd
 BuildRequires: asciidoc
 BuildRequires: pkgconfig(xtables) >= 1.6.1
 BuildRequires: jansson-devel
 BuildRequires: python3-devel
 BuildRequires: readline-devel
+
+Requires: libnftnl >= 1.3.0-2
 
 %generate_buildrequires
 cd py/
@@ -82,6 +90,7 @@ The nftables python module provides an interface to libnftables via ctypes.
 %autosetup -p1
 cp -a %{SOURCE6} ./tests/py/
 cp -a %{SOURCE7} ./tests/shell/
+cp -a %{SOURCE8} ./tests/monitor/run-tests.stderr.expect
 
 %build
 autoreconf -fi
@@ -151,6 +160,38 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Tue Dec 16 2025 Phil Sutter <psutter@redhat.com> [1.1.5-3.el10]
+- Update expected test suite results (Phil Sutter) [RHEL-121194]
+- tests: monitor: Fix for out-of-path call (Phil Sutter) [RHEL-121194]
+
+* Thu Nov 27 2025 Phil Sutter <psutter@redhat.com> [1.1.5-2.el10]
+- spec: Require libnftnl >= 1.3.0-2 for NFTA_DEVICE_PREFIX handling (Phil Sutter) [RHEL-108861]
+- mnl: Drop asterisk from end of NFTA_DEVICE_PREFIX strings (Phil Sutter) [RHEL-108861]
+- tests: shell: Test ifname-based hooks (Phil Sutter) [RHEL-108861]
+- parser_bison: Accept ASTERISK_STRING in flowtable_expr_member (Phil Sutter) [RHEL-108861]
+- mnl: Support simple wildcards in netdev hooks (Phil Sutter) [RHEL-108861]
+
+* Thu Nov 20 2025 Phil Sutter <psutter@redhat.com> [1.1.5-1.el10]
+- doc: libnftables-json: Describe RULESET object (Phil Sutter) [RHEL-121194]
+- doc: don't suggest to disable GSO (Phil Sutter) [RHEL-121194]
+- build: don't install ancillary files without systemd service file (Phil Sutter) [RHEL-121194]
+- tests: shell: fix typo in vmap_timeout test script (Phil Sutter) [RHEL-121194]
+- tests: py: inet/osf.t: Fix element ordering in JSON equivalents (Phil Sutter) [RHEL-121194]
+- tests: py: any/ct.t.json.output: Drop leftover entry (Phil Sutter) [RHEL-121194]
+- tests: py: any/tcpopt.t.json: Fix JSON equivalent (Phil Sutter) [RHEL-121194]
+- optimize: Fix verdict expression comparison (Phil Sutter) [RHEL-121194]
+- datatype: Fix boolean type on Big Endian (Phil Sutter) [RHEL-121194]
+- src: parser_json: fix format string bugs (Phil Sutter) [RHEL-121194]
+- doc: fix tcpdump example (Phil Sutter) [RHEL-121194]
+- libnftables: do not re-add default include directory in include search path (Phil Sutter) [RHEL-121194]
+- monitor: Inform JSON printer when reporting an object delete event (Phil Sutter) [RHEL-121194]
+- tests: shell: skip two bitwise tests if multi-register support isn't available (Phil Sutter) [RHEL-121194]
+- tests: monitor: Fix regex collecting expected echo output (Phil Sutter) [RHEL-121194]
+- monitor: Quote device names in chain declarations, too (Phil Sutter) [RHEL-121194]
+- tools: gitignore nftables.service file (Phil Sutter) [RHEL-121194]
+- parser_bison: remove leftover utf-8 character in error (Phil Sutter) [RHEL-121194]
+- Rebase onto version 1.1.5 (Phil Sutter) [RHEL-121194]
+
 * Tue Nov 04 2025 Phil Sutter <psutter@redhat.com> [1.1.1-9.el10]
 - fib: Fix for existence check on Big Endian (Phil Sutter) [RHEL-113851]
 

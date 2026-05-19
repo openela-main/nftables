@@ -1,0 +1,104 @@
+From 26fc99ea52458477bfc2ad67f927f9d7f18454ca Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 27 Nov 2025 10:58:08 +0100
+Subject: [PATCH] mnl: Support simple wildcards in netdev hooks
+
+JIRA: https://issues.redhat.com/browse/RHEL-108861
+Upstream Status: nftables commit c31e887504a90152e29c4a76a74c8a442f771917
+
+commit c31e887504a90152e29c4a76a74c8a442f771917
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Aug 13 20:26:08 2024 +0200
+
+    mnl: Support simple wildcards in netdev hooks
+
+    When building NFTA_{FLOWTABLE_,}HOOK_DEVS attributes, detect trailing
+    asterisks in interface names and transmit the leading part in a
+    NFTA_DEVICE_PREFIX attribute.
+
+    Deserialization (i.e., appending asterisk to interface prefixes returned
+    in NFTA_DEVICE_PREFIX atributes happens in libnftnl.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/linux/netfilter/nf_tables.h |  2 ++
+ src/mnl.c                           | 26 +++++++++++++++++++++++---
+ 2 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/include/linux/netfilter/nf_tables.h b/include/linux/netfilter/nf_tables.h
+index f57963e..b38d478 100644
+--- a/include/linux/netfilter/nf_tables.h
++++ b/include/linux/netfilter/nf_tables.h
+@@ -1774,10 +1774,12 @@ enum nft_synproxy_attributes {
+  * enum nft_device_attributes - nf_tables device netlink attributes
+  *
+  * @NFTA_DEVICE_NAME: name of this device (NLA_STRING)
++ * @NFTA_DEVICE_PREFIX: device name prefix, a simple wildcard (NLA_STRING)
+  */
+ enum nft_devices_attributes {
+ 	NFTA_DEVICE_UNSPEC,
+ 	NFTA_DEVICE_NAME,
++	NFTA_DEVICE_PREFIX,
+ 	__NFTA_DEVICE_MAX
+ };
+ #define NFTA_DEVICE_MAX		(__NFTA_DEVICE_MAX - 1)
+diff --git a/src/mnl.c b/src/mnl.c
+index 25cd872..ccf4ca5 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -801,6 +801,26 @@ static void nft_dev_array_free(const struct nft_dev *dev_array)
+ 	free_const(dev_array);
+ }
+ 
++static bool is_wildcard_str(const char *str)
++{
++	size_t len = strlen(str);
++
++	if (len < 1 || str[len - 1] != '*')
++		return false;
++	if (len < 2 || str[len - 2] != '\\')
++		return true;
++	/* XXX: ignore backslash escaping for now */
++	return false;
++}
++
++static void mnl_nft_attr_put_ifname(struct nlmsghdr *nlh, const char *ifname)
++{
++	uint16_t attr = is_wildcard_str(ifname) ?
++			NFTA_DEVICE_PREFIX : NFTA_DEVICE_NAME;
++
++	mnl_attr_put_strz(nlh, attr, ifname);
++}
++
+ static void mnl_nft_chain_devs_build(struct nlmsghdr *nlh, struct cmd *cmd)
+ {
+ 	const struct expr *dev_expr = cmd->chain->dev_expr;
+@@ -809,14 +829,14 @@ static void mnl_nft_chain_devs_build(struct nlmsghdr *nlh, struct cmd *cmd)
+ 	int i, num_devs = 0;
+ 
+ 	dev_array = nft_dev_array(dev_expr, &num_devs);
+-	if (num_devs == 1) {
++	if (num_devs == 1 && !is_wildcard_str(dev_array[0].ifname)) {
+ 		cmd_add_loc(cmd, nlh, dev_array[0].location);
+ 		mnl_attr_put_strz(nlh, NFTA_HOOK_DEV, dev_array[0].ifname);
+ 	} else {
+ 		nest_dev = mnl_attr_nest_start(nlh, NFTA_HOOK_DEVS);
+ 		for (i = 0; i < num_devs; i++) {
+ 			cmd_add_loc(cmd, nlh, dev_array[i].location);
+-			mnl_attr_put_strz(nlh, NFTA_DEVICE_NAME, dev_array[i].ifname);
++			mnl_nft_attr_put_ifname(nlh, dev_array[i].ifname);
+ 		}
+ 		mnl_attr_nest_end(nlh, nest_dev);
+ 	}
+@@ -2108,7 +2128,7 @@ static void mnl_nft_ft_devs_build(struct nlmsghdr *nlh, struct cmd *cmd)
+ 	nest_dev = mnl_attr_nest_start(nlh, NFTA_FLOWTABLE_HOOK_DEVS);
+ 	for (i = 0; i < num_devs; i++) {
+ 		cmd_add_loc(cmd, nlh, dev_array[i].location);
+-		mnl_attr_put_strz(nlh, NFTA_DEVICE_NAME, dev_array[i].ifname);
++		mnl_nft_attr_put_ifname(nlh, dev_array[i].ifname);
+ 	}
+ 
+ 	mnl_attr_nest_end(nlh, nest_dev);

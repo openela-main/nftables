@@ -1,0 +1,51 @@
+From 61fe7eb2b5acbacc8105d08172c19476af4d7dfc Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 16 Dec 2025 16:35:49 +0100
+Subject: [PATCH] tests: monitor: Fix for out-of-path call
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 1ac69c4de8ff7b472c3a5f2cf1d9442642e9047c
+Conflicts: Fix manually applied, upstream refactored the problematic
+	   code in commit 48550e8e9359c ("tests: monitor: Excercise all
+	   syntaxes and variants by default").
+
+commit 1ac69c4de8ff7b472c3a5f2cf1d9442642e9047c
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Dec 16 15:36:23 2025 +0100
+
+    tests: monitor: Fix for out-of-path call
+
+    When called from another directory without specifying test cases, an
+    incorrect regexp was used to glob all tests and no test was run at all:
+
+    | # ./tests/monitor/run-tests.sh
+    | echo: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+    | monitor: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+    | json-echo: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+    | json-monitor: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+
+    Fixes: 83eaf50c36fe8 ("tests: monitor: Become $PWD agnostic")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index 76355e8..bf10c16 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -170,7 +170,7 @@ for variant in $variants; do
+ 	run_test=${variant}_run_test
+ 	output_append=${variant}_output_append
+ 
+-	for testcase in ${testcases:-testcases/*.t}; do
++	for testcase in ${testcases:-$(dirname $0)/testcases/*.t}; do
+ 		filename=$(basename $testcase)
+ 		echo "$variant: running tests from file $filename"
+ 		rc_start=$rc

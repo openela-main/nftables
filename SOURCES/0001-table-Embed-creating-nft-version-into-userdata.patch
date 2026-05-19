@@ -1,11 +1,10 @@
-From 50afb84d7064806ad7acc8364455062fc0751528 Mon Sep 17 00:00:00 2001
+From df4f84d17daf107d9dc21d5b42ae6255b53f0ffd Mon Sep 17 00:00:00 2001
 From: Phil Sutter <psutter@redhat.com>
 Date: Tue, 9 Sep 2025 16:49:27 +0200
 Subject: [PATCH] table: Embed creating nft version into userdata
 
 JIRA: https://issues.redhat.com/browse/RHEL-108851
 Upstream Status: nftables commit 64c07e38f0494093a399a68a31056f5866c4d705
-Conflicts: Context change due to missing --with-unitdir option.
 
 commit 64c07e38f0494093a399a68a31056f5866c4d705
 Author: Phil Sutter <phil@nwl.cc>
@@ -32,7 +31,7 @@ Signed-off-by: Phil Sutter <psutter@redhat.com>
  6 files changed, 80 insertions(+), 6 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index ba09e7f..c2a6908 100644
+index e292d3b..243071e 100644
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -33,6 +33,7 @@ sbin_PROGRAMS =
@@ -43,7 +42,7 @@ index ba09e7f..c2a6908 100644
  
  ###############################################################################
  
-@@ -105,6 +106,8 @@ noinst_HEADERS = \
+@@ -106,6 +107,8 @@ noinst_HEADERS = \
  	\
  	$(NULL)
  
@@ -53,12 +52,12 @@ index ba09e7f..c2a6908 100644
  
  AM_CPPFLAGS = \
 diff --git a/configure.ac b/configure.ac
-index 816e920..bac8319 100644
+index 3a751cb..da16a6e 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -114,6 +114,30 @@ AC_CHECK_DECLS([getprotobyname_r, getprotobynumber_r, getservbyport_r], [], [],
- #include <netdb.h>
- ]])
+@@ -131,6 +131,30 @@ AC_ARG_WITH([unitdir],
+ )
+ AC_SUBST([unitdir])
  
 +AC_ARG_WITH([stable-release], [AS_HELP_STRING([--with-stable-release],
 +            [Stable release number])],
@@ -88,7 +87,7 @@ index 816e920..bac8319 100644
  		Makefile				\
  		libnftables.pc				\
 diff --git a/include/rule.h b/include/rule.h
-index 238be23..1b52972 100644
+index 470ae10..319f9c3 100644
 --- a/include/rule.h
 +++ b/include/rule.h
 @@ -170,6 +170,7 @@ struct table {
@@ -100,7 +99,7 @@ index 238be23..1b52972 100644
  
  extern struct table *table_alloc(void);
 diff --git a/src/mnl.c b/src/mnl.c
-index 12a6345..e748ab6 100644
+index 892fb8b..25cd872 100644
 --- a/src/mnl.c
 +++ b/src/mnl.c
 @@ -10,6 +10,7 @@
@@ -111,7 +110,7 @@ index 12a6345..e748ab6 100644
  
  #include <libmnl/libmnl.h>
  #include <libnftnl/common.h>
-@@ -1054,24 +1055,32 @@ int mnl_nft_table_add(struct netlink_ctx *ctx, struct cmd *cmd,
+@@ -1082,24 +1083,32 @@ int mnl_nft_table_add(struct netlink_ctx *ctx, struct cmd *cmd,
  	if (nlt == NULL)
  		memory_allocation_error();
  
@@ -151,7 +150,7 @@ index 12a6345..e748ab6 100644
  				    NFT_MSG_NEWTABLE,
  				    cmd->handle.family,
 diff --git a/src/netlink.c b/src/netlink.c
-index 2ced863..7f9730d 100644
+index 94cbcbf..b5da33e 100644
 --- a/src/netlink.c
 +++ b/src/netlink.c
 @@ -10,6 +10,7 @@
@@ -162,7 +161,7 @@ index 2ced863..7f9730d 100644
  
  #include <errno.h>
  #include <libmnl/libmnl.h>
-@@ -728,6 +729,14 @@ static int table_parse_udata_cb(const struct nftnl_udata *attr, void *data)
+@@ -799,6 +800,14 @@ static int table_parse_udata_cb(const struct nftnl_udata *attr, void *data)
  			if (value[len - 1] != '\0')
  				return -1;
  			break;
@@ -177,7 +176,7 @@ index 2ced863..7f9730d 100644
  		default:
  			return 0;
  	}
-@@ -735,6 +744,29 @@ static int table_parse_udata_cb(const struct nftnl_udata *attr, void *data)
+@@ -806,6 +815,29 @@ static int table_parse_udata_cb(const struct nftnl_udata *attr, void *data)
  	return 0;
  }
  
@@ -207,7 +206,7 @@ index 2ced863..7f9730d 100644
  struct table *netlink_delinearize_table(struct netlink_ctx *ctx,
  					const struct nftnl_table *nlt)
  {
-@@ -759,6 +791,7 @@ struct table *netlink_delinearize_table(struct netlink_ctx *ctx,
+@@ -830,6 +862,7 @@ struct table *netlink_delinearize_table(struct netlink_ctx *ctx,
  		}
  		if (ud[NFTNL_UDATA_TABLE_COMMENT])
  			table->comment = xstrdup(nftnl_udata_get(ud[NFTNL_UDATA_TABLE_COMMENT]));
@@ -216,10 +215,10 @@ index 2ced863..7f9730d 100644
  
  	return table;
 diff --git a/src/rule.c b/src/rule.c
-index 151ed53..e4d6f53 100644
+index 0ad948e..398e5bd 100644
 --- a/src/rule.c
 +++ b/src/rule.c
-@@ -1274,6 +1274,10 @@ static void table_print(const struct table *table, struct output_ctx *octx)
+@@ -1298,6 +1298,10 @@ static void table_print(const struct table *table, struct output_ctx *octx)
  		fprintf(octx->error_fp,
  			"# Warning: table %s %s is managed by iptables-nft, do not touch!\n",
  			family, table->handle.table.name);

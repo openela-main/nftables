@@ -1,0 +1,39 @@
+From 4f2bf41778c16cbf49c2af275f8391de14814cb3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:32 +0100
+Subject: [PATCH] tests: monitor: Fix regex collecting expected echo output
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 419338d96bdb19c10e241387c54f416c551a47c3
+
+commit 419338d96bdb19c10e241387c54f416c551a47c3
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Sep 3 15:23:12 2025 +0200
+
+    tests: monitor: Fix regex collecting expected echo output
+
+    No input triggered this bug, but the match would accept "insert" and
+    "replace" keywords anywhere in the line not just at the beginning as was
+    intended.
+
+    Fixes: b2506e5504fed ("tests: Merge monitor and echo test suites")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index 67d3e61..76355e8 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -52,7 +52,7 @@ echo_output_append() {
+ 		grep '^\(add\|replace\|insert\)' $command_file >>$output_file
+ 		return
+ 	}
+-	[[ "$*" =~ ^add|replace|insert ]] && echo "$*" >>$output_file
++	[[ "$*" =~ ^(add|replace|insert) ]] && echo "$*" >>$output_file
+ }
+ json_output_filter() { # (filename)
+ 	# unify handle values

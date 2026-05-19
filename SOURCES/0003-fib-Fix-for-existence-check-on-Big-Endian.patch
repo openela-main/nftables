@@ -1,4 +1,4 @@
-From 5dafd1cfd00116d0c6f289a0dc32b8a10d7c4c06 Mon Sep 17 00:00:00 2001
+From 14a205946dd436385ff141604794e64754290fe1 Mon Sep 17 00:00:00 2001
 From: Phil Sutter <psutter@redhat.com>
 Date: Tue, 4 Nov 2025 16:20:14 +0100
 Subject: [PATCH] fib: Fix for existence check on Big Endian
@@ -38,10 +38,10 @@ Signed-off-by: Phil Sutter <psutter@redhat.com>
  2 files changed, 4 insertions(+), 1 deletion(-)
 
 diff --git a/src/evaluate.c b/src/evaluate.c
-index c9cbaa6..474dc64 100644
+index aaeb7b4..9125d5f 100644
 --- a/src/evaluate.c
 +++ b/src/evaluate.c
-@@ -2795,6 +2795,7 @@ static int expr_evaluate_fib(struct eval_ctx *ctx, struct expr **exprp)
+@@ -3001,6 +3001,7 @@ static int expr_evaluate_fib(struct eval_ctx *ctx, struct expr **exprp)
  	if (expr->flags & EXPR_F_BOOLEAN) {
  		expr->fib.flags |= NFTA_FIB_F_PRESENT;
  		datatype_set(expr, &boolean_type);
@@ -50,10 +50,10 @@ index c9cbaa6..474dc64 100644
  	return expr_evaluate_primary(ctx, exprp);
  }
 diff --git a/src/fib.c b/src/fib.c
-index e95271c..0749007 100644
+index 5383613..4db7cd2 100644
 --- a/src/fib.c
 +++ b/src/fib.c
-@@ -189,8 +189,10 @@ struct expr *fib_expr_alloc(const struct location *loc,
+@@ -198,8 +198,10 @@ struct expr *fib_expr_alloc(const struct location *loc,
  		BUG("Unknown result %d\n", result);
  	}
  

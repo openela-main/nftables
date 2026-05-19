@@ -1,0 +1,69 @@
+From af563649df51ad00c1d0f3897af04ba1051c808e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:59 +0100
+Subject: [PATCH] tests: py: any/ct.t.json.output: Drop leftover entry
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 1801480314bf2baa6abf9cb15ccdef975b966867
+
+commit 1801480314bf2baa6abf9cb15ccdef975b966867
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Oct 16 16:23:12 2025 +0200
+
+    tests: py: any/ct.t.json.output: Drop leftover entry
+
+    The rule with single element anonymous set was replaced, drop this
+    leftover.
+
+    Fixes: 27f6a4c68b4fd ("tests: replace single element sets")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/any/ct.t.json.output | 33 ---------------------------------
+ 1 file changed, 33 deletions(-)
+
+diff --git a/tests/py/any/ct.t.json.output b/tests/py/any/ct.t.json.output
+index 70ade7e..82634c2 100644
+--- a/tests/py/any/ct.t.json.output
++++ b/tests/py/any/ct.t.json.output
+@@ -471,39 +471,6 @@
+     }
+ ]
+ 
+-# ct state . ct mark { new . 0x12345678}
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "concat": [
+-                    {
+-                        "ct": {
+-                            "key": "state"
+-                        }
+-                    },
+-                    {
+-                        "ct": {
+-                            "key": "mark"
+-                        }
+-                    }
+-                ]
+-            },
+-            "op": "==",
+-            "right": {
+-                "set": [
+-                    {
+-                        "concat": [
+-                            "new",
+-                            305419896
+-                        ]
+-                    }
+-                ]
+-            }
+-        }
+-    }
+-]
+-
+ # ct state . ct mark { new . 0x12345678, new . 0x34127856, established . 0x12785634}
+ [
+     {

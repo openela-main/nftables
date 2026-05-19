@@ -1,0 +1,39 @@
+From 8c0c1f8820891bffd7fd992643eef8d3ffaf9937 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:59 +0100
+Subject: [PATCH] datatype: Fix boolean type on Big Endian
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit aec699af2a006b1dd6580abb95910c402e306fa9
+
+commit aec699af2a006b1dd6580abb95910c402e306fa9
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Oct 8 23:19:08 2025 +0200
+
+    datatype: Fix boolean type on Big Endian
+
+    Pass a reference to a variable with correct size when creating the
+    expression, otherwise mpz_import_data() will read only the always zero
+    upper byte on Big Endian hosts.
+
+    Fixes: afb6a8e66a111 ("datatype: clamp boolean value to 0 and 1")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/datatype.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/datatype.c b/src/datatype.c
+index f347010..7104ae8 100644
+--- a/src/datatype.c
++++ b/src/datatype.c
+@@ -1559,7 +1559,7 @@ static struct error_record *boolean_type_parse(struct parse_ctx *ctx,
+ 					       struct expr **res)
+ {
+ 	struct error_record *erec;
+-	int num;
++	uint8_t num;
+ 
+ 	erec = integer_type_parse(ctx, sym, res);
+ 	if (erec)

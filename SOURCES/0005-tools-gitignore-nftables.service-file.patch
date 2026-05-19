@@ -1,0 +1,30 @@
+From 77d195c0d761978971c17504a2775fb4896ff4e7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:32 +0100
+Subject: [PATCH] tools: gitignore nftables.service file
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 441ff666cb22921f23b14146a70c1111210364a2
+
+commit 441ff666cb22921f23b14146a70c1111210364a2
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Aug 29 01:51:01 2025 +0200
+
+    tools: gitignore nftables.service file
+
+    Fixes: c4b17cf830510 ("tools: add a systemd unit for static rulesets")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tools/.gitignore | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 tools/.gitignore
+
+diff --git a/tools/.gitignore b/tools/.gitignore
+new file mode 100644
+index 0000000..2d06c49
+--- /dev/null
++++ b/tools/.gitignore
+@@ -0,0 +1 @@
++nftables.service

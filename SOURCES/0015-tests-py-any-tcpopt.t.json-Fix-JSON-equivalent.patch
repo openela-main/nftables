@@ -1,0 +1,167 @@
+From 116111d7182fba61985a5fae750e275da397d1a6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:59 +0100
+Subject: [PATCH] tests: py: any/tcpopt.t.json: Fix JSON equivalent
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 4282c50e4986cf0414282306dbff5fbad2f3c686
+
+commit 4282c50e4986cf0414282306dbff5fbad2f3c686
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Oct 8 23:46:34 2025 +0200
+
+    tests: py: any/tcpopt.t.json: Fix JSON equivalent
+
+    Set element ordering differed from the rule in standard syntax.
+
+    Fixes: d199cca92f9eb ("expression: expr_build_udata_recurse should recurse")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/any/tcpopt.t.json        | 24 +++++-----
+ tests/py/any/tcpopt.t.json.output | 76 +++++++++++++++++++++++++++++++
+ 2 files changed, 88 insertions(+), 12 deletions(-)
+
+diff --git a/tests/py/any/tcpopt.t.json b/tests/py/any/tcpopt.t.json
+index e712a5e..65fa1de 100644
+--- a/tests/py/any/tcpopt.t.json
++++ b/tests/py/any/tcpopt.t.json
+@@ -622,20 +622,20 @@
+                     },
+                     {
+                         "concat": [
+-                            "remove-addr",
+-                            300
++                            "mp-join",
++                            100
+                         ]
+                     },
+                     {
+                         "concat": [
+-                            "mp-fastclose",
+-                            600
++                            "add-addr",
++                            200
+                         ]
+                     },
+                     {
+                         "concat": [
+-                            "mp-join",
+-                            100
++                            "remove-addr",
++                            300
+                         ]
+                     },
+                     {
+@@ -646,20 +646,20 @@
+                     },
+                     {
+                         "concat": [
+-                            "mp-tcprst",
+-                            700
++                            "mp-fail",
++                            500
+                         ]
+                     },
+                     {
+                         "concat": [
+-                            "add-addr",
+-                            200
++                            "mp-fastclose",
++                            600
+                         ]
+                     },
+                     {
+                         "concat": [
+-                            "mp-fail",
+-                            500
++                            "mp-tcprst",
++                            700
+                         ]
+                     }
+                 ]
+diff --git a/tests/py/any/tcpopt.t.json.output b/tests/py/any/tcpopt.t.json.output
+index ad0d25f..ae979e7 100644
+--- a/tests/py/any/tcpopt.t.json.output
++++ b/tests/py/any/tcpopt.t.json.output
+@@ -30,3 +30,79 @@
+     }
+ ]
+ 
++# tcp option mptcp subtype . tcp dport { mp-capable . 10, mp-join . 100, add-addr . 200, remove-addr . 300, mp-prio . 400, mp-fail . 500, mp-fastclose . 600, mp-tcprst . 700 }
++[
++    {
++        "match": {
++            "left": {
++                "concat": [
++                    {
++                        "tcp option": {
++                            "field": "subtype",
++                            "name": "mptcp"
++                        }
++                    },
++                    {
++                        "payload": {
++                            "field": "dport",
++                            "protocol": "tcp"
++                        }
++                    }
++                ]
++            },
++            "op": "==",
++            "right": {
++                "set": [
++                    {
++                        "concat": [
++                            "mp-capable",
++                            10
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "remove-addr",
++                            300
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-fastclose",
++                            600
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-join",
++                            100
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-prio",
++                            400
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-tcprst",
++                            700
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "add-addr",
++                            200
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-fail",
++                            500
++                        ]
++                    }
++                ]
++            }
++        }
++    }
++]

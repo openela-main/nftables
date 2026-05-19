@@ -1,0 +1,48 @@
+From 6bd71d875043356fb8e6b8ed24e8d2d9c4f7f491 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:11:18 +0100
+Subject: [PATCH] doc: libnftables-json: Describe RULESET object
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 454f361434522bbeba32e114a14c336e1ebf20a1
+
+commit 454f361434522bbeba32e114a14c336e1ebf20a1
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Nov 6 12:14:56 2025 +0100
+
+    doc: libnftables-json: Describe RULESET object
+
+    Document the syntax of this meta-object used by "list" and "flush"
+    commands only.
+
+    Fixes: 872f373dc50f7 ("doc: Add JSON schema documentation")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/libnftables-json.adoc | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/doc/libnftables-json.adoc b/doc/libnftables-json.adoc
+index 643884d..049c325 100644
+--- a/doc/libnftables-json.adoc
++++ b/doc/libnftables-json.adoc
+@@ -200,6 +200,18 @@ Rename a chain. The new name is expected in a dedicated property named
+ 
+ == RULESET ELEMENTS
+ 
++=== RULESET
++[verse]
++____
++*{ "ruleset":* 'RULSET_PROPERTIES' *}*
++
++'RULESET_PROPERTIES' := *null* | *{ "family":* 'STRING' *}*
++____
++
++This is a special object for use with *list* and *flush* commands which will
++then operate on either the whole ruleset or the parts of it belonging to the
++given family.
++
+ === TABLE
+ [verse]
+ ____

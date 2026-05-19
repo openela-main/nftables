@@ -1,0 +1,38 @@
+From e514f0bbb4ca1cfdd7f2d719377e0276f759ec31 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:32 +0100
+Subject: [PATCH] monitor: Quote device names in chain declarations, too
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit ed1b5b672b2eeb6244bed566227bee2aa7a1e4b4
+
+commit ed1b5b672b2eeb6244bed566227bee2aa7a1e4b4
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Aug 28 16:47:03 2025 +0200
+
+    monitor: Quote device names in chain declarations, too
+
+    Fixed commit missed the fact that there are two routines printing chain
+    declarations.
+
+    Fixes: eb30f236d91a8 ("rule: print chain and flowtable devices in quotes")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/rule.c b/src/rule.c
+index 398e5bd..94f5eab 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -1131,7 +1131,7 @@ void chain_print_plain(const struct chain *chain, struct output_ctx *octx)
+ 
+ 			nft_print(octx, "devices = { ");
+ 			for (i = 0; i < chain->dev_array_len; i++) {
+-				nft_print(octx, "%s", chain->dev_array[i]);
++				nft_print(octx, "\"%s\"", chain->dev_array[i]);
+ 				if (i + 1 != chain->dev_array_len)
+ 					nft_print(octx, ", ");
+ 			}

@@ -1,0 +1,40 @@
+From b049bc68b06669875fe687c0686d65ff11653675 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:32 +0100
+Subject: [PATCH] parser_bison: remove leftover utf-8 character in error
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 7f37f3ca55810c2dc0e245ca7df108f160acb359
+
+commit 7f37f3ca55810c2dc0e245ca7df108f160acb359
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sun Aug 31 23:37:51 2025 +0200
+
+    parser_bison: remove leftover utf-8 character in error
+
+    replace "‘" (UTF-8, 0xe280 0x98) with "'" (ASCII 0x27).
+
+    Fixes: c92ec3b21979 ("src: remove utf-8 character in printf lines")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 1e4b3f8..9ac1ca3 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -4292,7 +4292,7 @@ variable_expr		:	'$'	identifier
+ 					sym = symbol_lookup_fuzzy(scope, $2);
+ 					if (sym) {
+ 						erec_queue(error(&@2, "unknown identifier '%s'; "
+-								      "did you mean identifier '%s’?",
++								      "did you mean identifier '%s'?",
+ 								      $2, sym->identifier),
+ 							   state->msgs);
+ 					} else {

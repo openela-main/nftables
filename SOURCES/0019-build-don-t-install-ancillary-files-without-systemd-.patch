@@ -1,0 +1,67 @@
+From 50fd26900311b0eb0e35fa421541dba42c64927b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:59 +0100
+Subject: [PATCH] build: don't install ancillary files without systemd service
+ file
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 31007975ccf5a389b76e1bc6f5f7215847f394ef
+Conflicts: Context change due to missing commit df19bf51d49be
+           ("Makefile: Enable support for 'make check'")
+
+commit 31007975ccf5a389b76e1bc6f5f7215847f394ef
+Author: Jeremy Sowden <jeremy@azazel.net>
+Date:   Wed Sep 17 21:34:54 2025 +0100
+
+    build: don't install ancillary files without systemd service file
+
+    If the systemd service file is not installed, currently the related man-page
+    and example nft file are still installed.  Instead only install them when the
+    service file is installed.
+
+    Fixes: 107580cfa85c ("build: disable --with-unitdir by default")
+    Signed-off-by: Jeremy Sowden <jeremy@azazel.net>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ Makefile.am  | 5 +++++
+ configure.ac | 1 +
+ 2 files changed, 6 insertions(+)
+
+diff --git a/Makefile.am b/Makefile.am
+index 4035e65..ebf64c4 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -418,10 +418,14 @@ EXTRA_DIST += \
+ 	tools/nftables.service.in \
+ 	$(NULL)
+ 
++if BUILD_SERVICE
+ CLEANFILES += tools/nftables.service
++endif
+ 
+ pkgconfigdir = $(libdir)/pkgconfig
+ pkgconfig_DATA = libnftables.pc
++
++if BUILD_SERVICE
+ unit_DATA = tools/nftables.service
+ man_MANS = tools/nftables.service.8
+ doc_DATA = files/nftables/main.nft
+@@ -429,3 +433,4 @@ doc_DATA = files/nftables/main.nft
+ tools/nftables.service: tools/nftables.service.in ${top_builddir}/config.status
+ 	${AM_V_GEN}${MKDIR_P} tools
+ 	${AM_V_at}sed -e 's|@''sbindir''@|${sbindir}|g;s|@''pkgsysconfdir''@|${pkgsysconfdir}|g' <${srcdir}/tools/nftables.service.in >$@
++endif
+diff --git a/configure.ac b/configure.ac
+index 3517ea0..09d1ee5 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -130,6 +130,7 @@ AC_ARG_WITH([unitdir],
+ 	[unitdir=""]
+ )
+ AC_SUBST([unitdir])
++AM_CONDITIONAL([BUILD_SERVICE], [test "x$unitdir" != x])
+ 
+ AC_ARG_WITH([stable-release], [AS_HELP_STRING([--with-stable-release],
+             [Stable release number])],

@@ -1,0 +1,50 @@
+From 34146c80ea9418fc96fe7bd6246ed88a517ccd23 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 27 Nov 2025 10:58:08 +0100
+Subject: [PATCH] mnl: Drop asterisk from end of NFTA_DEVICE_PREFIX strings
+
+JIRA: https://issues.redhat.com/browse/RHEL-108861
+Upstream Status: nftables commit 11b9415fd63d245b1a3230aa4f7cd1e2b0639ddd
+
+commit 11b9415fd63d245b1a3230aa4f7cd1e2b0639ddd
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Oct 7 17:51:32 2025 +0200
+
+    mnl: Drop asterisk from end of NFTA_DEVICE_PREFIX strings
+
+    The asterisk left in place becomes part of the prefix by accident and is thus
+    both included when matching interface names as well as dumped back to user
+    space.
+
+    Fixes: c31e887504a90 ("mnl: Support simple wildcards in netdev hooks")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mnl.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/mnl.c b/src/mnl.c
+index ccf4ca5..bd5d95e 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -815,9 +815,16 @@ static bool is_wildcard_str(const char *str)
+ 
+ static void mnl_nft_attr_put_ifname(struct nlmsghdr *nlh, const char *ifname)
+ {
+-	uint16_t attr = is_wildcard_str(ifname) ?
+-			NFTA_DEVICE_PREFIX : NFTA_DEVICE_NAME;
++	uint16_t attr = NFTA_DEVICE_NAME;
++	char pfx[IFNAMSIZ];
+ 
++	if (is_wildcard_str(ifname)) {
++		snprintf(pfx, IFNAMSIZ, "%s", ifname);
++		pfx[strlen(pfx) - 1] = '\0';
++
++		attr = NFTA_DEVICE_PREFIX;
++		ifname = pfx;
++	}
+ 	mnl_attr_put_strz(nlh, attr, ifname);
+ }
+ 

@@ -1,0 +1,60 @@
+From 8cc3c94a06c23d37827b4c02537d691bf2b713a7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:59 +0100
+Subject: [PATCH] src: parser_json: fix format string bugs
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit b30ad0c25b7b4a289dd73e8da6fa101b66fbf0d7
+
+commit b30ad0c25b7b4a289dd73e8da6fa101b66fbf0d7
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Oct 23 14:17:00 2025 +0200
+
+    src: parser_json: fix format string bugs
+
+    After adding fmt attribute annotation:
+    warning: format not a string literal and no format arguments [-Wformat-security]
+      131 |         erec_queue(error(&loc, err->text), ctx->msgs);
+    In function 'json_events_cb':
+    warning: format '%lu' expects argument of type 'long unsigned int', but argument 3 has type '__u32' {aka 'unsigned int'} [-Wformat=]
+
+    Fix that up too.
+
+    Fixes: 586ad210368b ("libnftables: Implement JSON parser")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 71e44f1..3a50c86 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -128,7 +128,7 @@ static void json_lib_error(struct json_ctx *ctx, json_error_t *err)
+ 		.last_column = err->column,
+ 	};
+ 
+-	erec_queue(error(&loc, err->text), ctx->msgs);
++	erec_queue(error(&loc, "%s", err->text), ctx->msgs);
+ }
+ 
+ __attribute__((format(printf, 2, 3)))
+@@ -4320,6 +4320,7 @@ int nft_parse_json_filename(struct nft_ctx *nft, const char *filename,
+ 	return ret;
+ }
+ 
++__attribute__((format(printf, 2, 3)))
+ static int json_echo_error(struct netlink_mon_handler *monh,
+ 			   const char *fmt, ...)
+ {
+@@ -4392,7 +4393,7 @@ int json_events_cb(const struct nlmsghdr *nlh, struct netlink_mon_handler *monh)
+ 
+ 	json = seqnum_to_json(nlh->nlmsg_seq);
+ 	if (!json) {
+-		json_echo_error(monh, "No JSON command found with seqnum %lu\n",
++		json_echo_error(monh, "No JSON command found with seqnum %u\n",
+ 				nlh->nlmsg_seq);
+ 		return MNL_CB_OK;
+ 	}

@@ -1,0 +1,41 @@
+From a440e595cd5f61948684de3ab0c666769cb9f695 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:59 +0100
+Subject: [PATCH] libnftables: do not re-add default include directory in
+ include search path
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 3af59817b8d3994d52db0f1aa5dabeebc84dae45
+
+commit 3af59817b8d3994d52db0f1aa5dabeebc84dae45
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Sep 24 23:54:12 2025 +0200
+
+    libnftables: do not re-add default include directory in include search path
+
+    Otherwise globbing might duplicate included files because
+    include_path_glob() is called twice.
+
+    Fixes: 7eb950a8e8fa ("libnftables: include canonical path to avoid duplicates")
+    Tested-by: Jeremy Sowden <jeremy@azazel.net>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/libnftables.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/libnftables.c b/src/libnftables.c
+index c8293f7..9f6a1bc 100644
+--- a/src/libnftables.c
++++ b/src/libnftables.c
+@@ -176,6 +176,9 @@ static bool nft_ctx_find_include_path(struct nft_ctx *ctx, const char *path)
+ 			return true;
+ 	}
+ 
++	if (!strcmp(path, DEFAULT_INCLUDE_PATH))
++		return true;
++
+ 	return false;
+ }
+ 

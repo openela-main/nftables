@@ -1,0 +1,50 @@
+From 82d38b67556dbebf42def4abefa6dca951fbd79e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 20 Nov 2025 20:10:32 +0100
+Subject: [PATCH] tests: shell: skip two bitwise tests if multi-register
+ support isn't available
+
+JIRA: https://issues.redhat.com/browse/RHEL-121194
+Upstream Status: nftables commit 083c532a2e179ec350881ff5444f35c58b99937f
+
+commit 083c532a2e179ec350881ff5444f35c58b99937f
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Sep 8 11:06:35 2025 +0200
+
+    tests: shell: skip two bitwise tests if multi-register support isn't available
+
+    These tests fail in case kernel requires bitwise RHS to be a constant
+    value.
+
+    Fixes: 67d2a8d4c86f ("tests: shell: add parser and packetpath test")
+    Reported-by: Yi Chen <yiche@redhat.com>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/bitwise/bitwise_in_sets_and_maps | 1 +
+ tests/shell/testcases/packetpath/bitwise_with_map      | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/tests/shell/testcases/bitwise/bitwise_in_sets_and_maps b/tests/shell/testcases/bitwise/bitwise_in_sets_and_maps
+index 4f5044f..e574f78 100755
+--- a/tests/shell/testcases/bitwise/bitwise_in_sets_and_maps
++++ b/tests/shell/testcases/bitwise/bitwise_in_sets_and_maps
+@@ -1,5 +1,6 @@
+ #!/bin/bash
+ 
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_bitwise_multireg)
+ # NFT_TEST_REQUIRES(NFT_TEST_HAVE_bitshift)
+ 
+ set -e
+diff --git a/tests/shell/testcases/packetpath/bitwise_with_map b/tests/shell/testcases/packetpath/bitwise_with_map
+index 33419e4..127b341 100755
+--- a/tests/shell/testcases/packetpath/bitwise_with_map
++++ b/tests/shell/testcases/packetpath/bitwise_with_map
+@@ -1,5 +1,6 @@
+ #!/bin/bash
+ 
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_bitwise_multireg)
+ # NFT_TEST_REQUIRES(NFT_TEST_HAVE_bitshift)
+ 
+ set -e
