@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.9
-%define nft_specrelease 6
+%define nft_specrelease 7
 
 Name:           nftables
 Version:        %{nft_rpmversion}
@@ -32,6 +32,8 @@ Patch10:            0010-tests-py-missing-json-output-in-never-merge-across-n.pa
 Patch11:            0011-Revert-doc-part-of-src-add-tcp-option-reset-support.patch
 Patch12:            0012-Revert-doc-part-of-meta-introduce-meta-broute-suppor.patch
 Patch13:            0013-Revert-doc-part-of-exthdr-add-boolean-DCCP-option-ma.patch
+Patch14:            0014-src-netlink-fix-crash-when-ops-doesn-t-support-udata.patch
+Patch15:            0015-src-fix-reset-element-support-for-interval-set-type.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -144,6 +146,10 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Wed Mar 18 2026 Phil Sutter <psutter@redhat.com> [1.0.9-7.el9]
+- src: fix reset element support for interval set type (Phil Sutter) [RHEL-153461]
+- src: netlink: fix crash when ops doesn't support udata (Phil Sutter) [RHEL-153461]
+
 * Wed Nov 26 2025 Phil Sutter <psutter@redhat.com> [1.0.9-6.el9]
 - Revert doc/ part of "exthdr: add boolean DCCP option matching" (Phil Sutter) [RHEL-126817]
 - Revert doc/ part of "meta: introduce meta broute support" (Phil Sutter) [RHEL-126817]
