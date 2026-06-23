@@ -1,0 +1,56 @@
+From f675eaad15472cd84fae5f51a0ecac188e1b7e66 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 24 Feb 2026 15:53:23 +0100
+Subject: [PATCH] expression: Set range expression 'len' field
+
+JIRA: https://issues.redhat.com/browse/RHEL-128553
+Upstream Status: nftables commit b74a108432510b8cef62c4d0de1cef754ee70ab1
+
+commit b74a108432510b8cef62c4d0de1cef754ee70ab1
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Oct 16 18:57:20 2025 +0200
+
+    expression: Set range expression 'len' field
+
+    The length value is needed for netlink debug output of concatenated
+    ranges. Set it to one of the inner elements' lengths (which should be
+    identical).
+
+    Since the inner element length may not be set initially, set it in
+    eval phase again. This covers at least all cases in tests/py.
+
+    Without this, netlink_gen_concat_key() et al. would have to inspect
+    element types and extract lengths accordingly, this is much easier.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c   | 1 +
+ src/expression.c | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 9125d5f..0831d2c 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1337,6 +1337,7 @@ static int expr_evaluate_range(struct eval_ctx *ctx, struct expr **exprp)
+ 
+ 	datatype_set(range, left->dtype);
+ 	range->flags |= EXPR_F_CONSTANT;
++	range->len = left->len;
+ 	return 0;
+ }
+ 
+diff --git a/src/expression.c b/src/expression.c
+index 8cb6397..6e0941a 100644
+--- a/src/expression.c
++++ b/src/expression.c
+@@ -1013,6 +1013,7 @@ struct expr *range_expr_alloc(const struct location *loc,
+ 			  BYTEORDER_INVALID, 0);
+ 	expr->left  = left;
+ 	expr->right = right;
++	expr->len = left->len;
+ 	return expr;
+ }
+ 

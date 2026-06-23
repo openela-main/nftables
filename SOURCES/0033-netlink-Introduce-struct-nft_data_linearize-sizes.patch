@@ -1,0 +1,108 @@
+From 3dbc8914f61700ab156fc9851e45a21c184391f3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 24 Feb 2026 15:53:23 +0100
+Subject: [PATCH] netlink: Introduce struct nft_data_linearize::sizes
+
+JIRA: https://issues.redhat.com/browse/RHEL-128553
+Upstream Status: nftables commit 3d5937f52b7d7675a8f9b446a336317b0f36560a
+
+commit 3d5937f52b7d7675a8f9b446a336317b0f36560a
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Oct 17 17:06:10 2025 +0200
+
+    netlink: Introduce struct nft_data_linearize::sizes
+
+    This array holds each concat component's actual length in bytes. It is
+    crucial because component data is padded to match register lengths and
+    if libnftnl has to print data "in reverse" (to print Little Endian
+    values byte-by-byte), it will print extra leading zeroes with odd data
+    lengths and thus indicate number of printed bytes does no longer
+    correctly reflect actual data length.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/netlink.h |  1 +
+ src/netlink.c     | 14 ++++++++++----
+ 2 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/include/netlink.h b/include/netlink.h
+index a762cb4..aa25094 100644
+--- a/include/netlink.h
++++ b/include/netlink.h
+@@ -107,6 +107,7 @@ struct nft_data_linearize {
+ 	uint32_t	chain_id;
+ 	int		verdict;
+ 	uint32_t	byteorder;
++	uint8_t		sizes[NFT_REG32_COUNT];
+ };
+ 
+ struct nft_data_delinearize {
+diff --git a/src/netlink.c b/src/netlink.c
+index 939552a..4523d0a 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -381,7 +381,7 @@ static void netlink_gen_concat_key(const struct expr *expr,
+ 		if (byteorder == BYTEORDER_HOST_ENDIAN &&
+ 		    expr_basetype(i)->type != TYPE_STRING)
+ 			nld->byteorder |= 1 << n;
+-		n++;
++		nld->sizes[n++] = div_round_up(i->len, BITS_PER_BYTE);
+ 	}
+ 
+ 	nft_data_memcpy(nld, data, len);
+@@ -451,7 +451,7 @@ static void __netlink_gen_concat_expand(const struct expr *expr,
+ 		if (i->byteorder == BYTEORDER_HOST_ENDIAN &&
+ 		    expr_basetype(i)->type != TYPE_STRING)
+ 			nld->byteorder |= 1 << n;
+-		n++;
++		nld->sizes[n++] = div_round_up(i->len, BITS_PER_BYTE);
+ 	}
+ 
+ 	list_for_each_entry(i, &expr_concat(expr)->expressions, list) {
+@@ -459,7 +459,7 @@ static void __netlink_gen_concat_expand(const struct expr *expr,
+ 		if (i->byteorder == BYTEORDER_HOST_ENDIAN &&
+ 		    expr_basetype(i)->type != TYPE_STRING)
+ 			nld->byteorder |= 1 << n;
+-		n++;
++		nld->sizes[n++] = div_round_up(i->len, BITS_PER_BYTE);
+ 	}
+ 
+ 	nft_data_memcpy(nld, data, len);
+@@ -484,7 +484,7 @@ static void __netlink_gen_concat(const struct expr *expr,
+ 		if (i->byteorder == BYTEORDER_HOST_ENDIAN &&
+ 		    expr_basetype(i)->type != TYPE_STRING)
+ 			nld->byteorder |= 1 << n;
+-		n++;
++		nld->sizes[n++] = div_round_up(i->len, BITS_PER_BYTE);
+ 	}
+ 
+ 	nft_data_memcpy(nld, data, len);
+@@ -562,6 +562,8 @@ static void netlink_gen_range(const struct expr *expr,
+ 	offset = netlink_export_pad(data, expr->left->value, expr->left);
+ 	netlink_export_pad(data + offset, expr->right->value, expr->right);
+ 	nft_data_memcpy(nld, data, len);
++	nld->sizes[0] = div_round_up(expr->left->len, BITS_PER_BYTE);
++	nld->sizes[1] = div_round_up(expr->right->len, BITS_PER_BYTE);
+ }
+ 
+ static void netlink_gen_range_value(const struct expr *expr,
+@@ -578,6 +580,8 @@ static void netlink_gen_range_value(const struct expr *expr,
+ 	offset = netlink_export_pad(data, expr->range.low, expr);
+ 	netlink_export_pad(data + offset, expr->range.high, expr);
+ 	nft_data_memcpy(nld, data, len);
++	nld->sizes[0] = div_round_up(expr->len, BITS_PER_BYTE);
++	nld->sizes[1] = nld->sizes[0];
+ }
+ 
+ static void netlink_gen_prefix(const struct expr *expr,
+@@ -598,6 +602,8 @@ static void netlink_gen_prefix(const struct expr *expr,
+ 	mpz_clear(v);
+ 
+ 	nft_data_memcpy(nld, data, len);
++	nld->sizes[0] = div_round_up(expr->prefix->len, BITS_PER_BYTE);
++	nld->sizes[1] = nld->sizes[0];
+ }
+ 
+ static void netlink_gen_key(const struct expr *expr,

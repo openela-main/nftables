@@ -1,0 +1,65 @@
+From 06ba89ac8e3a57d54b581f9ff234d6f67b232306 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 24 Feb 2026 15:53:23 +0100
+Subject: [PATCH] intervals: Convert byte order implicitly
+
+JIRA: https://issues.redhat.com/browse/RHEL-128553
+Upstream Status: nftables commit 56107b766e1d886be4f6bf25c54f49b90c1b858b
+
+commit 56107b766e1d886be4f6bf25c54f49b90c1b858b
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Nov 13 16:36:01 2025 +0100
+
+    intervals: Convert byte order implicitly
+
+    When converting ranges to intervals, the latter's high and low values
+    must be in network byte order. Instead of creating the low/high constant
+    expressions with host byte order and converting the value, create them
+    with Big Endian and keep the value as is. Upon export, Little Endian MPZ
+    values will be byte-swapped by mpz_export_data() if BYTEORDER_BIG_ENDIAN
+    is passed.
+
+    The benefit of this is that value's byteorder may be communicated to
+    libnftnl later by looking at struct expr::byteorder field. By the time
+    this information is required during netlink serialization, there is no
+    other indicator for data byte order available.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/src/intervals.c b/src/intervals.c
+index 8c8ce8c..d8c61ef 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -798,11 +798,8 @@ int setelem_to_interval(const struct set *set, struct expr *elem,
+ 	}
+ 
+ 	low = constant_expr_alloc(&key->location, set->key->dtype,
+-				  set->key->byteorder, set->key->len, NULL);
+-
++				  BYTEORDER_BIG_ENDIAN, set->key->len, NULL);
+ 	mpz_set(low->value, key->range.low);
+-	if (set->key->byteorder == BYTEORDER_HOST_ENDIAN)
+-		mpz_switch_byteorder(low->value, set->key->len / BITS_PER_BYTE);
+ 
+ 	low = set_elem_expr_alloc(&key->location, low);
+ 	set_elem_expr_copy(low, interval_expr_key(elem));
+@@ -824,12 +821,11 @@ int setelem_to_interval(const struct set *set, struct expr *elem,
+ 	}
+ 
+ 	high = constant_expr_alloc(&key->location, set->key->dtype,
+-				   set->key->byteorder, set->key->len,
++				   BYTEORDER_BIG_ENDIAN, set->key->len,
+ 				   NULL);
+ 	mpz_set(high->value, key->range.high);
+ 	mpz_add_ui(high->value, high->value, 1);
+-	if (set->key->byteorder == BYTEORDER_HOST_ENDIAN)
+-		mpz_switch_byteorder(high->value, set->key->len / BITS_PER_BYTE);
++	high->byteorder = BYTEORDER_BIG_ENDIAN;
+ 
+ 	high = set_elem_expr_alloc(&key->location, high);
+ 

@@ -1,0 +1,76 @@
+From 3097a93fcfa42b6460cd9ba37577e647c754eae3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 24 Feb 2026 15:53:23 +0100
+Subject: [PATCH] netlink: No need to reference array when passing as pointer
+
+JIRA: https://issues.redhat.com/browse/RHEL-128553
+Upstream Status: nftables commit 134b50e5d3f185219e09c613d98d6bf9494b1248
+
+commit 134b50e5d3f185219e09c613d98d6bf9494b1248
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Oct 17 16:11:14 2025 +0200
+
+    netlink: No need to reference array when passing as pointer
+
+    Struct nft_data_linearize::value is an array, drop the reference
+    operator.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c           | 6 +++---
+ src/netlink_linearize.c | 8 ++++----
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 4523d0a..49655f2 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -139,17 +139,17 @@ struct nftnl_set_elem *alloc_nftnl_setelem(const struct expr *set,
+ 			netlink_gen_key(key, &nld);
+ 			key->flags &= ~EXPR_F_INTERVAL;
+ 
+-			nftnl_set_elem_set(nlse, NFTNL_SET_ELEM_KEY, &nld.value, nld.len);
++			nftnl_set_elem_set(nlse, NFTNL_SET_ELEM_KEY, nld.value, nld.len);
+ 
+ 			key->flags |= EXPR_F_INTERVAL_END;
+ 			netlink_gen_key(key, &nld);
+ 			key->flags &= ~EXPR_F_INTERVAL_END;
+ 
+ 			nftnl_set_elem_set(nlse, NFTNL_SET_ELEM_KEY_END,
+-					   &nld.value, nld.len);
++					   nld.value, nld.len);
+ 		} else {
+ 			netlink_gen_key(key, &nld);
+-			nftnl_set_elem_set(nlse, NFTNL_SET_ELEM_KEY, &nld.value, nld.len);
++			nftnl_set_elem_set(nlse, NFTNL_SET_ELEM_KEY, nld.value, nld.len);
+ 		}
+ 		break;
+ 	}
+diff --git a/src/netlink_linearize.c b/src/netlink_linearize.c
+index 8ac33d3..9af7333 100644
+--- a/src/netlink_linearize.c
++++ b/src/netlink_linearize.c
+@@ -470,8 +470,8 @@ static struct expr *netlink_gen_prefix(struct netlink_linearize_ctx *ctx,
+ 	netlink_put_register(nle, NFTNL_EXPR_BITWISE_SREG, sreg);
+ 	netlink_put_register(nle, NFTNL_EXPR_BITWISE_DREG, sreg);
+ 	nftnl_expr_set_u32(nle, NFTNL_EXPR_BITWISE_LEN, nld.len);
+-	nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_MASK, &nld.value, nld.len);
+-	nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_XOR, &zero.value, zero.len);
++	nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_MASK, nld.value, nld.len);
++	nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_XOR, zero.value, zero.len);
+ 	nft_rule_add_expr(ctx, nle, &expr->location);
+ 
+ 	return expr->right->prefix;
+@@ -546,8 +546,8 @@ static void netlink_gen_flagcmp(struct netlink_linearize_ctx *ctx,
+ 		netlink_put_register(nle, NFTNL_EXPR_BITWISE_SREG, sreg);
+ 		netlink_put_register(nle, NFTNL_EXPR_BITWISE_DREG, sreg);
+ 		nftnl_expr_set_u32(nle, NFTNL_EXPR_BITWISE_LEN, len);
+-		nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_MASK, &nld2.value, nld2.len);
+-		nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_XOR, &nld.value, nld.len);
++		nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_MASK, nld2.value, nld2.len);
++		nftnl_expr_set(nle, NFTNL_EXPR_BITWISE_XOR, nld.value, nld.len);
+ 		nft_rule_add_expr(ctx, nle, &expr->location);
+ 
+ 		nle = alloc_nft_expr("cmp");

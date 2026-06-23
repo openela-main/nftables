@@ -1,0 +1,104 @@
+From 9ef04720b6513392d8aa2164b97c3a24e39c7965 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 24 Feb 2026 15:53:23 +0100
+Subject: [PATCH] tests: py: tools: Add regen_payloads.sh
+
+JIRA: https://issues.redhat.com/browse/RHEL-128553
+Upstream Status: nftables commit db82466117b8bfc93923eec49114d47200f7f913
+
+commit db82466117b8bfc93923eec49114d47200f7f913
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Nov 24 17:29:04 2021 +0100
+
+    tests: py: tools: Add regen_payloads.sh
+
+    Use this script to recreate all payload records.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/tools/regen_payloads.sh | 74 ++++++++++++++++++++++++++++++++
+ 1 file changed, 74 insertions(+)
+ create mode 100755 tests/py/tools/regen_payloads.sh
+
+diff --git a/tests/py/tools/regen_payloads.sh b/tests/py/tools/regen_payloads.sh
+new file mode 100755
+index 0000000..9fcbc2c
+--- /dev/null
++++ b/tests/py/tools/regen_payloads.sh
+@@ -0,0 +1,74 @@
++#!/bin/bash
++
++# update payload records in an automated fashion, trying to reduce diff sizes
++
++
++# scan payloadfile and print record for cmd (if found)
++find_payload() { # (payloadfile, cmd)
++	local found=false
++
++	readarray -t pl <"$1"
++	for l in "${pl[@]}"; do
++		if [[ "$l" == "# "* ]]; then
++			$found && return
++			[[ "$l" == "$2" ]] && found=true
++		fi
++		$found && echo "$l"
++	done
++	$found || echo "Warning: Command '$2' not found in '$1'" >&2
++}
++
++cd $(dirname $0)/../
++
++# make sure no stray output files get in the way
++rm -f */*.got */*.gotgot
++
++# store payload records for later
++# clear payload files to force regenerating (but leave them in place)
++for pl in */*.payload*; do
++	[[ $pl == *.bak ]] && continue # ignore leftover .bak files
++	cp "$pl" "${pl}.bak"
++	echo >"$pl"
++done
++
++# run the testsuite to create .got files
++# pass -f to keep going despite missing payloads
++./nft-test.py -f
++
++# restore old payload records
++for plbak in */*.bak; do
++	mv "$plbak" "${plbak%.bak}"
++done
++
++# sort created got files to match order in old payload records
++for g in ${@:-*/*.payload*.got}; do
++	pl=${g%.got}
++
++	[[ -f $g ]] || continue
++	[[ -f $pl ]] || continue
++
++	readarray -t ploads <"$g"
++	readarray -t cmds <<< $(grep '^# ' $pl)
++	for cmd in "${cmds[@]}"; do
++		found=false
++		for l in "${ploads[@]}"; do
++			if [[ "$l" == "# "* ]]; then
++				$found && break
++				[[ "$l" == "$cmd" ]] && found=true
++			fi
++			$found && [[ "$l" != "" ]] && echo "$l"
++		done
++		if ! $found; then
++			echo "Warning: Command '$cmd' not found in '$g'" >&2
++		else
++			echo ""
++		fi
++	done | head -n -1 >${g}got
++
++	mv "${g}got" "${g}"
++done
++
++# overwrite old payload records with new ones
++for got in */*.payload*.got; do
++	mv "${got}" "${got%.got}"
++done

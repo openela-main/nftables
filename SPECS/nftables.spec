@@ -1,6 +1,6 @@
 Name:           nftables
 Version:        1.1.5
-Release:        3%{?dist}
+Release:        5%{?dist}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utilities
@@ -43,6 +43,19 @@ Patch23:            0023-parser_bison-Accept-ASTERISK_STRING-in-flowtable_exp.pa
 Patch24:            0024-tests-shell-Test-ifname-based-hooks.patch
 Patch25:            0025-mnl-Drop-asterisk-from-end-of-NFTA_DEVICE_PREFIX-str.patch
 Patch26:            0026-tests-monitor-Fix-for-out-of-path-call.patch
+Patch27:            0027-segtree-Fix-range-aggregation-on-Big-Endian.patch
+Patch28:            0028-mergesort-Fix-sorting-of-string-values.patch
+Patch29:            0029-mergesort-Align-concatenation-sort-order-with-Big-En.patch
+Patch30:            0030-intervals-Convert-byte-order-implicitly.patch
+Patch31:            0031-expression-Set-range-expression-len-field.patch
+Patch32:            0032-netlink-Introduce-struct-nft_data_linearize-byteorde.patch
+Patch33:            0033-netlink-Introduce-struct-nft_data_linearize-sizes.patch
+Patch34:            0034-netlink-No-need-to-reference-array-when-passing-as-p.patch
+Patch35:            0035-netlink-Make-use-of-nftnl_-expr-set_elem-_set_imm.patch
+Patch36:            0036-tests-py-tools-Add-regen_payloads.sh.patch
+Patch37:            0037-tests-py-objects.t-must-use-input-not-output.patch
+Patch38:            0038-tests-py-Update-payload-records.patch
+Patch39:            0039-tests-py-Adjust-payloads-to-changed-userdata-printin.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -53,7 +66,7 @@ BuildRequires: flex
 BuildRequires: bison
 BuildRequires: pkgconfig(libmnl) >= 1.0.4
 BuildRequires: gmp-devel
-BuildRequires: libnftnl-devel >= 1.3.0-1
+BuildRequires: libnftnl-devel >= 1.3.0-3
 BuildRequires: systemd
 BuildRequires: asciidoc
 BuildRequires: pkgconfig(xtables) >= 1.6.1
@@ -61,7 +74,7 @@ BuildRequires: jansson-devel
 BuildRequires: python3-devel
 BuildRequires: readline-devel
 
-Requires: libnftnl >= 1.3.0-2
+Requires: libnftnl >= 1.3.0-3
 
 %generate_buildrequires
 cd py/
@@ -160,6 +173,25 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Thu May 21 2026 Phil Sutter <psutter@redhat.com> [1.1.5-5.el10]
+- Bump revision to overcome pipeline issues (Phil Sutter) [RHEL-128553]
+
+* Tue Feb 24 2026 Phil Sutter <psutter@redhat.com> [1.1.5-4.el10]
+- spec: Require libnftnl-1.3.0-3 for nftnl_{expr,set_elem}_set_imm() (Phil Sutter) [RHEL-128553]
+- tests: py: Adjust payloads to changed userdata printing (Phil Sutter) [RHEL-128553]
+- tests: py: Update payload records (Phil Sutter) [RHEL-128553]
+- tests: py: objects.t: must use input, not output (Phil Sutter) [RHEL-128553]
+- tests: py: tools: Add regen_payloads.sh (Phil Sutter) [RHEL-128553]
+- netlink: Make use of nftnl_{expr,set_elem}_set_imm() (Phil Sutter) [RHEL-128553]
+- netlink: No need to reference array when passing as pointer (Phil Sutter) [RHEL-128553]
+- netlink: Introduce struct nft_data_linearize::sizes (Phil Sutter) [RHEL-128553]
+- netlink: Introduce struct nft_data_linearize::byteorder (Phil Sutter) [RHEL-128553]
+- expression: Set range expression 'len' field (Phil Sutter) [RHEL-128553]
+- intervals: Convert byte order implicitly (Phil Sutter) [RHEL-128553]
+- mergesort: Align concatenation sort order with Big Endian (Phil Sutter) [RHEL-128553]
+- mergesort: Fix sorting of string values (Phil Sutter) [RHEL-128553]
+- segtree: Fix range aggregation on Big Endian (Phil Sutter) [RHEL-128553]
+
 * Tue Dec 16 2025 Phil Sutter <psutter@redhat.com> [1.1.5-3.el10]
 - Update expected test suite results (Phil Sutter) [RHEL-121194]
 - tests: monitor: Fix for out-of-path call (Phil Sutter) [RHEL-121194]

@@ -1,0 +1,69 @@
+From 212f623b375694c58357719c95929457c93ab218 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 24 Feb 2026 15:53:22 +0100
+Subject: [PATCH] segtree: Fix range aggregation on Big Endian
+
+JIRA: https://issues.redhat.com/browse/RHEL-128553
+Upstream Status: nftables commit e8b17865833b8c2b9f31a4dfb98069651572494d
+
+commit e8b17865833b8c2b9f31a4dfb98069651572494d
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Oct 21 18:36:10 2025 +0200
+
+    segtree: Fix range aggregation on Big Endian
+
+    Interface name wildcards are received as ranges from prefix with zero
+    padding to prefix with ones padding. E.g. with "abcd*" (in hex):
+
+    61626364000000000000000000000000 - 61626364ffffffffffffffffffffffff
+
+    The faulty code tries to export the prefix from the lower boundary (r1)
+    into a buffer, append "*" and allocate a constant expression from the
+    resulting string. This does not work on Big Endian though:
+    mpz_export_data() seems to zero-pad data upon export and not necessarily
+    respect the passed length value. Moreover, this padding appears in the
+    first bytes of the buffer. The amount of padding seems illogical, too:
+    While a 6B prefix causes 2B padding and 8B prefix no padding, 10B prefix
+    causes 4B padding and 12B prefix even 8B padding.
+
+    Work around the odd behaviour by exporting the full data into a larger
+    buffer.
+
+    A similar issue is caused by increasing the constant expression's length
+    to match the upper boundary data length: Data export when printing puts
+    the padding upfront, so the resulting string starts with NUL-chars.
+    Since this length adjustment seems not to have any effect in practice,
+    just drop it.
+
+    Fixes: 88b2345a215ef ("segtree: add pretty-print support for wildcard strings in concatenated sets")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index fd77e03..bf9d7b1 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -409,16 +409,16 @@ void concat_range_aggregate(struct expr *set)
+ 			if (prefix_len >= 0 &&
+ 			    (prefix_len % BITS_PER_BYTE) == 0 &&
+ 			    string_type) {
++				unsigned int r1len = div_round_up(r1->len, BITS_PER_BYTE);
+ 				unsigned int str_len = prefix_len / BITS_PER_BYTE;
+-				char data[str_len + 2];
++				char data[r1len + 1] = {};
+ 
+-				mpz_export_data(data, r1->value, BYTEORDER_HOST_ENDIAN, str_len);
++				mpz_export_data(data, r1->value, BYTEORDER_HOST_ENDIAN, r1len);
+ 				data[str_len] = '*';
+ 
+ 				tmp = constant_expr_alloc(&r1->location, r1->dtype,
+ 							  BYTEORDER_HOST_ENDIAN,
+ 							  (str_len + 1) * BITS_PER_BYTE, data);
+-				tmp->len = r2->len;
+ 				list_replace(&r2->list, &tmp->list);
+ 				r2_next = tmp->list.next;
+ 				expr_free(r2);
