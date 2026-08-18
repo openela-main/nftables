@@ -1,0 +1,83 @@
+From 1b77c42989bca6d5a03f6b7bdb3d5cd729b792e3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 28 May 2026 16:58:10 +0200
+Subject: [PATCH] Tree-wide use of python3
+
+JIRA: https://issues.redhat.com/browse/RHEL-179874
+Upstream Status: nftables commit 9c0ddde6c830d4718cea88160693fdad6cb15137
+Conflicts:
+- Dropped changes to INSTALL document, they don't apply due to missing
+  other changes
+- Context change in py/setup.py due to missing commit 8ae4dc1f40aa0
+  ("py: use setup.cfg to configure setuptools")
+- Dropped changes to non-existent json-pretty.sh helper
+
+commit 9c0ddde6c830d4718cea88160693fdad6cb15137
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Feb 16 18:23:35 2026 +0100
+
+    Tree-wide use of python3
+
+    It seems that unversioned Python shebangs are discouraged these days:
+
+    - See the lintian web on Debian:
+      https://lintian.debian.org/tags/script-uses-unversioned-python-in-shebang.html
+
+    - Also, see "Finalizing Fedora's Switch to Python3":
+      https://fedoraproject.org/wiki/FinalizingFedoraSwitchtoPython3
+
+    Replace them all tree-wide.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ py/nftables.py              | 2 +-
+ py/setup.py                 | 2 +-
+ tests/json_echo/run-test.py | 2 +-
+ tests/py/nft-test.py        | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/py/nftables.py b/py/nftables.py
+index 2a0a1e8..f9966d7 100644
+--- a/py/nftables.py
++++ b/py/nftables.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/python
++#!/usr/bin/python3
+ # Copyright(C) 2018 Phil Sutter <phil@nwl.cc>
+ 
+ # This program is free software; you can redistribute it and/or modify
+diff --git a/py/setup.py b/py/setup.py
+index 72fc8fd..c3850f5 100755
+--- a/py/setup.py
++++ b/py/setup.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ from distutils.core import setup
+ from nftables import NFTABLES_VERSION
+ 
+diff --git a/tests/json_echo/run-test.py b/tests/json_echo/run-test.py
+index a6bdfc6..a990901 100755
+--- a/tests/json_echo/run-test.py
++++ b/tests/json_echo/run-test.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/python
++#!/usr/bin/python3
+ 
+ from __future__ import print_function
+ import sys
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index b66a33c..2b3f28e 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ #
+ # (C) 2014 by Ana Rey Botello <anarey@gmail.com>
+ #
+-- 
+2.53.0
+

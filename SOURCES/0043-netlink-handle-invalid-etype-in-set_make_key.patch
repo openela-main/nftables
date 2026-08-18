@@ -1,0 +1,42 @@
+From c0bdfb75c5f264b4f56179b1ce54ad335695ae8f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 28 May 2026 00:48:45 +0200
+Subject: [PATCH] netlink: handle invalid etype in set_make_key()
+
+JIRA: https://issues.redhat.com/browse/RHEL-179599
+Upstream Status: nftables commit c4186c5376ee73efff005dbd23dd73a8e06e6ad8
+
+commit c4186c5376ee73efff005dbd23dd73a8e06e6ad8
+Author: Thomas Haller <thaller@redhat.com>
+Date:   Wed Sep 20 16:26:07 2023 +0200
+
+    netlink: handle invalid etype in set_make_key()
+
+    It's not clear to me, what ensures that the etype is always valid.
+    Handle a NULL.
+
+    Fixes: 6e48df5329ea ('src: add "typeof" build/parse/print support')
+    Signed-off-by: Thomas Haller <thaller@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index dee1732..c323854 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -801,6 +801,8 @@ static struct expr *set_make_key(const struct nftnl_udata *attr)
+ 
+ 	etype = nftnl_udata_get_u32(ud[NFTNL_UDATA_SET_TYPEOF_EXPR]);
+ 	ops = expr_ops_by_type(etype);
++	if (!ops)
++		return NULL;
+ 
+ 	expr = ops->parse_udata(ud[NFTNL_UDATA_SET_TYPEOF_DATA]);
+ 	if (!expr)
+-- 
+2.53.0
+

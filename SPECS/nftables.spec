@@ -1,5 +1,5 @@
 %define nft_rpmversion 1.0.4
-%define nft_specrelease 7
+%define nft_specrelease 8
 %define libnftnl_ver 1.2.2-1
 
 Name:           nftables
@@ -63,6 +63,11 @@ Patch39:            0039-xt-Fall-back-to-generic-printing-from-translation.patch
 Patch40:            0040-xt-Fix-fallback-printing-for-extensions-matching-key.patch
 Patch41:            0041-evaluate-un-break-rule-insert-with-intervals.patch
 Patch42:            0042-xt-Fix-translation-error-path.patch
+Patch43:            0043-netlink-handle-invalid-etype-in-set_make_key.patch
+Patch44:            0044-expression-cleanup-expr_ops_by_type-and-handle-u32-i.patch
+Patch45:            0045-src-netlink-fix-crash-when-ops-doesn-t-support-udata.patch
+Patch46:            0046-tests-shell-connect-chains-to-hook-point.patch
+Patch47:            0047-Tree-wide-use-of-python3.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -182,6 +187,13 @@ touch -r %{SOURCE2} $RPM_BUILD_ROOT/%{python3_sitelib}/nftables/nftables.py
 %{python3_sitelib}/nftables/
 
 %changelog
+* Fri May 29 2026 Phil Sutter <psutter@redhat.com> [1.0.4-8.el8]
+- Tree-wide use of python3 (Phil Sutter) [RHEL-179874]
+- tests: shell: connect chains to hook point (Phil Sutter) [RHEL-179874]
+- src: netlink: fix crash when ops doesn't support udata (Phil Sutter) [RHEL-179599]
+- expression: cleanup expr_ops_by_type() and handle u32 input (Phil Sutter) [RHEL-179599]
+- netlink: handle invalid etype in set_make_key() (Phil Sutter) [RHEL-179599]
+
 * Fri Nov 29 2024 Phil Sutter <psutter@redhat.com> [1.0.4-7.el8]
 - xt: Fix translation error path (Phil Sutter) [RHEL-5806]
 

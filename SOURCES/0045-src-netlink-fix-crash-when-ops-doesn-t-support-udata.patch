@@ -1,0 +1,45 @@
+From 2e909b6557572a481dbaa84f3aa81a71e96ac5f9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 28 May 2026 00:49:16 +0200
+Subject: [PATCH] src: netlink: fix crash when ops doesn't support udata
+
+JIRA: https://issues.redhat.com/browse/RHEL-179599
+Upstream Status: nftables commit be737a1986bfee0ddea4bee7863dca0123a2bcbc
+
+commit be737a1986bfee0ddea4bee7863dca0123a2bcbc
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu May 8 16:29:04 2025 +0200
+
+    src: netlink: fix crash when ops doesn't support udata
+
+    Whenever a new version adds udata support to an expression, then old
+    versions of nft will crash when trying to list such a ruleset generated
+    by a more recent version of nftables.
+
+    Fix this by falling back to 'type' format.
+
+    Fixes: 6e48df5329ea ('src: add "typeof" build/parse/print support')
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 7dc166f..4946634 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -801,7 +801,7 @@ static struct expr *set_make_key(const struct nftnl_udata *attr)
+ 
+ 	etype = nftnl_udata_get_u32(ud[NFTNL_UDATA_SET_TYPEOF_EXPR]);
+ 	ops = expr_ops_by_type_u32(etype);
+-	if (!ops)
++	if (!ops || !ops->parse_udata)
+ 		return NULL;
+ 
+ 	expr = ops->parse_udata(ud[NFTNL_UDATA_SET_TYPEOF_DATA]);
+-- 
+2.53.0
+

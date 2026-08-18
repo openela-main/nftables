@@ -1,0 +1,135 @@
+From 12799007329de427d4d0515b3be3307ccd1c8c09 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Thu, 28 May 2026 00:48:45 +0200
+Subject: [PATCH] expression: cleanup expr_ops_by_type() and handle u32 input
+
+JIRA: https://issues.redhat.com/browse/RHEL-179599
+Upstream Status: nftables commit 3d0ce3c19d319a5aae806b617905cfa1ee7f87f4
+Conflicts: Changes in old code due to missing commit 0d614a853bf49
+           ("src: fix enum/integer mismatches").
+
+commit 3d0ce3c19d319a5aae806b617905cfa1ee7f87f4
+Author: Thomas Haller <thaller@redhat.com>
+Date:   Wed Sep 20 16:26:08 2023 +0200
+
+    expression: cleanup expr_ops_by_type() and handle u32 input
+
+    Make fewer assumptions about the underlying integer type of the enum.
+    Instead, be clear about where we have an untrusted uint32_t from netlink
+    and an enum. Rename expr_ops_by_type() to expr_ops_by_type_u32() to make
+    this clearer. Later we might make the enum as packed, when this starts
+    to matter more.
+
+    Also, only the code path expr_ops() wants strict validation and assert
+    against valid enum values. Move the assertion out of
+    __expr_ops_by_type(). Then expr_ops_by_type_u32() does not need to
+    duplicate the handling of EXPR_INVALID. We still need to duplicate the
+    check against EXPR_MAX, to ensure that the uint32_t value can be cast to
+    an enum value.
+
+    [ Remove cast on EXPR_MAX. --pablo ]
+
+    Signed-off-by: Thomas Haller <thaller@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/expression.h |  2 +-
+ src/expression.c     | 23 ++++++++++++-----------
+ src/netlink.c        |  4 ++--
+ 3 files changed, 15 insertions(+), 14 deletions(-)
+
+diff --git a/include/expression.h b/include/expression.h
+index cf7319b..57fb377 100644
+--- a/include/expression.h
++++ b/include/expression.h
+@@ -181,7 +181,7 @@ struct expr_ops {
+ };
+ 
+ const struct expr_ops *expr_ops(const struct expr *e);
+-const struct expr_ops *expr_ops_by_type(enum expr_types etype);
++const struct expr_ops *expr_ops_by_type_u32(uint32_t value);
+ 
+ /**
+  * enum expr_flags
+diff --git a/src/expression.c b/src/expression.c
+index 7390089..ebb8079 100644
+--- a/src/expression.c
++++ b/src/expression.c
+@@ -994,7 +994,7 @@ static struct expr *concat_expr_parse_udata(const struct nftnl_udata *attr)
+ 			goto err_free;
+ 
+ 		etype = nftnl_udata_get_u32(nest_ud[NFTNL_UDATA_SET_KEY_CONCAT_SUB_TYPE]);
+-		ops = expr_ops_by_type(etype);
++		ops = expr_ops_by_type_u32(etype);
+ 		if (!ops || !ops->parse_udata)
+ 			goto err_free;
+ 
+@@ -1497,9 +1497,7 @@ void range_expr_value_high(mpz_t rop, const struct expr *expr)
+ static const struct expr_ops *__expr_ops_by_type(enum expr_types etype)
+ {
+ 	switch (etype) {
+-	case EXPR_INVALID:
+-		BUG("Invalid expression ops requested");
+-		break;
++	case EXPR_INVALID: break;
+ 	case EXPR_VERDICT: return &verdict_expr_ops;
+ 	case EXPR_SYMBOL: return &symbol_expr_ops;
+ 	case EXPR_VARIABLE: return &variable_expr_ops;
+@@ -1531,20 +1529,23 @@ static const struct expr_ops *__expr_ops_by_type(enum expr_types etype)
+ 	case EXPR_FLAGCMP: return &flagcmp_expr_ops;
+ 	}
+ 
+-	BUG("Unknown expression type %d\n", etype);
++	return NULL;
+ }
+ 
+ const struct expr_ops *expr_ops(const struct expr *e)
+ {
+-	return __expr_ops_by_type(e->etype);
++	const struct expr_ops *ops;
++
++	ops = __expr_ops_by_type(e->etype);
++	if (!ops)
++		BUG("Unknown expression type %d\n", e->etype);
++
++	return ops;
+ }
+ 
+-const struct expr_ops *expr_ops_by_type(uint32_t value)
++const struct expr_ops *expr_ops_by_type_u32(uint32_t value)
+ {
+-	/* value might come from unreliable source, such as "udata"
+-	 * annotation of set keys.  Avoid BUG() assertion.
+-	 */
+-	if (value == EXPR_INVALID || value > EXPR_MAX)
++	if (value > EXPR_MAX)
+ 		return NULL;
+ 
+ 	return __expr_ops_by_type(value);
+diff --git a/src/netlink.c b/src/netlink.c
+index c323854..7dc166f 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -783,8 +783,8 @@ static struct expr *set_make_key(const struct nftnl_udata *attr)
+ {
+ 	const struct nftnl_udata *ud[NFTNL_UDATA_SET_TYPEOF_MAX + 1] = {};
+ 	const struct expr_ops *ops;
+-	enum expr_types etype;
+ 	struct expr *expr;
++	uint32_t etype;
+ 	int err;
+ 
+ 	if (!attr)
+@@ -800,7 +800,7 @@ static struct expr *set_make_key(const struct nftnl_udata *attr)
+ 		return NULL;
+ 
+ 	etype = nftnl_udata_get_u32(ud[NFTNL_UDATA_SET_TYPEOF_EXPR]);
+-	ops = expr_ops_by_type(etype);
++	ops = expr_ops_by_type_u32(etype);
+ 	if (!ops)
+ 		return NULL;
+ 
+-- 
+2.53.0
+
