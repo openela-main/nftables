@@ -1,0 +1,46 @@
+From 800a941f90e85ec7b3e0974c1fc575edde59f558 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 28 Jul 2026 13:31:01 +0200
+Subject: [PATCH] intervals: Fix for inconsistent union field use
+
+JIRA: https://issues.redhat.com/browse/RHEL-179035
+Upstream Status: nftables commit ba90672b190737d72723d0ec6ccfaaa46b4e7cd0
+Conflicts: Adjusted to missing commit 775383afb9298
+           ("src: move flags from EXPR_SET_ELEM to key")
+
+commit ba90672b190737d72723d0ec6ccfaaa46b4e7cd0
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue May 26 15:49:58 2026 +0200
+
+    intervals: Fix for inconsistent union field use
+
+    Reported by a static code analyzer: key->value belongs to a different
+    struct in the embedded anonymous union than key->range.* which is
+    accessed elsewhere in that function.
+
+    It is correct in that the function asserts key->etype to be
+    EXPR_RANGE_VALUE, so key->value is not necessarily valid (it just
+    happens to match key->range.low's offset.
+
+    Fixes: 91dc281a82ea6 ("src: rework singleton interval transformation to reduce memory consumption")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/intervals.c b/src/intervals.c
+index d8c61ef..9246068 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -812,7 +812,8 @@ int setelem_to_interval(const struct set *set, struct expr *elem,
+ 
+ 	if (adjacent)
+ 		return 0;
+-	else if (!mpz_cmp_ui(key->value, 0) && elem->flags & EXPR_F_INTERVAL_END) {
++	else if (!mpz_cmp_ui(key->range.low, 0) &&
++		 elem->flags & EXPR_F_INTERVAL_END) {
+ 		low->flags |= EXPR_F_INTERVAL_END;
+ 		return 0;
+ 	} else if (mpz_scan0(key->range.high, 0) == set->key->len) {

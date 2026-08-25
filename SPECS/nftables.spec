@@ -1,6 +1,6 @@
 Name:           nftables
 Version:        1.1.5
-Release:        5%{?dist}
+Release:        6%{?dist}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utilities
@@ -56,6 +56,9 @@ Patch36:            0036-tests-py-tools-Add-regen_payloads.sh.patch
 Patch37:            0037-tests-py-objects.t-must-use-input-not-output.patch
 Patch38:            0038-tests-py-Update-payload-records.patch
 Patch39:            0039-tests-py-Adjust-payloads-to-changed-userdata-printin.patch
+Patch40:            0040-intervals-Fix-for-inconsistent-union-field-use.patch
+Patch41:            0041-parser_json-fix-map-set-type-confusion-crash-in-map-.patch
+Patch42:            0042-tests-Prepare-exit-codes-for-automake.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -173,6 +176,11 @@ cd py/
 %files -n python3-nftables -f %{pyproject_files}
 
 %changelog
+* Wed Jul 29 2026 Phil Sutter <psutter@redhat.com> [1.1.5-6.el10]
+- tests: Prepare exit codes for automake (Phil Sutter) [RHEL-179035]
+- parser_json: fix map/set type confusion crash in map statement parser (Phil Sutter) [RHEL-179035]
+- intervals: Fix for inconsistent union field use (Phil Sutter) [RHEL-179035]
+
 * Thu May 21 2026 Phil Sutter <psutter@redhat.com> [1.1.5-5.el10]
 - Bump revision to overcome pipeline issues (Phil Sutter) [RHEL-128553]
 
