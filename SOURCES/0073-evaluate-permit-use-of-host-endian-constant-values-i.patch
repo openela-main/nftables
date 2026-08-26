@@ -1,0 +1,137 @@
+From 20e6758f2cbf8c42e3c58ec10207b12c490c8fb9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] evaluate: permit use of host-endian constant values in set
+ lookup keys
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit c0080feb0d034913409944d23873cce4bf9edf9e
+
+commit c0080feb0d034913409944d23873cce4bf9edf9e
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Feb 12 16:46:29 2024 +0100
+
+    evaluate: permit use of host-endian constant values in set lookup keys
+
+    AFL found following crash:
+
+    table ip filter {
+            map ipsec_in {
+                    typeof ipsec in reqid . iif : verdict
+                    flags interval
+            }
+
+            chain INPUT {
+                    type filter hook input priority filter; policy drop;
+                    ipsec in reqid . 100 @ipsec_in
+            }
+    }
+
+    Which yields:
+    nft: evaluate.c:1213: expr_evaluate_unary: Assertion `!expr_is_constant(arg)' failed.
+
+    All existing test cases with constant values use big endian values, but
+    "iif" expects host endian values.
+
+    As raw values were not supported before, concat byteorder conversion
+    doesn't handle constants.
+
+    Fix this:
+
+    1. Add constant handling so that the number is converted in-place,
+       without unary expression.
+
+    2. Add the inverse handling on delinearization for non-interval set
+       types.
+       When dissecting the concat data soup, watch for integer constants where
+       the datatype indicates host endian integer.
+
+    Last, extend an existing test case with the afl input to cover
+    in/output.
+
+    A new test case is added to test linearization, delinearization and
+    matching.
+
+    Based on original patch from Florian Westphal, patch subject and
+    description wrote by him.
+
+    Fixes: b422b07ab2f9 ("src: permit use of constant values in set lookup keys")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/netlink.h         |  1 +
+ src/evaluate.c            | 19 +++++++++++++------
+ src/netlink_delinearize.c |  5 ++++-
+ 3 files changed, 18 insertions(+), 7 deletions(-)
+
+diff --git a/include/netlink.h b/include/netlink.h
+index 6766d7e..2ce4b39 100644
+--- a/include/netlink.h
++++ b/include/netlink.h
+@@ -61,6 +61,7 @@ struct rule_pp_ctx {
+ 	struct dl_proto_ctx	*dl;
+ 	struct stmt		*stmt;
+ 	unsigned int		flags;
++	struct set		*set;
+ };
+ 
+ extern const struct input_descriptor indesc_netlink;
+diff --git a/src/evaluate.c b/src/evaluate.c
+index e64bc91..89656eb 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -194,13 +194,20 @@ static int byteorder_conversion(struct eval_ctx *ctx, struct expr **expr,
+ 
+ 			assert(basetype == TYPE_INTEGER);
+ 
+-			if (div_round_up(i->len, BITS_PER_BYTE) >= 2) {
+-				op = byteorder_conversion_op(i, byteorder);
+-				unary = unary_expr_alloc(&i->location, op, i);
+-				if (expr_evaluate(ctx, &unary) < 0)
+-					return -1;
++			switch (i->etype) {
++			case EXPR_VALUE:
++				if (i->byteorder == BYTEORDER_HOST_ENDIAN)
++					mpz_switch_byteorder(i->value, div_round_up(i->len, BITS_PER_BYTE));
++				break;
++			default:
++				if (div_round_up(i->len, BITS_PER_BYTE) >= 2) {
++					op = byteorder_conversion_op(i, byteorder);
++					unary = unary_expr_alloc(&i->location, op, i);
++					if (expr_evaluate(ctx, &unary) < 0)
++						return -1;
+ 
+-				list_replace(&i->list, &unary->list);
++					list_replace(&i->list, &unary->list);
++				}
+ 			}
+ 		}
+ 
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index 27630a8..1d30a78 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -2722,10 +2722,11 @@ static struct expr *expr_postprocess_string(struct expr *expr)
+ 
+ static void expr_postprocess_value(struct rule_pp_ctx *ctx, struct expr **exprp)
+ {
++	bool interval = (ctx->set && ctx->set->flags & NFT_SET_INTERVAL);
+ 	struct expr *expr = *exprp;
+ 
+ 	// FIXME
+-	if (expr->byteorder == BYTEORDER_HOST_ENDIAN)
++	if (expr->byteorder == BYTEORDER_HOST_ENDIAN && !interval)
+ 		mpz_switch_byteorder(expr->value, expr->len / BITS_PER_BYTE);
+ 
+ 	if (expr_basetype(expr)->type == TYPE_STRING)
+@@ -2869,7 +2870,9 @@ static void expr_postprocess(struct rule_pp_ctx *ctx, struct expr **exprp)
+ 
+ 				datatype_set(expr->left, expr->right->dtype);
+ 			}
++			ctx->set = expr->right->set;
+ 			expr_postprocess(ctx, &expr->left);
++			ctx->set = NULL;
+ 			break;
+ 		default:
+ 			expr_postprocess(ctx, &expr->left);

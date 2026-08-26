@@ -1,0 +1,41 @@
+From d1311c23e56c62effabdbbe09d2427d268231248 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:24 +0200
+Subject: [PATCH] doc: fix tcpdump example
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b9516b0a4dfb6e16e3e11c3024683a2df1ea09ab
+
+commit b9516b0a4dfb6e16e3e11c3024683a2df1ea09ab
+Author: Georg Pfuetzenreuter <mail@georg-pfuetzenreuter.net>
+Date:   Mon Oct 13 19:17:31 2025 +0200
+
+    doc: fix tcpdump example
+
+    The expression needs to be enclosed in a single string and combined with
+    a logical AND to have the desired effect.
+
+    Fixes: 1188a69604c3 ("src: introduce SYNPROXY matching")
+    Signed-off-by: Georg Pfuetzenreuter <mail@georg-pfuetzenreuter.net>
+    Reviewed-by: Fernando Fernandez Mancera <fmancera@suse.de>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/statements.txt | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/doc/statements.txt b/doc/statements.txt
+index c4a2aff..2de3ab2 100644
+--- a/doc/statements.txt
++++ b/doc/statements.txt
+@@ -632,8 +632,7 @@ needed for selective acknowledgement and window scaling).
+ ---------------------------------------
+ Determine tcp options used by backend, from an external system
+ 
+-              tcpdump -pni eth0 -c 1 'tcp[tcpflags] == (tcp-syn|tcp-ack)'
+-                  port 80 &
++              tcpdump -pni eth0 -c 1 'tcp[tcpflags] == (tcp-syn|tcp-ack) && port 80' &
+               telnet 192.0.2.42 80
+               18:57:24.693307 IP 192.0.2.42.80 > 192.0.2.43.48757:
+                   Flags [S.], seq 360414582, ack 788841994, win 14480,

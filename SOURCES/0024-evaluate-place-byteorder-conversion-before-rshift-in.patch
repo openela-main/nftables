@@ -1,0 +1,238 @@
+From 2d5e3d1d7241a86d1555b3edfb020f20fc95748d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:18 +0200
+Subject: [PATCH] evaluate: place byteorder conversion before rshift in payload
+ expressions
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit cb9b72a43c5684379c027908d9f332170bf8dd15
+
+commit cb9b72a43c5684379c027908d9f332170bf8dd15
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sun Nov 5 21:54:25 2023 +0100
+
+    evaluate: place byteorder conversion before rshift in payload expressions
+
+    Use the key from the evaluation context to perform the byteorder
+    conversion in case that this expression is used for lookups and updates
+    on explicit sets.
+
+     # nft --debug=netlink add rule ip6 t output ip6 dscp @mapv6
+     ip6 t output
+      [ payload load 2b @ network header + 0 => reg 1 ]
+      [ bitwise reg 1 = ( reg 1 & 0x0000c00f ) ^ 0x00000000 ]
+      [ byteorder reg 1 = ntoh(reg 1, 2, 2) ]   <-------------- this was missing!
+      [ bitwise reg 1 = ( reg 1 >> 0x00000006 ) ]
+      [ lookup reg 1 set mapv6 ]
+
+    Also with set statements (updates from packet path):
+
+     # nft --debug=netlink add rule ip6 t output update @mapv6 { ip6 dscp }
+     ip6 t output
+      [ payload load 2b @ network header + 0 => reg 1 ]
+      [ bitwise reg 1 = ( reg 1 & 0x0000c00f ) ^ 0x00000000 ]
+      [ byteorder reg 1 = ntoh(reg 1, 2, 2) ]   <------------- also here!
+      [ bitwise reg 1 = ( reg 1 >> 0x00000006 ) ]
+      [ dynset update reg_key 1 set mapv6 ]
+
+    Simple matches on values and implicit sets rely on the binary transfer
+    mechanism to propagate the shift to the constant, no explicit byteorder
+    is required in such case.
+
+    Fixes: 668c18f67203 ("evaluate: place byteorder conversion before rshift in payload statement")
+    Reported-by: Florian Westphal <fw@strlen.de>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                  | 10 +++++++-
+ tests/py/ip6/ip6.t              |  4 ++++
+ tests/py/ip6/ip6.t.json         | 42 +++++++++++++++++++++++++++++++++
+ tests/py/ip6/ip6.t.payload.inet | 21 +++++++++++++++++
+ tests/py/ip6/ip6.t.payload.ip6  | 17 +++++++++++++
+ 5 files changed, 93 insertions(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 1850043..303e36c 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -545,7 +545,8 @@ static void expr_evaluate_bits(struct eval_ctx *ctx, struct expr **exprp)
+ 	and->len	= masklen;
+ 
+ 	if (shift) {
+-		if (ctx->stmt_len > 0 && div_round_up(masklen, BITS_PER_BYTE) > 1) {
++		if ((ctx->ectx.key || ctx->stmt_len > 0) &&
++		    div_round_up(masklen, BITS_PER_BYTE) > 1) {
+ 			int op = byteorder_conversion_op(expr, BYTEORDER_HOST_ENDIAN);
+ 			and = unary_expr_alloc(&expr->location, op, and);
+ 			and->len = masklen;
+@@ -574,6 +575,7 @@ static void expr_evaluate_bits(struct eval_ctx *ctx, struct expr **exprp)
+ 
+ static int __expr_evaluate_exthdr(struct eval_ctx *ctx, struct expr **exprp)
+ {
++	const struct expr *key = ctx->ectx.key;
+ 	struct expr *expr = *exprp;
+ 
+ 	if (expr->exthdr.flags & NFT_EXTHDR_F_PRESENT)
+@@ -582,6 +584,8 @@ static int __expr_evaluate_exthdr(struct eval_ctx *ctx, struct expr **exprp)
+ 	if (expr_evaluate_primary(ctx, exprp) < 0)
+ 		return -1;
+ 
++	ctx->ectx.key = key;
++
+ 	if (expr->exthdr.offset % BITS_PER_BYTE != 0 ||
+ 	    expr->len % BITS_PER_BYTE != 0)
+ 		expr_evaluate_bits(ctx, exprp);
+@@ -878,6 +882,7 @@ static bool payload_needs_adjustment(const struct expr *expr)
+ 
+ static int expr_evaluate_payload(struct eval_ctx *ctx, struct expr **exprp)
+ {
++	const struct expr *key = ctx->ectx.key;
+ 	struct expr *expr = *exprp;
+ 
+ 	if (expr->payload.evaluated)
+@@ -889,6 +894,8 @@ static int expr_evaluate_payload(struct eval_ctx *ctx, struct expr **exprp)
+ 	if (expr_evaluate_primary(ctx, exprp) < 0)
+ 		return -1;
+ 
++	ctx->ectx.key = key;
++
+ 	if (payload_needs_adjustment(expr))
+ 		expr_evaluate_bits(ctx, exprp);
+ 
+@@ -1508,6 +1515,7 @@ static int expr_evaluate_concat(struct eval_ctx *ctx, struct expr **expr)
+ 		}
+ 
+ 		__expr_set_context(&ctx->ectx, tmp, bo, dsize, 0);
++		ctx->ectx.key = i;
+ 
+ 		if (list_member_evaluate(ctx, &i) < 0)
+ 			return -1;
+diff --git a/tests/py/ip6/ip6.t b/tests/py/ip6/ip6.t
+index 60ea223..430dd57 100644
+--- a/tests/py/ip6/ip6.t
++++ b/tests/py/ip6/ip6.t
+@@ -21,6 +21,10 @@ ip6 dscp vmap { 0x04 : accept, 0x3f : continue } counter;ok
+ meta mark set ip6 dscp map @map1;ok
+ !map2 type dscp . ipv6_addr : mark;ok
+ meta mark set ip6 dscp . ip6 daddr map @map2;ok
++!map3 type dscp : mark;ok
++ip6 dscp @map3;ok
++!map4 type dscp . ipv6_addr : mark;ok
++ip6 dscp . ip6 daddr @map4;ok
+ 
+ ip6 flowlabel 22;ok
+ ip6 flowlabel != 233;ok
+diff --git a/tests/py/ip6/ip6.t.json b/tests/py/ip6/ip6.t.json
+index 5411190..49e5a2d 100644
+--- a/tests/py/ip6/ip6.t.json
++++ b/tests/py/ip6/ip6.t.json
+@@ -193,6 +193,48 @@
+     }
+ ]
+ 
++# ip6 dscp @map3
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dscp",
++                    "protocol": "ip6"
++                }
++            },
++            "op": "==",
++            "right": "@map3"
++        }
++    }
++]
++
++# ip6 dscp . ip6 daddr @map4
++[
++    {
++        "match": {
++            "left": {
++                "concat": [
++                    {
++                        "payload": {
++                            "field": "dscp",
++                            "protocol": "ip6"
++                        }
++                    },
++                    {
++                        "payload": {
++                            "field": "daddr",
++                            "protocol": "ip6"
++                        }
++                    }
++                ]
++            },
++            "op": "==",
++            "right": "@map4"
++        }
++    }
++]
++
+ # ip6 flowlabel 22
+ [
+     {
+diff --git a/tests/py/ip6/ip6.t.payload.inet b/tests/py/ip6/ip6.t.payload.inet
+index 214a0ed..dbb430a 100644
+--- a/tests/py/ip6/ip6.t.payload.inet
++++ b/tests/py/ip6/ip6.t.payload.inet
+@@ -76,6 +76,27 @@ inet test-inet input
+   [ lookup reg 1 set map2 dreg 1 ]
+   [ meta set mark with reg 1 ]
+ 
++# ip6 dscp @map3
++inet test-inet input
++  [ meta load nfproto => reg 1 ]
++  [ cmp eq reg 1 0x0000000a ]
++  [ payload load 2b @ network header + 0 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000c00f ) ^ 0x00000000 ]
++  [ byteorder reg 1 = ntoh(reg 1, 2, 2) ]
++  [ bitwise reg 1 = ( reg 1 >> 0x00000006 ) ]
++  [ lookup reg 1 set map3 ]
++
++# ip6 dscp . ip6 daddr @map4
++inet test-inet input
++  [ meta load nfproto => reg 1 ]
++  [ cmp eq reg 1 0x0000000a ]
++  [ payload load 2b @ network header + 0 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000c00f ) ^ 0x00000000 ]
++  [ byteorder reg 1 = ntoh(reg 1, 2, 2) ]
++  [ bitwise reg 1 = ( reg 1 >> 0x00000006 ) ]
++  [ payload load 16b @ network header + 24 => reg 9 ]
++  [ lookup reg 1 set map4 ]
++
+ # ip6 flowlabel 22
+ inet test-inet input
+   [ meta load nfproto => reg 1 ]
+diff --git a/tests/py/ip6/ip6.t.payload.ip6 b/tests/py/ip6/ip6.t.payload.ip6
+index 428b8ea..b128923 100644
+--- a/tests/py/ip6/ip6.t.payload.ip6
++++ b/tests/py/ip6/ip6.t.payload.ip6
+@@ -60,6 +60,23 @@ ip6 test-ip6 input
+   [ lookup reg 1 set map2 dreg 1 ]
+   [ meta set mark with reg 1 ]
+ 
++# ip6 dscp @map3
++ip6 test-ip6 input
++  [ payload load 2b @ network header + 0 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000c00f ) ^ 0x00000000 ]
++  [ byteorder reg 1 = ntoh(reg 1, 2, 2) ]
++  [ bitwise reg 1 = ( reg 1 >> 0x00000006 ) ]
++  [ lookup reg 1 set map3 ]
++
++# ip6 dscp . ip6 daddr @map4
++ip6 test-ip6 input
++  [ payload load 2b @ network header + 0 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x0000c00f ) ^ 0x00000000 ]
++  [ byteorder reg 1 = ntoh(reg 1, 2, 2) ]
++  [ bitwise reg 1 = ( reg 1 >> 0x00000006 ) ]
++  [ payload load 16b @ network header + 24 => reg 9 ]
++  [ lookup reg 1 set map4 ]
++
+ # ip6 flowlabel 22
+ ip6 test-ip6 input
+   [ payload load 3b @ network header + 1 => reg 1 ]

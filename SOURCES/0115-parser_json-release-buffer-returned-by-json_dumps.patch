@@ -1,0 +1,62 @@
+From 281ca241e91da463f1f7115acbe25322b5b28b64 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] parser_json: release buffer returned by json_dumps
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 46700fbdbbbaab0d7db716fce3a438334c58ac9e
+
+commit 46700fbdbbbaab0d7db716fce3a438334c58ac9e
+Author: Sebastian Walz (sivizius) <sebastian.walz@secunet.com>
+Date:   Mon Aug 19 19:58:14 2024 +0200
+
+    parser_json: release buffer returned by json_dumps
+
+    The signature of `json_dumps` is:
+
+    `char *json_dumps(const json_t *json, size_t flags)`:
+
+    It will return a pointer to an owned string, the caller must free it.
+    However, `json_error` just borrows the string to format it as `%s`, but
+    after printing the formatted error message, the pointer to the string is
+    lost and thus never freed.
+
+    Fixes: 586ad210368b ("libnftables: Implement JSON parser")
+    Signed-off-by: Sebastian Walz (sivizius) <sebastian.walz@secunet.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index a144f4c..3473a2a 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -181,8 +181,11 @@ static int json_unpack_stmt(struct json_ctx *ctx, json_t *root,
+ 	assert(value);
+ 
+ 	if (json_object_size(root) != 1) {
++		const char *dump = json_dumps(root, 0);
++
+ 		json_error(ctx, "Malformed object (too many properties): '%s'.",
+-			   json_dumps(root, 0));
++			   dump);
++		free_const(dump);
+ 		return 1;
+ 	}
+ 
+@@ -3364,8 +3367,10 @@ static struct cmd *json_parse_cmd_add_set(struct json_ctx *ctx, json_t *root,
+ 		} else if ((set->data = json_parse_dtype_expr(ctx, tmp))) {
+ 			set->flags |= NFT_SET_MAP;
+ 		} else {
+-			json_error(ctx, "Invalid map type '%s'.",
+-				   json_dumps(tmp, 0));
++			const char *dump = json_dumps(tmp, 0);
++
++			json_error(ctx, "Invalid map type '%s'.", dump);
++			free_const(dump);
+ 			set_free(set);
+ 			handle_free(&h);
+ 			return NULL;

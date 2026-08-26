@@ -1,0 +1,88 @@
+From 5544e2dd7b3f219d54b06dfc779bdff4646ac420 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:09:25 +0200
+Subject: [PATCH] cmd: skip variable set elements when collapsing commands
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit be055af5c58d9a4751990684d8f83b85082ca443
+Conflicts: Dropped changes to non-existent .json-nft dump
+
+commit be055af5c58d9a4751990684d8f83b85082ca443
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Jun 11 17:40:23 2024 +0200
+
+    cmd: skip variable set elements when collapsing commands
+
+    ASAN reports an issue when collapsing commands that represent an element
+    through a variable:
+
+    include/list.h:60:13: runtime error: member access within null pointer of type 'struct list_head'
+    AddressSanitizer:DEADLYSIGNAL
+    =================================================================
+    ==11398==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x7ffb77cf09c2 bp 0x7ffc818267c0 sp 0x7ffc818267a0 T0)
+    ==11398==The signal is caused by a WRITE memory access.
+    ==11398==Hint: address points to the zero page.
+        #0 0x7ffb77cf09c2 in __list_add include/list.h:60
+        #1 0x7ffb77cf0ad9 in list_add_tail include/list.h:87
+        #2 0x7ffb77cf0e72 in list_move_tail include/list.h:169
+        #3 0x7ffb77cf86ad in nft_cmd_collapse src/cmd.c:478
+        #4 0x7ffb77da9f16 in nft_evaluate src/libnftables.c:531
+        #5 0x7ffb77dac471 in __nft_run_cmd_from_filename src/libnftables.c:720
+        #6 0x7ffb77dad703 in nft_run_cmd_from_filename src/libnftables.c:807
+
+    Skip such commands to address this issue.
+
+    This patch also extends tests/shell to cover for this bug.
+
+    Closes: https://bugzilla.netfilter.org/show_bug.cgi?id=1754
+    Fixes: 498a5f0c219d ("rule: collapse set element commands")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cmd.c                                            | 3 +++
+ tests/shell/testcases/sets/collapse_elem_0           | 6 ++++++
+ tests/shell/testcases/sets/dumps/collapse_elem_0.nft | 2 +-
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/cmd.c b/src/cmd.c
+index de11468..8f465de 100644
+--- a/src/cmd.c
++++ b/src/cmd.c
+@@ -455,6 +455,9 @@ bool nft_cmd_collapse(struct list_head *cmds)
+ 			continue;
+ 		}
+ 
++		if (cmd->expr->etype == EXPR_VARIABLE)
++			continue;
++
+ 		if (!elems) {
+ 			elems = cmd;
+ 			continue;
+diff --git a/tests/shell/testcases/sets/collapse_elem_0 b/tests/shell/testcases/sets/collapse_elem_0
+index 7699e9d..52a42c2 100755
+--- a/tests/shell/testcases/sets/collapse_elem_0
++++ b/tests/shell/testcases/sets/collapse_elem_0
+@@ -17,3 +17,9 @@ add element ip a x { 2 }
+ add element ip6 a x { 2 }"
+ 
+ $NFT -f - <<< $RULESET
++
++RULESET="define m = { 3, 4 }
++add element ip a x \$m
++add element ip a x { 5 }"
++
++$NFT -f - <<< $RULESET
+diff --git a/tests/shell/testcases/sets/dumps/collapse_elem_0.nft b/tests/shell/testcases/sets/dumps/collapse_elem_0.nft
+index a3244fc..775f0ab 100644
+--- a/tests/shell/testcases/sets/dumps/collapse_elem_0.nft
++++ b/tests/shell/testcases/sets/dumps/collapse_elem_0.nft
+@@ -1,7 +1,7 @@
+ table ip a {
+ 	set x {
+ 		type inet_service
+-		elements = { 1, 2 }
++		elements = { 1, 2, 3, 4, 5 }
+ 	}
+ }
+ table ip6 a {

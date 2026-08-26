@@ -1,0 +1,120 @@
+From e1c01c2858d276e16b8fea5c42014799d00258c9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] parser_bison: error out on duplicated type/typeof/element
+ keywords
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6c04e5ceb95068bb459b07307ecc3629d97a2043
+
+commit 6c04e5ceb95068bb459b07307ecc3629d97a2043
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Dec 19 16:22:32 2023 +0100
+
+    parser_bison: error out on duplicated type/typeof/element keywords
+
+    Otherwise nft will leak the previous definition (expressions).
+    Also remove the nonsensical
+
+       datatype_set($1->key, $3->dtype);
+
+    This is a no-op, at this point: $1->key and $3 are identical.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 38 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index fa59207..0ab9dec 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -2159,11 +2159,20 @@ set_block		:	/* empty */	{ $$ = $<set>-1; }
+ 			|	set_block	stmt_separator
+ 			|	set_block	TYPE		data_type_expr	stmt_separator	close_scope_type
+ 			{
++				if (already_set($1->key, &@2, state)) {
++					expr_free($3);
++					YYERROR;
++				}
++
+ 				$1->key = $3;
+ 				$$ = $1;
+ 			}
+ 			|	set_block	TYPEOF		typeof_expr	stmt_separator
+ 			{
++				if (already_set($1->key, &@2, state)) {
++					expr_free($3);
++					YYERROR;
++				}
+ 				$1->key = $3;
+ 				datatype_set($1->key, $3->dtype);
+ 				$$ = $1;
+@@ -2191,6 +2200,10 @@ set_block		:	/* empty */	{ $$ = $<set>-1; }
+ 			}
+ 			|	set_block	ELEMENTS	'='		set_block_expr
+ 			{
++				if (already_set($1->init, &@2, state)) {
++					expr_free($4);
++					YYERROR;
++				}
+ 				$1->init = $4;
+ 				$$ = $1;
+ 			}
+@@ -2262,6 +2275,12 @@ map_block		:	/* empty */	{ $$ = $<set>-1; }
+ 						data_type_expr	COLON	map_block_data_interval data_type_expr
+ 						stmt_separator	close_scope_type
+ 			{
++				if (already_set($1->key, &@2, state)) {
++					expr_free($3);
++					expr_free($6);
++					YYERROR;
++				}
++
+ 				$1->key = $3;
+ 				$1->data = $6;
+ 				$1->data->flags |= $5;
+@@ -2273,8 +2292,13 @@ map_block		:	/* empty */	{ $$ = $<set>-1; }
+ 						typeof_expr	COLON	typeof_data_expr
+ 						stmt_separator
+ 			{
++				if (already_set($1->key, &@2, state)) {
++					expr_free($3);
++					expr_free($5);
++					YYERROR;
++				}
++
+ 				$1->key = $3;
+-				datatype_set($1->key, $3->dtype);
+ 				$1->data = $5;
+ 
+ 				$1->flags |= NFT_SET_MAP;
+@@ -2284,8 +2308,13 @@ map_block		:	/* empty */	{ $$ = $<set>-1; }
+ 						typeof_expr	COLON	INTERVAL	typeof_expr
+ 						stmt_separator
+ 			{
++				if (already_set($1->key, &@2, state)) {
++					expr_free($3);
++					expr_free($6);
++					YYERROR;
++				}
++
+ 				$1->key = $3;
+-				datatype_set($1->key, $3->dtype);
+ 				$1->data = $6;
+ 				$1->data->flags |= EXPR_F_INTERVAL;
+ 
+@@ -2296,6 +2325,11 @@ map_block		:	/* empty */	{ $$ = $<set>-1; }
+ 						data_type_expr	COLON	map_block_obj_type
+ 						stmt_separator	close_scope_type
+ 			{
++				if (already_set($1->key, &@2, state)) {
++					expr_free($3);
++					YYERROR;
++				}
++
+ 				$1->key = $3;
+ 				$1->objtype = $5;
+ 				$1->flags  |= NFT_SET_OBJECT;

@@ -1,0 +1,40 @@
+From b177524ecebef7e317841415c9ac2cae43c1dde8 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] cache: only dump rules for the given table
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit ebd06f85a3257c294572005d0fa6b8ab0f213486
+
+commit ebd06f85a3257c294572005d0fa6b8ab0f213486
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Aug 26 00:41:40 2024 +0200
+
+    cache: only dump rules for the given table
+
+    Only family is set on in the dump request, set on table and chain
+    otherwise, rules for the given family are fetched for each existing
+    table.
+
+    Fixes: afbd102211dc ("src: do not use the nft_cache_filter object from mnl.c")
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 3940ab5..eb00480 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -658,7 +658,7 @@ int rule_cache_dump(struct netlink_ctx *ctx, const struct handle *h,
+ 		    bool dump, bool reset)
+ {
+ 	struct nftnl_rule_list *rule_cache;
+-	const char *table = NULL;
++	const char *table = h->table.name;
+ 	const char *chain = NULL;
+ 	uint64_t rule_handle = 0;
+ 

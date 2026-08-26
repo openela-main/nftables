@@ -1,0 +1,46 @@
+From 00aa63585bc57573f7bd3d769e2dd3fe4299338c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] parser_bison: consolidate counter grammar rule for set
+ elements
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit fe069b8c3be4ddfd361c2a40cd861b7a49e2ae12
+
+commit fe069b8c3be4ddfd361c2a40cd861b7a49e2ae12
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Mar 20 10:43:42 2025 +0100
+
+    parser_bison: consolidate counter grammar rule for set elements
+
+    Use existing grammar rules to parse counters to simplify parser.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 11 +----------
+ 1 file changed, 1 insertion(+), 10 deletions(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index c3a5368..feab3a5 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -4547,16 +4547,7 @@ set_elem_stmt_list	:	set_elem_stmt
+ 			}
+ 			;
+ 
+-set_elem_stmt		:	COUNTER	close_scope_counter
+-			{
+-				$$ = counter_stmt_alloc(&@$);
+-			}
+-			|	COUNTER	PACKETS	NUM	BYTES	NUM	close_scope_counter
+-			{
+-				$$ = counter_stmt_alloc(&@$);
+-				$$->counter.packets = $3;
+-				$$->counter.bytes = $5;
+-			}
++set_elem_stmt		:	counter_stmt	close_scope_counter
+ 			|	LIMIT   RATE    limit_mode      limit_rate_pkts       limit_burst_pkts	close_scope_limit
+ 			{
+ 				if ($5 == 0) {

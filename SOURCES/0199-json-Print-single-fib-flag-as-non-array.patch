@@ -1,0 +1,48 @@
+From 24a6352951680a8ab6bc2c43f283eb098a8abffb Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:13:44 +0200
+Subject: [PATCH] json: Print single fib flag as non-array
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit dbe5c44f2b891c1d305cc94a7ea9dd963a7b6100
+
+commit dbe5c44f2b891c1d305cc94a7ea9dd963a7b6100
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu May 8 16:40:41 2025 +0200
+
+    json: Print single fib flag as non-array
+
+    Check array size and reduce the array if possible.
+
+    The zero array length check is dead code here due to the surrounding 'if
+    (flags)' block, but it's a common idiom one could replace by a shared
+    routine later.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/json.c b/src/json.c
+index c1927ab..daa1fb5 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -928,7 +928,15 @@ json_t *fib_expr_json(const struct expr *expr, struct output_ctx *octx)
+ 		}
+ 		if (flags)
+ 			json_array_append_new(tmp, json_integer(flags));
+-		json_object_set_new(root, "flags", tmp);
++
++		if (json_array_size(tmp) > 1) {
++			json_object_set_new(root, "flags", tmp);
++		} else {
++			if (json_array_size(tmp))
++				json_object_set(root, "flags",
++						json_array_get(tmp, 0));
++			json_decref(tmp);
++		}
+ 	}
+ 	return json_pack("{s:o}", "fib", root);
+ }

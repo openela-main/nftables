@@ -1,0 +1,38 @@
+From 5e2b22338ba5f0a99d515ccdfffbadf7a8af7ec2 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] tests: json_echo: Drop rule handle before multi-add
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit ad74cbd63a9782e8285f7198a5055d7947998b7f
+
+commit ad74cbd63a9782e8285f7198a5055d7947998b7f
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Jan 20 22:47:02 2026 +0100
+
+    tests: json_echo: Drop rule handle before multi-add
+
+    Now that JSON parser respects rule handles in explicit add commands, the
+    still present rule handle causes an error since the old rule does not
+    exist anymore.
+
+    Fixes: 50b5b71ebeee3 ("parser_json: Rewrite echo support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/json_echo/run-test.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tests/json_echo/run-test.py b/tests/json_echo/run-test.py
+index a6bdfc6..7217746 100755
+--- a/tests/json_echo/run-test.py
++++ b/tests/json_echo/run-test.py
+@@ -286,6 +286,7 @@ add_quota["add"]["quota"]["name"] = "q"
+ do_flush()
+ 
+ print("doing multi add")
++del(add_rule["add"]["rule"]["handle"])
+ add_multi = [ add_table, add_chain, add_set, add_rule ]
+ out = do_command(add_multi)
+ 

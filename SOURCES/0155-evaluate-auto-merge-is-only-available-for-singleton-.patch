@@ -1,0 +1,42 @@
+From 6e340dc11b6d710909c1da9e48f1c942a17cdc8b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] evaluate: auto-merge is only available for singleton interval
+ sets
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 65382b888e266e2e3d49a418073fd76dcc4815a7
+
+commit 65382b888e266e2e3d49a418073fd76dcc4815a7
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Feb 20 17:55:15 2025 +0100
+
+    evaluate: auto-merge is only available for singleton interval sets
+
+    auto-merge is only available to interval sets with one value only,
+    untoggle this flag for concatenation with intervals.
+
+    Later, this can be hardened to reject it.
+
+    Fixes: 30f667920601 ("src: add 'auto-merge' option to sets")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 33f5724..2cc17c3 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -4785,6 +4785,9 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set)
+ 		       sizeof(set->desc.field_len));
+ 		set->desc.field_count = set->key->field_count;
+ 		set->flags |= NFT_SET_CONCAT;
++
++		if (set->automerge)
++			set->automerge = false;
+ 	}
+ 
+ 	if (set_is_datamap(set->flags)) {

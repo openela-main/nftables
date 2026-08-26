@@ -1,0 +1,70 @@
+From 04adeaaab4d640f4bb50e783db835909df9959d4 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: disable meta set with ranges
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d99b44adc5cfc455fdafd9b4bdabd413edf9a38a
+
+commit d99b44adc5cfc455fdafd9b4bdabd413edf9a38a
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Dec 4 19:04:58 2023 +0100
+
+    evaluate: disable meta set with ranges
+
+    ... this will cause an assertion in netlink linearization, catch this
+    at eval stage instead.
+
+    before:
+    BUG: unknown expression type range
+    nft: netlink_linearize.c:908: netlink_gen_expr: Assertion `0' failed.
+
+    after:
+    /unknown_expr_type_range_assert:3:31-40: Error: Meta expression cannot be a range
+    meta mark set 0x001-3434
+                  ^^^^^^^^^^
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                      | 13 +++++++++++++
+ .../bogons/nft-f/unknown_expr_type_range_assert     |  5 +++++
+ 2 files changed, 18 insertions(+)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/unknown_expr_type_range_assert
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 1d13db1..9de71d7 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -3148,6 +3148,19 @@ static int stmt_evaluate_meta(struct eval_ctx *ctx, struct stmt *stmt)
+ 				&stmt->meta.expr);
+ 	ctx->stmt_len = 0;
+ 
++	if (ret < 0)
++		return ret;
++
++	switch (stmt->meta.expr->etype) {
++	case EXPR_RANGE:
++		ret = expr_error(ctx->msgs, stmt->meta.expr,
++				 "Meta expression cannot be a range");
++		break;
++	default:
++		break;
++
++	}
++
+ 	return ret;
+ }
+ 
+diff --git a/tests/shell/testcases/bogons/nft-f/unknown_expr_type_range_assert b/tests/shell/testcases/bogons/nft-f/unknown_expr_type_range_assert
+new file mode 100644
+index 0000000..234dd62
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/unknown_expr_type_range_assert
+@@ -0,0 +1,5 @@
++table ip x {
++        chain k {
++                meta mark set 0x001-3434
++        }
++}

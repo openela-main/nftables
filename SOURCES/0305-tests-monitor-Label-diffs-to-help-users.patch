@@ -1,0 +1,36 @@
+From d96974d910b7373fa92cdfb87f4277fdbe749954 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Jul 2026 17:18:39 +0200
+Subject: [PATCH] tests: monitor: Label diffs to help users
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 53d686888bc446cc949c2013504c9974e93c1e2d
+
+commit 53d686888bc446cc949c2013504c9974e93c1e2d
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Sep 3 15:01:09 2025 +0200
+
+    tests: monitor: Label diffs to help users
+
+    Clarify what was expected and what was actually received.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index 7cbc7b1..1cceb0c 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -6,7 +6,7 @@ debug=false
+ test_json=false
+ 
+ mydiff() {
+-	diff -w -I '^# ' "$@"
++	diff -w -I '^# ' --label "expected" --label "got" "$@"
+ }
+ 
+ err() {

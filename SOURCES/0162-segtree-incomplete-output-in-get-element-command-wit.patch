@@ -1,0 +1,140 @@
+From 95248181bf7d82073184ce718c7b6b8ce461b7d3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] segtree: incomplete output in get element command with maps
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6db28b2d71e7f61c64338787be5d82edfdb62a21
+
+commit 6db28b2d71e7f61c64338787be5d82edfdb62a21
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Mar 6 18:49:21 2025 +0100
+
+    segtree: incomplete output in get element command with maps
+
+    get element command displays an incomplete range.
+
+    Using this simple test ruleset:
+
+     table ip x {
+            map y {
+                    typeof ip saddr : meta mark
+                    counter
+                    flags interval,timeout
+                    elements = { 1.1.1.1-1.1.1.10 timeout 10m : 20, 2.2.2.2-2.2.2.5 timeout 10m : 30}
+            }
+
+    then, invoking the get element command:
+
+     # nft get element x y { 1.1.1.2 }
+
+    results in, before (incomplete output):
+
+     table ip x {
+            map y {
+                    type ipv4_addr : mark
+                    flags interval,timeout
+                    elements = { 1.1.1.1 counter packets 0 bytes 0 timeout 10m expires 1m24s160ms : 0x00000014 }
+            }
+     }
+
+    Note that it displays 1.1.1.1, instead of 1.1.1.1-1.1.1.10.
+
+    After this fix:
+
+     table ip x {
+            map y {
+                    type ipv4_addr : mark
+                    flags interval,timeout
+                    elements = { 1.1.1.1-1.1.1.10 counter packets 0 bytes 0 timeout 10m expires 1m24s160ms : 0x00000014 }
+            }
+     }
+
+    Fixes: a43cc8d53096 ("src: support for get element command")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c | 39 ++++++++++++++++++++-------------------
+ 1 file changed, 20 insertions(+), 19 deletions(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index a57d865..ee68ce1 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -110,19 +110,34 @@ struct expr *get_set_intervals(const struct set *set, const struct expr *init)
+ 	return new_init;
+ }
+ 
++static struct expr *expr_value(struct expr *expr)
++{
++	switch (expr->etype) {
++	case EXPR_MAPPING:
++		return expr->left->key;
++	case EXPR_SET_ELEM:
++		return expr->key;
++	case EXPR_VALUE:
++		return expr;
++	default:
++		BUG("invalid expression type %s\n", expr_name(expr));
++	}
++}
++
+ static struct expr *get_set_interval_find(const struct set *cache_set,
+ 					  struct expr *left,
+ 					  struct expr *right)
+ {
+ 	const struct set *set = cache_set;
+ 	struct expr *range = NULL;
+-	struct expr *i;
++	struct expr *i, *key;
+ 	mpz_t val;
+ 
+ 	mpz_init2(val, set->key->len);
+ 
+ 	list_for_each_entry(i, &set->init->expressions, list) {
+-		switch (i->key->etype) {
++		key = expr_value(i);
++		switch (key->etype) {
+ 		case EXPR_VALUE:
+ 			if (expr_basetype(i->key)->type != TYPE_STRING)
+ 				break;
+@@ -131,14 +146,14 @@ static struct expr *get_set_interval_find(const struct set *cache_set,
+ 		case EXPR_PREFIX:
+ 		case EXPR_RANGE:
+ 			range_expr_value_low(val, i);
+-			if (left && mpz_cmp(left->key->value, val))
++			if (left && mpz_cmp(expr_value(left)->value, val))
+ 				break;
+ 
+ 			range_expr_value_high(val, i);
+-			if (right && mpz_cmp(right->key->value, val))
++			if (right && mpz_cmp(expr_value(right)->value, val))
+ 				break;
+ 
+-			range = expr_clone(i->key);
++			range = expr_clone(i);
+ 			goto out;
+ 		default:
+ 			break;
+@@ -150,20 +165,6 @@ out:
+ 	return range;
+ }
+ 
+-static struct expr *expr_value(struct expr *expr)
+-{
+-	switch (expr->etype) {
+-	case EXPR_MAPPING:
+-		return expr->left->key;
+-	case EXPR_SET_ELEM:
+-		return expr->key;
+-	case EXPR_VALUE:
+-		return expr;
+-	default:
+-		BUG("invalid expression type %s\n", expr_name(expr));
+-	}
+-}
+-
+ static struct expr *__expr_to_set_elem(struct expr *low, struct expr *expr)
+ {
+ 	struct expr *elem = set_elem_expr_alloc(&low->location, expr);

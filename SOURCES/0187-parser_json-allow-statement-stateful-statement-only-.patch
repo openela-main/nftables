@@ -1,0 +1,41 @@
+From eaa4615f0ada1992dc970d4e55184dd1ff2e3dd8 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:34 +0200
+Subject: [PATCH] parser_json: allow statement stateful statement only in set
+ elements
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 85b5b051f0e64f106cee078fc6d66d0872770e79
+
+commit 85b5b051f0e64f106cee078fc6d66d0872770e79
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Apr 1 09:49:48 2025 +0200
+
+    parser_json: allow statement stateful statement only in set elements
+
+    Upfront reject of non stateful statements in set elements.
+
+    Fixes: 07958ec53830 ("json: add set statement list support")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 974d87b..b76dbdc 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -2384,6 +2384,11 @@ static void json_parse_set_stmt_list(struct json_ctx *ctx,
+ 			stmt_list_free(stmt_list);
+ 			return;
+ 		}
++		if (!(stmt->flags & STMT_F_STATEFUL)) {
++			stmt_free(stmt);
++			json_error(ctx, "Unsupported set statements array at index %zd failed.", index);
++			stmt_list_free(stmt_list);
++		}
+ 		list_add(&stmt->list, head);
+ 		head = &stmt->list;
+ 	}

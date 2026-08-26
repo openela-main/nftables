@@ -1,0 +1,40 @@
+From 5b5efaa25f056785bf16dff019766e7008330485 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:25 +0200
+Subject: [PATCH] libnftables: Zero ctx->vars after freeing it
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d361be1f8734461e27117f6c569acf2189fcf81e
+
+commit d361be1f8734461e27117f6c569acf2189fcf81e
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Sep 3 17:43:19 2024 +0200
+
+    libnftables: Zero ctx->vars after freeing it
+
+    Leaving the invalid pointer value in place will cause a double-free when
+    users call nft_ctx_clear_vars() first, then nft_ctx_free(). Moreover,
+    nft_ctx_add_var() passes the pointer to mrealloc() and thus assumes it
+    to be either NULL or valid.
+
+    Closes: https://bugzilla.netfilter.org/show_bug.cgi?id=1772
+    Fixes: 9edaa6a51eab4 ("src: add --define key=value")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/libnftables.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/libnftables.c b/src/libnftables.c
+index 02570c4..b6bbece 100644
+--- a/src/libnftables.c
++++ b/src/libnftables.c
+@@ -159,6 +159,7 @@ void nft_ctx_clear_vars(struct nft_ctx *ctx)
+ 	}
+ 	ctx->num_vars = 0;
+ 	free(ctx->vars);
++	ctx->vars = NULL;
+ }
+ 
+ EXPORT_SYMBOL(nft_ctx_add_include_path);

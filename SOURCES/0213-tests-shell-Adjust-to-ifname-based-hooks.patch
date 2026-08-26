@@ -1,0 +1,121 @@
+From 4c3f2e77cbaf6a26584af6c5695721dff5920e90 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] tests: shell: Adjust to ifname-based hooks
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f27e5abd81f29d6429e2749a6adf02a25185e206
+
+commit f27e5abd81f29d6429e2749a6adf02a25185e206
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed May 7 00:06:20 2025 +0200
+
+    tests: shell: Adjust to ifname-based hooks
+
+    Interface specs won't disappear anymore upon device removal. Drop them
+    manually if kernel has ifname-based hooks.
+
+    Skip transactions/0050rule_1 if kernel has name-based hooks: The test
+    relies upon the ruleset being rejected for non-existent interfaces,
+    which obviously won't happen then.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/features/ifname_based_hooks.sh           | 12 ++++++++++++
+ .../testcases/chains/netdev_chain_dormant_autoremove |  3 +++
+ .../testcases/flowtable/0012flowtable_variable_0     |  9 ++++++++-
+ tests/shell/testcases/listing/0020flowtable_0        |  8 +++++++-
+ tests/shell/testcases/transactions/0050rule_1        |  4 ++++
+ 5 files changed, 34 insertions(+), 2 deletions(-)
+ create mode 100755 tests/shell/features/ifname_based_hooks.sh
+
+diff --git a/tests/shell/features/ifname_based_hooks.sh b/tests/shell/features/ifname_based_hooks.sh
+new file mode 100755
+index 0000000..cada695
+--- /dev/null
++++ b/tests/shell/features/ifname_based_hooks.sh
+@@ -0,0 +1,12 @@
++#!/bin/bash
++
++# check if netdev chains survive without a single device
++
++unshare -n bash -c "ip link add d0 type dummy; \
++	$NFT \"table netdev t { \
++		chain c { \
++			type filter hook ingress priority 0; devices = { d0 }; \
++		}; \
++	}\"; \
++	ip link del d0; \
++	$NFT list chain netdev t c"
+diff --git a/tests/shell/testcases/chains/netdev_chain_dormant_autoremove b/tests/shell/testcases/chains/netdev_chain_dormant_autoremove
+index 0a684e5..659ab69 100755
+--- a/tests/shell/testcases/chains/netdev_chain_dormant_autoremove
++++ b/tests/shell/testcases/chains/netdev_chain_dormant_autoremove
+@@ -7,3 +7,6 @@ ip link add dummy1 type dummy
+ $NFT add table netdev test { flags dormant\; }
+ $NFT add chain netdev test ingress { type filter hook ingress devices = { "dummy0", "dummy1" } priority 0\; policy drop\; }
+ ip link del dummy0
++if [ "$NFT_TEST_HAVE_ifname_based_hooks" = y ]; then
++	$NFT 'delete chain netdev test ingress { devices = { "dummy0" }; }'
++fi
+diff --git a/tests/shell/testcases/flowtable/0012flowtable_variable_0 b/tests/shell/testcases/flowtable/0012flowtable_variable_0
+index 9c03820..ff35548 100755
+--- a/tests/shell/testcases/flowtable/0012flowtable_variable_0
++++ b/tests/shell/testcases/flowtable/0012flowtable_variable_0
+@@ -4,11 +4,18 @@
+ 
+ set -e
+ 
++ft_deldev() {
++	$NFT "delete flowtable $1 $2 { devices = { $3 }; }"
++}
++
+ iface_cleanup() {
+ 	ip link del dummy1 &>/dev/null || :
++	if [ "$NFT_TEST_HAVE_ifname_based_hooks" = y ]; then
++		ft_deldev filter1 Main_ft1 dummy1
++		ft_deldev filter2 Main_ft2 dummy1
++	fi
+ }
+ trap 'iface_cleanup' EXIT
+-iface_cleanup
+ 
+ ip link add name dummy1 type dummy
+ 
+diff --git a/tests/shell/testcases/listing/0020flowtable_0 b/tests/shell/testcases/listing/0020flowtable_0
+index 6eb82cf..600b524 100755
+--- a/tests/shell/testcases/listing/0020flowtable_0
++++ b/tests/shell/testcases/listing/0020flowtable_0
+@@ -46,7 +46,13 @@ EXPECTED3="table ip filter {
+ iface_cleanup() {
+ 	ip link del d0 &>/dev/null || :
+ }
+-trap 'iface_cleanup' EXIT
++ft_cleanup() {
++	if [ "$NFT_TEST_HAVE_ifname_based_hooks" = y ]; then
++		$NFT 'delete flowtable ip filter f2 { devices = { d0 }; }'
++		$NFT 'delete flowtable inet filter f2 { devices = { d0 }; }'
++	fi
++}
++trap 'iface_cleanup; ft_cleanup' EXIT
+ iface_cleanup
+ 
+ ip link add d0 type dummy
+diff --git a/tests/shell/testcases/transactions/0050rule_1 b/tests/shell/testcases/transactions/0050rule_1
+index 89e5f42..cbf9689 100755
+--- a/tests/shell/testcases/transactions/0050rule_1
++++ b/tests/shell/testcases/transactions/0050rule_1
+@@ -2,6 +2,10 @@
+ 
+ set -e
+ 
++# The ruleset is supposed to fail due to non-existing interfaces,
++# hence depends on non-name-based interface hooks.
++[ "$NFT_TEST_HAVE_ifname_based_hooks" = y ] && exit 77
++
+ RULESET="table inet filter {
+ 	flowtable ftable {
+ 		hook ingress priority 0; devices = { eno1, eno0, x };

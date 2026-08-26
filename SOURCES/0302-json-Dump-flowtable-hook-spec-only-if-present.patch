@@ -1,0 +1,78 @@
+From bac7112d952ab5d6e99cdfd650ca23a3126c2891 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 15:35:17 +0200
+Subject: [PATCH] json: Dump flowtable hook spec only if present
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 9fa3fbed73a36111e308c9856514a032f5444564
+
+commit 9fa3fbed73a36111e308c9856514a032f5444564
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jun 11 16:45:48 2025 +0200
+
+    json: Dump flowtable hook spec only if present
+
+    If there is no priority.expr set, assume hook.num is bogus, too.
+
+    While this is fixing JSON output, it's hard to tell what commit this is
+    actually fixing: Before commit 627c451b23513 ("src: allow variables in
+    the chain priority specification"), there was no way to detect
+    flowtables missing hook specs (e.g. when printing flowtable delete
+    monitor event).
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c                                 | 22 ++++++++++++++--------
+ tests/monitor/testcases/flowtable-simple.t |  2 +-
+ 2 files changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/src/json.c b/src/json.c
+index e26adce..79c3925 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -493,18 +493,24 @@ static json_t *flowtable_print_json(const struct flowtable *ftable)
+ 	json_t *root, *devs = NULL;
+ 	int i, priority = 0;
+ 
++	root = nft_json_pack("{s:s, s:s, s:s, s:I}",
++			"family", family2str(ftable->handle.family),
++			"name", ftable->handle.flowtable.name,
++			"table", ftable->handle.table.name,
++			"handle", ftable->handle.handle.id);
++
+ 	if (ftable->priority.expr) {
++		json_t *tmp;
++
+ 		mpz_export_data(&priority, ftable->priority.expr->value,
+ 				BYTEORDER_HOST_ENDIAN, sizeof(int));
+-	}
+ 
+-	root = nft_json_pack("{s:s, s:s, s:s, s:I, s:s, s:i}",
+-			"family", family2str(ftable->handle.family),
+-			"name", ftable->handle.flowtable.name,
+-			"table", ftable->handle.table.name,
+-			"handle", ftable->handle.handle.id,
+-			"hook", hooknum2str(NFPROTO_NETDEV, ftable->hook.num),
+-			"prio", priority);
++		tmp = nft_json_pack("{s:s, s:i}",
++				    "hook", hooknum2str(NFPROTO_NETDEV,
++							ftable->hook.num),
++				    "prio", priority);
++		json_object_update_new(root, tmp);
++	}
+ 
+ 	for (i = 0; i < ftable->dev_array_len; i++) {
+ 		const char *dev = ftable->dev_array[i];
+diff --git a/tests/monitor/testcases/flowtable-simple.t b/tests/monitor/testcases/flowtable-simple.t
+index df8eccb..b373cca 100644
+--- a/tests/monitor/testcases/flowtable-simple.t
++++ b/tests/monitor/testcases/flowtable-simple.t
+@@ -7,4 +7,4 @@ J {"add": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0
+ 
+ I delete flowtable ip t ft
+ O -
+-J {"delete": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0, "hook": "ingress", "prio": 0, "dev": "lo"}}}
++J {"delete": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0}}}

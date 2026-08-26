@@ -1,0 +1,78 @@
+From 6bc395ed503556ef05e3db62926226afd6b036a9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] parser: compact type/typeof set rules
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit fb98cb91c575880617e5da2cb6f094525516cb78
+
+commit fb98cb91c575880617e5da2cb6f094525516cb78
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Feb 27 15:53:19 2024 +0100
+
+    parser: compact type/typeof set rules
+
+    Set/maps keys can be declared either by 'type' or 'typeof' keyword.
+
+    Compact this to use a common block for both cases.
+
+    The datatype_set call is redundant, remove it:
+    at this point $3 == $1->key, so this is a no-op.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 24 +++++++++---------------
+ 1 file changed, 9 insertions(+), 15 deletions(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 82aac8d..23b64ce 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -812,8 +812,8 @@ int nft_lex(void *, void *, void *);
+ 
+ %type <expr>			symbol_expr verdict_expr integer_expr variable_expr chain_expr policy_expr
+ %destructor { expr_free($$); }	symbol_expr verdict_expr integer_expr variable_expr chain_expr policy_expr
+-%type <expr>			primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_verdict_expr
+-%destructor { expr_free($$); }	primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_verdict_expr
++%type <expr>			primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_key_expr typeof_verdict_expr
++%destructor { expr_free($$); }	primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_key_expr typeof_verdict_expr
+ %type <expr>			exclusive_or_expr inclusive_or_expr
+ %destructor { expr_free($$); }	exclusive_or_expr inclusive_or_expr
+ %type <expr>			basic_expr
+@@ -2187,27 +2187,21 @@ set_block_alloc		:	/* empty */
+ 			}
+ 			;
+ 
++typeof_key_expr		:	TYPEOF	typeof_expr { $$ = $2; }
++			|	TYPE	data_type_expr close_scope_type { $$ = $2; }
++			;
++
+ set_block		:	/* empty */	{ $$ = $<set>-1; }
+ 			|	set_block	common_block
+ 			|	set_block	stmt_separator
+-			|	set_block	TYPE		data_type_expr	stmt_separator	close_scope_type
++			|	set_block	typeof_key_expr	stmt_separator
+ 			{
+ 				if (already_set($1->key, &@2, state)) {
+-					expr_free($3);
++					expr_free($2);
+ 					YYERROR;
+ 				}
+ 
+-				$1->key = $3;
+-				$$ = $1;
+-			}
+-			|	set_block	TYPEOF		typeof_expr	stmt_separator
+-			{
+-				if (already_set($1->key, &@2, state)) {
+-					expr_free($3);
+-					YYERROR;
+-				}
+-				$1->key = $3;
+-				datatype_set($1->key, $3->dtype);
++				$1->key = $2;
+ 				$$ = $1;
+ 			}
+ 			|	set_block	FLAGS		set_flag_list	stmt_separator

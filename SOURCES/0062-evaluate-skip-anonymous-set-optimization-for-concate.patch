@@ -1,0 +1,57 @@
+From 475315fb01bac6b53833c727add0cf1c427a75b7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] evaluate: skip anonymous set optimization for concatenations
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6bc6673fc88c8a3e3dd5504b2d24a6d6bc2f8427
+
+commit 6bc6673fc88c8a3e3dd5504b2d24a6d6bc2f8427
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Jan 10 18:18:50 2024 +0100
+
+    evaluate: skip anonymous set optimization for concatenations
+
+    Concatenation is only supported with sets. Moreover, stripping of the
+    set leads to broken ruleset listing, therefore, skip this optimization
+    for the concatenations.
+
+    Fixes: fa17b17ea74a ("evaluate: revisit anonymous set with single element optimization")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 20 +++++++++++---------
+ 1 file changed, 11 insertions(+), 9 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 06ad554..8f98b48 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -2507,15 +2507,17 @@ static int expr_evaluate_relational(struct eval_ctx *ctx, struct expr **expr)
+ 		return expr_binary_error(ctx->msgs, right, left,
+ 					 "Cannot be used with right hand side constant value");
+ 
+-	switch (rel->op) {
+-	case OP_EQ:
+-	case OP_IMPLICIT:
+-	case OP_NEQ:
+-		if (right->etype == EXPR_SET && right->size == 1)
+-			optimize_singleton_set(rel, &right);
+-		break;
+-	default:
+-		break;
++	if (left->etype != EXPR_CONCAT) {
++		switch (rel->op) {
++		case OP_EQ:
++		case OP_IMPLICIT:
++		case OP_NEQ:
++			if (right->etype == EXPR_SET && right->size == 1)
++				optimize_singleton_set(rel, &right);
++			break;
++		default:
++			break;
++		}
+ 	}
+ 
+ 	switch (rel->op) {

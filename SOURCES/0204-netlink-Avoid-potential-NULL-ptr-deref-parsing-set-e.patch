@@ -1,0 +1,40 @@
+From c43c837b05d3a813a8b826d34aef9c8bb4333dba Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:03 +0200
+Subject: [PATCH] netlink: Avoid potential NULL-ptr deref parsing set elem
+ expressions
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 89645d04106d45d5e23b6d5206777dad1fb3e6bf
+
+commit 89645d04106d45d5e23b6d5206777dad1fb3e6bf
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri May 16 20:08:05 2025 +0200
+
+    netlink: Avoid potential NULL-ptr deref parsing set elem expressions
+
+    Since netlink_parse_set_expr() may return NULL, the following deref must
+    be guarded.
+
+    Fixes: e6d1d0d611958 ("src: add set element multi-statement support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index bf2cf53..05d5a97 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -956,7 +956,8 @@ static int set_elem_parse_expressions(struct nftnl_expr *e, void *data)
+ 	struct stmt *stmt;
+ 
+ 	stmt = netlink_parse_set_expr(set, cache, e);
+-	list_add_tail(&stmt->list, &setelem_parse_ctx->stmt_list);
++	if (stmt)
++		list_add_tail(&stmt->list, &setelem_parse_ctx->stmt_list);
+ 
+ 	return 0;
+ }

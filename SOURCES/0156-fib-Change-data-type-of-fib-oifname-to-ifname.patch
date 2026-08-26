@@ -1,0 +1,89 @@
+From 0e922765197331ee4b5c03f81fc8369b8e9ffd71 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] fib: Change data type of fib oifname to "ifname"
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 316d99246644268e5e0453afa3ade163fda21d7f
+
+commit 316d99246644268e5e0453afa3ade163fda21d7f
+Author: Xiao Liang <shaw.leon@gmail.com>
+Date:   Tue Feb 25 18:02:17 2025 +0800
+
+    fib: Change data type of fib oifname to "ifname"
+
+    Change data type of fib oifname from "string" to "ifname", so that it
+    can be matched against a set of ifnames:
+
+        set x {
+                type ifname
+        }
+        chain y {
+                fib saddr oifname @x drop
+        }
+
+    Signed-off-by: Xiao Liang <shaw.leon@gmail.com>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/primary-expression.txt                                    | 4 ++--
+ src/fib.c                                                     | 2 +-
+ tests/shell/testcases/sets/0029named_ifname_dtype_0           | 1 +
+ tests/shell/testcases/sets/dumps/0029named_ifname_dtype_0.nft | 1 +
+ 4 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/doc/primary-expression.txt b/doc/primary-expression.txt
+index e85fa58..43fa40c 100644
+--- a/doc/primary-expression.txt
++++ b/doc/primary-expression.txt
+@@ -348,10 +348,10 @@ address types can be shown with *nft* *describe* *fib_addrtype*.
+ |Keyword| Description| Result Type
+ |oif|
+ Output interface index|
+-integer (32 bit)
++iface_index
+ |oifname|
+ Output interface name|
+-string
++ifname
+ |type|
+ Address type |
+ fib_addrtype (see *nft* *describe* *fib_addrtype* for a list)
+diff --git a/src/fib.c b/src/fib.c
+index e95271c..5a7c117 100644
+--- a/src/fib.c
++++ b/src/fib.c
+@@ -179,7 +179,7 @@ struct expr *fib_expr_alloc(const struct location *loc,
+ 		type = &ifindex_type;
+ 		break;
+ 	case NFT_FIB_RESULT_OIFNAME:
+-		type = &string_type;
++		type = &ifname_type;
+ 		len = IFNAMSIZ * BITS_PER_BYTE;
+ 		break;
+ 	case NFT_FIB_RESULT_ADDRTYPE:
+diff --git a/tests/shell/testcases/sets/0029named_ifname_dtype_0 b/tests/shell/testcases/sets/0029named_ifname_dtype_0
+index 2dbcd22..ea58140 100755
+--- a/tests/shell/testcases/sets/0029named_ifname_dtype_0
++++ b/tests/shell/testcases/sets/0029named_ifname_dtype_0
+@@ -40,6 +40,7 @@ EXPECTED="table inet t {
+ 	chain c {
+ 		iifname @s accept
+ 		oifname @s accept
++		fib saddr oifname @s accept
+ 		tcp dport . meta iifname @sc accept
+ 		meta iifname . meta mark @nv accept
+ 	}
+diff --git a/tests/shell/testcases/sets/dumps/0029named_ifname_dtype_0.nft b/tests/shell/testcases/sets/dumps/0029named_ifname_dtype_0.nft
+index 55cd4f2..6f9832a 100644
+--- a/tests/shell/testcases/sets/dumps/0029named_ifname_dtype_0.nft
++++ b/tests/shell/testcases/sets/dumps/0029named_ifname_dtype_0.nft
+@@ -51,6 +51,7 @@ table inet t {
+ 	chain c {
+ 		iifname @s accept
+ 		oifname @s accept
++		fib saddr oifname @s accept
+ 		tcp dport . iifname @sc accept
+ 		iifname . meta mark @nv accept
+ 	}

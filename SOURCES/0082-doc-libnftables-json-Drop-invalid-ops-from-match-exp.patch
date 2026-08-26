@@ -1,0 +1,40 @@
+From 86c010da124c480215b3a69fd08d3081b08862b1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] doc: libnftables-json: Drop invalid ops from match expression
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 840cb6df16973139a1981fcec276f59d3b92bb46
+
+commit 840cb6df16973139a1981fcec276f59d3b92bb46
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Sep 22 18:43:11 2023 +0200
+
+    doc: libnftables-json: Drop invalid ops from match expression
+
+    These make no sense there and are listed again in BINARY OPERATION.
+
+    Fixes: 872f373dc50f7 ("doc: Add JSON schema documentation")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/libnftables-json.adoc | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/doc/libnftables-json.adoc b/doc/libnftables-json.adoc
+index 3bbb6cd..cc70f0f 100644
+--- a/doc/libnftables-json.adoc
++++ b/doc/libnftables-json.adoc
+@@ -695,11 +695,6 @@ processing continues with the next rule in the same chain.
+ ==== OPERATORS
+ 
+ [horizontal]
+-*&*:: Binary AND
+-*|*:: Binary OR
+-*^*:: Binary XOR
+-*<<*:: Left shift
+-*>>*:: Right shift
+ *==*:: Equal
+ *!=*:: Not equal
+ *<*:: Less than

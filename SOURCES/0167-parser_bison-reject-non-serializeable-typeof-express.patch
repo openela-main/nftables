@@ -1,0 +1,86 @@
+From 96245f9d9e6cdc61a228e3e525fac95dffec7e61 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] parser_bison: reject non-serializeable typeof expressions
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit a1bb1814148c5011d50cb566a92b3b30fff118b0
+
+commit a1bb1814148c5011d50cb566a92b3b30fff118b0
+Author: Florian Westphal <fw@strlen.de>
+Date:   Sun Mar 16 22:39:10 2025 +0100
+
+    parser_bison: reject non-serializeable typeof expressions
+
+    Included bogon asserts with:
+    BUG: unhandled key type 13
+    nft: src/intervals.c:73: setelem_expr_to_range: Assertion `0' failed.
+
+    This should be rejected at parser stage, but the check for udata
+    support was only done on the first item in a concatenation.
+
+    After fix, parser rejects this with:
+    Error: primary expression type 'symbol' lacks typeof serialization
+
+    Fixes: 6e48df5329ea ("src: add "typeof" build/parse/print support")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y                                 | 14 ++++++++++----
+ .../nft-f/typeof_map_with_plain_integer_assert     |  7 +++++++
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/typeof_map_with_plain_integer_assert
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index e601934..c3a5368 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -816,8 +816,8 @@ int nft_lex(void *, void *, void *);
+ 
+ %type <expr>			symbol_expr verdict_expr integer_expr variable_expr chain_expr policy_expr
+ %destructor { expr_free($$); }	symbol_expr verdict_expr integer_expr variable_expr chain_expr policy_expr
+-%type <expr>			primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_key_expr typeof_verdict_expr
+-%destructor { expr_free($$); }	primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_key_expr typeof_verdict_expr
++%type <expr>			primary_expr shift_expr and_expr primary_typeof_expr typeof_expr typeof_data_expr typeof_key_expr typeof_verdict_expr
++%destructor { expr_free($$); }	primary_expr shift_expr and_expr primary_typeof_expr typeof_expr typeof_data_expr typeof_key_expr typeof_verdict_expr
+ %type <expr>			exclusive_or_expr inclusive_or_expr
+ %destructor { expr_free($$); }	exclusive_or_expr inclusive_or_expr
+ %type <expr>			basic_expr
+@@ -2136,7 +2136,7 @@ typeof_data_expr	:	INTERVAL	typeof_expr
+ 			}
+ 			;
+ 
+-typeof_expr		:	primary_expr
++primary_typeof_expr	:	primary_expr
+ 			{
+ 				if (expr_ops($1)->build_udata == NULL) {
+ 					erec_queue(error(&@1, "primary expression type '%s' lacks typeof serialization", expr_ops($1)->name),
+@@ -2147,7 +2147,13 @@ typeof_expr		:	primary_expr
+ 
+ 				$$ = $1;
+ 			}
+-			|	typeof_expr		DOT		primary_expr
++			;
++
++typeof_expr		:	primary_typeof_expr
++			{
++				$$ = $1;
++			}
++			|	typeof_expr		DOT		primary_typeof_expr
+ 			{
+ 				struct location rhs[] = {
+ 					[1]	= @2,
+diff --git a/tests/shell/testcases/bogons/nft-f/typeof_map_with_plain_integer_assert b/tests/shell/testcases/bogons/nft-f/typeof_map_with_plain_integer_assert
+new file mode 100644
+index 0000000..f1dc12f
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/typeof_map_with_plain_integer_assert
+@@ -0,0 +1,7 @@
++table ip t {
++        map m {
++                typeof ip saddr . meta mark  . 0: verdict
++                flags interval
++                elements = { 127.0.0.1-127.0.0.4 . 0x00123434-0x00b00122 : accept }
++        }
++}

@@ -1,0 +1,48 @@
+From b781894684ace123ce3aa246dd15d546aac2d239 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] tests/py: clean up set backend support fallout
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d477eada4f271f5f8774b5f467d937b1439cb46b
+
+commit d477eada4f271f5f8774b5f467d937b1439cb46b
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Jun 24 21:39:46 2025 +0200
+
+    tests/py: clean up set backend support fallout
+
+    Pablo reports failing py tests woth recent kernel and userland:
+     any/objects.t: OK
+    WARNING: line 3: 'add rule ip6 test-ip6 input ..
+    mismatches 'family 2 __set0 test-ip4 3 backend nft_set_bitmap_type [nf_tables] count 7'
+
+    When nf_tables is built as a module, the set backend name coming
+    from kernel contains the module name ([nf_tables]), this makes the
+    test script treat it as part of the pseudo instructions.
+
+    Skip this line explicitly to avoid these warnings.
+
+    Fixes: 7cec20e45a75 ("tests/py: prepare for set debug change")
+    Reported-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Tested-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 06f1701..376e62a 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -722,7 +722,7 @@ def payload_check(payload_buffer, file, cmd):
+              continue
+ 
+         line = file.readline()
+-        while line.find("[") < 0 or line.find("]") < 0:
++        while line.find("[") < 0 or line.find("]") < 0 or (line.startswith("family ") and line.find(" [nf_tables]") > 0):
+             line = file.readline()
+             if line == "":
+                 break

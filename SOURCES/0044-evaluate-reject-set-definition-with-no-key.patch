@@ -1,0 +1,55 @@
+From 1ccb4065209aef5be9e922c8702317636ca67745 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: reject set definition with no key
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 1949a63215b423b914d3a7a9de7511cb48af3c09
+
+commit 1949a63215b423b914d3a7a9de7511cb48af3c09
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Dec 6 13:40:22 2023 +0100
+
+    evaluate: reject set definition with no key
+
+     tests/shell/testcases/bogons/nft-f/set_definition_with_no_key_assert
+     BUG: unhandled key type 2
+     nft: src/intervals.c:59: setelem_expr_to_range: Assertion `0' failed.
+
+    This patch adds a new unit tests/shell courtesy of Florian Westphal.
+
+    Fixes: 3975430b12d9 ("src: expand table command before evaluation")
+    Reported-by: Florian Westphal <fw@strlen.de>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 9de71d7..c2a7a41 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -4664,6 +4664,12 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set)
+ 	struct stmt *stmt;
+ 	const char *type;
+ 
++	type = set_is_map(set->flags) ? "map" : "set";
++
++	if (set->key == NULL)
++		return set_error(ctx, set, "%s definition does not specify key",
++				 type);
++
+ 	if (!set_is_anonymous(set->flags)) {
+ 		table = table_cache_find(&ctx->nft->cache.table_cache,
+ 					 set->handle.table.name,
+@@ -4687,8 +4693,6 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set)
+ 	if (!(set->flags & NFT_SET_INTERVAL) && set->automerge)
+ 		return set_error(ctx, set, "auto-merge only works with interval sets");
+ 
+-	type = set_is_map(set->flags) ? "map" : "set";
+-
+ 	if (set->key == NULL)
+ 		return set_error(ctx, set, "%s definition does not specify key",
+ 				 type);

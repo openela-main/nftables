@@ -1,0 +1,52 @@
+From cab75933e5ef60083de962c17248c820bfa1bec3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] evaluate: release existing datatype when evaluating unary
+ expression
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 494a6ed120065b764f07acd05789b816625e8e13
+
+commit 494a6ed120065b764f07acd05789b816625e8e13
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Fri Feb 28 15:54:55 2025 +0100
+
+    evaluate: release existing datatype when evaluating unary expression
+
+    Use __datatype_set() to release the existing datatype before assigning
+    the new one, otherwise ASAN reports the following memleak:
+
+    Direct leak of 104 byte(s) in 1 object(s) allocated from:
+        #0 0x7fbc8a2b89cf in __interceptor_malloc ../../../../src/libsa
+        #1 0x7fbc898c96c2 in xmalloc src/utils.c:31
+        #2 0x7fbc8971a182 in datatype_clone src/datatype.c:1406
+        #3 0x7fbc89737c35 in expr_evaluate_unary src/evaluate.c:1366
+        #4 0x7fbc89758ae9 in expr_evaluate src/evaluate.c:3057
+        #5 0x7fbc89726bd9 in byteorder_conversion src/evaluate.c:243
+        #6 0x7fbc89739ff0 in expr_evaluate_bitwise src/evaluate.c:1491
+        #7 0x7fbc8973b4f8 in expr_evaluate_binop src/evaluate.c:1600
+        #8 0x7fbc89758b01 in expr_evaluate src/evaluate.c:3059
+        #9 0x7fbc8975ae0e in stmt_evaluate_arg src/evaluate.c:3198
+        #10 0x7fbc8975c51d in stmt_evaluate_payload src/evaluate.c:330
+
+    Fixes: faa6908fad60 ("evaluate: clone unary expression datatype to deal with dynamic datatype")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 7059108..a294bbd 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1339,7 +1339,7 @@ static int expr_evaluate_unary(struct eval_ctx *ctx, struct expr **expr)
+ 		BUG("invalid unary operation %u\n", unary->op);
+ 	}
+ 
+-	unary->dtype	 = datatype_clone(arg->dtype);
++	__datatype_set(unary, datatype_clone(arg->dtype));
+ 	unary->byteorder = byteorder;
+ 	unary->len	 = arg->len;
+ 	return 0;

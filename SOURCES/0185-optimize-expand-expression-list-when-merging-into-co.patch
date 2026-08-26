@@ -1,0 +1,84 @@
+From a4724e7ed7dbee3f7a8dc5c4564891141d9e8831 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:21 +0200
+Subject: [PATCH] optimize: expand expression list when merging into
+ concatenation
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 0d17d28bb06bf2a04862d5cd879a14bcb9a2d2dc
+Conflicts: Dropped changes to non-existent .json-nft dump
+
+commit 0d17d28bb06bf2a04862d5cd879a14bcb9a2d2dc
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Apr 1 18:11:45 2025 +0200
+
+    optimize: expand expression list when merging into concatenation
+
+    The following rules:
+
+        udp dport 137 ct state new,untracked accept
+        udp dport 138 ct state new,untracked accept
+
+    results in:
+
+      nft: src/optimize.c:670: __merge_concat: Assertion `0' failed.
+
+    The logic to expand to the new,untracked list in the concatenation is
+    missing.
+
+    Fixes: 187c6d01d357 ("optimize: expand implicit set element when merging into concatenation")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c                                         | 10 ++++++++++
+ .../optimizations/dumps/merge_stmts_concat.nft         |  1 +
+ tests/shell/testcases/optimizations/merge_stmts_concat |  2 ++
+ 3 files changed, 13 insertions(+)
+
+diff --git a/src/optimize.c b/src/optimize.c
+index c8082c3..c5147d7 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -665,6 +665,16 @@ static void __merge_concat(const struct optimize_ctx *ctx, uint32_t i,
+ 				clone = expr_clone(stmt_a->expr->right);
+ 				compound_expr_add(concat, clone);
+ 				break;
++			case EXPR_LIST:
++				list_for_each_entry(expr, &stmt_a->expr->right->expressions, list) {
++					concat_clone = expr_clone(concat);
++					clone = expr_clone(expr);
++					compound_expr_add(concat_clone, clone);
++					list_add_tail(&concat_clone->list, &pending_list);
++				}
++				list_del(&concat->list);
++				expr_free(concat);
++				break;
+ 			default:
+ 				assert(0);
+ 				break;
+diff --git a/tests/shell/testcases/optimizations/dumps/merge_stmts_concat.nft b/tests/shell/testcases/optimizations/dumps/merge_stmts_concat.nft
+index f56cea1..d00ac41 100644
+--- a/tests/shell/testcases/optimizations/dumps/merge_stmts_concat.nft
++++ b/tests/shell/testcases/optimizations/dumps/merge_stmts_concat.nft
+@@ -2,6 +2,7 @@ table ip x {
+ 	chain y {
+ 		iifname . ip saddr . ip daddr { "eth1" . 1.1.1.1 . 2.2.2.3, "eth1" . 1.1.1.2 . 2.2.2.4, "eth1" . 1.1.1.2 . 2.2.3.0/24, "eth1" . 1.1.1.2 . 2.2.4.0-2.2.4.10, "eth2" . 1.1.1.3 . 2.2.2.5 } accept
+ 		ip protocol . th dport { tcp . 22, udp . 67 }
++		udp dport . ct state { 137 . new, 138 . new, 137 . untracked, 138 . untracked } accept
+ 	}
+ 
+ 	chain c1 {
+diff --git a/tests/shell/testcases/optimizations/merge_stmts_concat b/tests/shell/testcases/optimizations/merge_stmts_concat
+index 9679d86..1fd1a30 100755
+--- a/tests/shell/testcases/optimizations/merge_stmts_concat
++++ b/tests/shell/testcases/optimizations/merge_stmts_concat
+@@ -10,6 +10,8 @@ RULESET="table ip x {
+ 		meta iifname eth1 ip saddr 1.1.1.2 ip daddr 2.2.4.0-2.2.4.10 accept
+ 		meta iifname eth2 ip saddr 1.1.1.3 ip daddr 2.2.2.5 accept
+ 		ip protocol . th dport { tcp . 22, udp . 67 }
++		udp dport 137 ct state new,untracked accept
++		udp dport 138 ct state new,untracked accept
+ 	}
+ }"
+ 

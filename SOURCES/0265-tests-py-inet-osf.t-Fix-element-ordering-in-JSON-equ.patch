@@ -1,0 +1,121 @@
+From 7c2c36e0a564c5a7678c5dd3e56bf96ef96e61d1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] tests: py: inet/osf.t: Fix element ordering in JSON
+ equivalents
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b028f8ce616bb5a219a10844357b9a3822d99a8c
+
+commit b028f8ce616bb5a219a10844357b9a3822d99a8c
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Oct 9 02:06:54 2025 +0200
+
+    tests: py: inet/osf.t: Fix element ordering in JSON equivalents
+
+    The original rules order set elements differently. Stick to that and add
+    entries to inet/osf.t.json.output to cover for nftables reordering
+    entries.
+
+    Fixes: 92029c1282958 ("src: osf: add json support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/osf.t.json        | 12 ++++----
+ tests/py/inet/osf.t.json.output | 53 +++++++++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+), 6 deletions(-)
+ create mode 100644 tests/py/inet/osf.t.json.output
+
+diff --git a/tests/py/inet/osf.t.json b/tests/py/inet/osf.t.json
+index cedb7f6..b1bf747 100644
+--- a/tests/py/inet/osf.t.json
++++ b/tests/py/inet/osf.t.json
+@@ -73,8 +73,8 @@
+             "op": "==",
+             "right": {
+                 "set": [
+-                    "MacOs",
+-                    "Windows"
++                    "Windows",
++                    "MacOs"
+                 ]
+             }
+         }
+@@ -114,13 +114,13 @@
+                 "map": {
+                     "data": {
+                         "set": [
+-                            [
+-                                "MacOs",
+-                                2
+-                            ],
+                             [
+                                 "Windows",
+                                 1
++                            ],
++                            [
++                                "MacOs",
++                                2
+                             ]
+                         ]
+                     },
+diff --git a/tests/py/inet/osf.t.json.output b/tests/py/inet/osf.t.json.output
+new file mode 100644
+index 0000000..922e395
+--- /dev/null
++++ b/tests/py/inet/osf.t.json.output
+@@ -0,0 +1,53 @@
++# osf name { "Windows", "MacOs" }
++[
++    {
++        "match": {
++            "left": {
++                "osf": {
++                    "key": "name"
++                }
++            },
++            "op": "==",
++            "right": {
++                "set": [
++                    "MacOs",
++                    "Windows"
++                ]
++            }
++        }
++    }
++]
++
++# ct mark set osf name map { "Windows" : 0x00000001, "MacOs" : 0x00000002 }
++[
++    {
++        "mangle": {
++            "key": {
++                "ct": {
++                    "key": "mark"
++                }
++            },
++            "value": {
++                "map": {
++                    "data": {
++                        "set": [
++                            [
++                                "MacOs",
++                                2
++                            ],
++                            [
++                                "Windows",
++                                1
++                            ]
++                        ]
++                    },
++                    "key": {
++                        "osf": {
++                            "key": "name"
++                        }
++                    }
++                }
++            }
++        }
++    }
++]

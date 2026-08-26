@@ -1,0 +1,380 @@
+From 09efbdc26bc08b23cfaace6ec3a370fbcb47f1d1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:13:45 +0200
+Subject: [PATCH] json: Accept more than two operands in binary expressions
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 0ac39384fd9e48ff6bcc5605df2cbeb33af64b9e
+Conflicts: Dropped changes to non-existent .json-nft dumps
+
+commit 0ac39384fd9e48ff6bcc5605df2cbeb33af64b9e
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Mar 20 15:54:54 2024 +0100
+
+    json: Accept more than two operands in binary expressions
+
+    The most common use case is ORing flags like
+
+    | syn | ack | rst
+
+    but nft seems to be fine with less intuitive stuff like
+
+    | meta mark set ip dscp << 2 << 3
+
+    so support all of them.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/libnftables-json.adoc       |  18 +++---
+ src/json.c                      |  19 +++++-
+ src/parser_json.c               |  12 ++++
+ tests/py/inet/tcp.t.json        |  67 ++------------------
+ tests/py/inet/tcp.t.json.output | 104 +++++++-------------------------
+ 5 files changed, 66 insertions(+), 154 deletions(-)
+
+diff --git a/doc/libnftables-json.adoc b/doc/libnftables-json.adoc
+index ab4223d..9129cc8 100644
+--- a/doc/libnftables-json.adoc
++++ b/doc/libnftables-json.adoc
+@@ -1343,15 +1343,17 @@ Perform kernel Forwarding Information Base lookups.
+ 
+ === BINARY OPERATION
+ [verse]
+-*{ "|": [* 'EXPRESSION'*,* 'EXPRESSION' *] }*
+-*{ "^": [* 'EXPRESSION'*,* 'EXPRESSION' *] }*
+-*{ "&": [* 'EXPRESSION'*,* 'EXPRESSION' *] }*
+-*{ "+<<+": [* 'EXPRESSION'*,* 'EXPRESSION' *] }*
+-*{ ">>": [* 'EXPRESSION'*,* 'EXPRESSION' *] }*
+-
+-All binary operations expect an array of exactly two expressions, of which the
++*{ "|": [* 'EXPRESSION'*,* 'EXPRESSIONS' *] }*
++*{ "^": [* 'EXPRESSION'*,* 'EXPRESSIONS' *] }*
++*{ "&": [* 'EXPRESSION'*,* 'EXPRESSIONS' *] }*
++*{ "+<<+": [* 'EXPRESSION'*,* 'EXPRESSIONS' *] }*
++*{ ">>": [* 'EXPRESSION'*,* 'EXPRESSIONS' *] }*
++'EXPRESSIONS' := 'EXPRESSION' | 'EXPRESSION'*,* 'EXPRESSIONS'
++
++All binary operations expect an array of at least two expressions, of which the
+ first element denotes the left hand side and the second one the right hand
+-side.
++side. Extra elements are accepted in the given array and appended to the term
++accordingly.
+ 
+ === VERDICT
+ [verse]
+diff --git a/src/json.c b/src/json.c
+index daa1fb5..089c251 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -551,11 +551,24 @@ json_t *flagcmp_expr_json(const struct expr *expr, struct output_ctx *octx)
+ 			 "right", expr_print_json(expr->flagcmp.value, octx));
+ }
+ 
++static json_t *
++__binop_expr_json(int op, const struct expr *expr, struct output_ctx *octx)
++{
++	json_t *a = json_array();
++
++	if (expr->etype == EXPR_BINOP && expr->op == op) {
++		json_array_extend(a, __binop_expr_json(op, expr->left, octx));
++		json_array_extend(a, __binop_expr_json(op, expr->right, octx));
++	} else {
++		json_array_append_new(a, expr_print_json(expr, octx));
++	}
++	return a;
++}
++
+ json_t *binop_expr_json(const struct expr *expr, struct output_ctx *octx)
+ {
+-	return json_pack("{s:[o, o]}", expr_op_symbols[expr->op],
+-			 expr_print_json(expr->left, octx),
+-			 expr_print_json(expr->right, octx));
++	return json_pack("{s:o}", expr_op_symbols[expr->op],
++			 __binop_expr_json(expr->op, expr, octx));
+ }
+ 
+ json_t *relational_expr_json(const struct expr *expr, struct output_ctx *octx)
+diff --git a/src/parser_json.c b/src/parser_json.c
+index dc038f5..05dab1a 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -1221,6 +1221,18 @@ static struct expr *json_parse_binop_expr(struct json_ctx *ctx,
+ 		return NULL;
+ 	}
+ 
++	if (json_array_size(root) > 2) {
++		left = json_parse_primary_expr(ctx, json_array_get(root, 0));
++		right = json_parse_primary_expr(ctx, json_array_get(root, 1));
++		left = binop_expr_alloc(int_loc, thisop, left, right);
++		for (i = 2; i < json_array_size(root); i++) {
++			jright = json_array_get(root, i);
++			right = json_parse_primary_expr(ctx, jright);
++			left = binop_expr_alloc(int_loc, thisop, left, right);
++		}
++		return left;
++	}
++
+ 	if (json_unpack_err(ctx, root, "[o, o!]", &jleft, &jright))
+ 		return NULL;
+ 
+diff --git a/tests/py/inet/tcp.t.json b/tests/py/inet/tcp.t.json
+index d3a846c..bd589cf 100644
+--- a/tests/py/inet/tcp.t.json
++++ b/tests/py/inet/tcp.t.json
+@@ -954,12 +954,12 @@
+                         }
+                     },
+                     {
+-                        "|": [ "fin", { "|": [ "syn", { "|": [ "rst", { "|": [ "psh", { "|": [ "ack", { "|": [ "urg", { "|": [ "ecn", "cwr" ] } ] } ] } ] } ] } ] } ]
++                        "|": [ "fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr" ]
+                     }
+                 ]
+             },
+             "op": "==",
+-            "right": { "|": [ "fin", { "|": [ "syn", { "|": [ "rst", { "|": [ "psh", { "|": [ "ack", { "|": [ "urg", { "|": [ "ecn", "cwr" ] } ] } ] } ] } ] } ] } ] }
++            "right": { "|": [ "fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr" ] }
+         }
+     }
+ ]
+@@ -1395,55 +1395,15 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    {
+-                        "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            {
+-                                                "|": [
+-                                                    {
+-                                                        "|": [
+-                                                            "fin",
+-                                                            "syn"
+-                                                        ]
+-                                                    },
+-                                                    "rst"
+-                                                ]
+-                                            },
+-                                            "psh"
+-                                        ]
+-                                    },
+-                                    "ack"
+-                                ]
+-                            },
+-                            "urg"
+-                        ]
+-                    }
++                    { "|": [ "fin", "syn", "rst", "psh", "ack", "urg" ] }
+                 ]
+             },
+             "op": "==",
+             "right": {
+                 "set": [
+-                    {
+-                        "|": [
+-                            {
+-                                "|": [
+-                                    "fin",
+-                                    "psh"
+-                                ]
+-                            },
+-                            "ack"
+-                        ]
+-                    },
++                    { "|": [ "fin", "psh", "ack" ] },
+                     "fin",
+-                    {
+-                        "|": [
+-                            "psh",
+-                            "ack"
+-                        ]
+-                    },
++                    { "|": [ "psh", "ack" ] },
+                     "ack"
+                 ]
+             }
+@@ -1780,22 +1740,7 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    {
+-                        "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            "fin",
+-                                            "syn"
+-                                        ]
+-                                    },
+-                                    "rst"
+-                                ]
+-                            },
+-                            "ack"
+-                        ]
+-                    }
++                    { "|": [ "fin", "syn", "rst", "ack" ] }
+                 ]
+             },
+             "op": "!=",
+diff --git a/tests/py/inet/tcp.t.json.output b/tests/py/inet/tcp.t.json.output
+index e186e12..3f03c0d 100644
+--- a/tests/py/inet/tcp.t.json.output
++++ b/tests/py/inet/tcp.t.json.output
+@@ -155,27 +155,11 @@
+                     },
+                     {
+                         "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            {
+-                                                "|": [
+-                                                    {
+-                                                        "|": [
+-                                                            "fin",
+-                                                            "syn"
+-                                                        ]
+-                                                    },
+-                                                    "rst"
+-                                                ]
+-                                            },
+-                                            "psh"
+-                                        ]
+-                                    },
+-                                    "ack"
+-                                ]
+-                            },
++                            "fin",
++                            "syn",
++                            "rst",
++                            "psh",
++                            "ack",
+                             "urg"
+                         ]
+                     }
+@@ -187,12 +171,8 @@
+                     "fin",
+                     {
+                         "|": [
+-                            {
+-                                "|": [
+-                                    "fin",
+-                                    "psh"
+-                                ]
+-                            },
++                            "fin",
++                            "psh",
+                             "ack"
+                         ]
+                     },
+@@ -280,17 +260,9 @@
+                     },
+                     {
+                         "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            "fin",
+-                                            "syn"
+-                                        ]
+-                                    },
+-                                    "rst"
+-                                ]
+-                            },
++                            "fin",
++                            "syn",
++                            "rst",
+                             "ack"
+                         ]
+                     }
+@@ -316,17 +288,9 @@
+                     },
+                     {
+                         "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            "fin",
+-                                            "syn"
+-                                        ]
+-                                    },
+-                                    "rst"
+-                                ]
+-                            },
++                            "fin",
++                            "syn",
++                            "rst",
+                             "ack"
+                         ]
+                     }
+@@ -352,17 +316,9 @@
+                     },
+                     {
+                         "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            "fin",
+-                                            "syn"
+-                                        ]
+-                                    },
+-                                    "rst"
+-                                ]
+-                            },
++                            "fin",
++                            "syn",
++                            "rst",
+                             "ack"
+                         ]
+                     }
+@@ -388,17 +344,9 @@
+                     },
+                     {
+                         "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            "fin",
+-                                            "syn"
+-                                        ]
+-                                    },
+-                                    "rst"
+-                                ]
+-                            },
++                            "fin",
++                            "syn",
++                            "rst",
+                             "ack"
+                         ]
+                     }
+@@ -429,17 +377,9 @@
+                     },
+                     {
+                         "|": [
+-                            {
+-                                "|": [
+-                                    {
+-                                        "|": [
+-                                            "fin",
+-                                            "syn"
+-                                        ]
+-                                    },
+-                                    "rst"
+-                                ]
+-                            },
++                            "fin",
++                            "syn",
++                            "rst",
+                             "ack"
+                         ]
+                     }

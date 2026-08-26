@@ -1,0 +1,10 @@
+echo: 1 tests from file chain.t failed
+echo: 1 tests from file flowtable-simple.t failed
+monitor: 1 tests from file chain.t failed
+monitor: 1 tests from file flowtable-simple.t failed
+monitor: 1 tests from file table.t failed
+echo: 1 tests from file chain.t failed
+echo: 1 tests from file flowtable-simple.t failed
+monitor: 1 tests from file chain.t failed
+monitor: 1 tests from file flowtable-simple.t failed
+monitor: 1 tests from file table.t failed

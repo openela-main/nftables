@@ -1,0 +1,65 @@
+From 95a2b5535929c478daf8bb23300cfa2e752cb87f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] intervals: add helper function to set previous element
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 450590ab57e61ec8a300c67decbd0e850e576a81
+
+commit 450590ab57e61ec8a300c67decbd0e850e576a81
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Fri Jan 3 17:40:48 2025 +0100
+
+    intervals: add helper function to set previous element
+
+    Add helper function to set previous element during the automerge
+    iteration. No functional changes are intended.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/src/intervals.c b/src/intervals.c
+index e771aae..a817cd0 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -143,6 +143,14 @@ static void set_sort_splice(struct expr *init, struct set *set)
+ 	}
+ }
+ 
++static void set_prev_elem(struct expr **prev, struct expr *i,
++			  struct range *prev_range, struct range *range)
++{
++	*prev = i;
++	mpz_set(prev_range->low, range->low);
++	mpz_set(prev_range->high, range->high);
++}
++
+ static void setelem_automerge(struct set_automerge_ctx *ctx)
+ {
+ 	struct expr *i, *next, *prev = NULL;
+@@ -163,9 +171,7 @@ static void setelem_automerge(struct set_automerge_ctx *ctx)
+ 		range_expr_value_high(range.high, i);
+ 
+ 		if (!prev) {
+-			prev = i;
+-			mpz_set(prev_range.low, range.low);
+-			mpz_set(prev_range.high, range.high);
++			set_prev_elem(&prev, i, &prev_range, &range);
+ 			continue;
+ 		}
+ 
+@@ -187,9 +193,7 @@ static void setelem_automerge(struct set_automerge_ctx *ctx)
+ 			}
+ 		}
+ 
+-		prev = i;
+-		mpz_set(prev_range.low, range.low);
+-		mpz_set(prev_range.high, range.high);
++		set_prev_elem(&prev, i, &prev_range, &range);
+ 	}
+ 
+ 	mpz_clear(prev_range.low);

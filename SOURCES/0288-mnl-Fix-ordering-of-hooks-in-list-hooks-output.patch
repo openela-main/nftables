@@ -1,0 +1,39 @@
+From c17011df23b33bbbb5e5711b3c61e411157ec43e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:05 +0200
+Subject: [PATCH] mnl: Fix ordering of hooks in 'list hooks' output
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 2f3b8d37c2e46f2ddf086c50affcd224b1f7f7dd
+
+commit 2f3b8d37c2e46f2ddf086c50affcd224b1f7f7dd
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Mar 20 13:30:52 2026 +0100
+
+    mnl: Fix ordering of hooks in 'list hooks' output
+
+    Hooks with same family, basehook and priority were inadvertently
+    inserted into the list in reverse ordering, fix that.
+
+    Suggested-by: Florian Westphal <fw@strlen.de>
+    Fixes: b98fee20bfe23 ("mnl: revisit hook listing")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mnl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/mnl.c b/src/mnl.c
+index 56c3fcf..28c8403 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -2257,7 +2257,7 @@ static void basehook_list_add_tail(struct basehook *b, struct list_head *head)
+ 			continue;
+ 		if (hook->num != b->num)
+ 			continue;
+-		if (hook->prio < b->prio)
++		if (hook->prio <= b->prio)
+ 			continue;
+ 
+ 		list_add(&b->list, &hook->list);

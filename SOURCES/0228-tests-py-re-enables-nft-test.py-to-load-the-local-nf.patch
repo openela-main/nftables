@@ -1,0 +1,45 @@
+From 5a5e88276a8fc1764ab934e10ef84d82abaf9cc7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: re-enables nft-test.py to load the local
+ nftables.py
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 0f3965a38aecaf1fda66c2ce5dcf3b755d8191c6
+
+commit 0f3965a38aecaf1fda66c2ce5dcf3b755d8191c6
+Author: Zhongqiu Duan <dzq.aishenghu0@gmail.com>
+Date:   Fri Jul 4 03:12:16 2025 +0000
+
+    tests: py: re-enables nft-test.py to load the local nftables.py
+
+    This is a needed follow-up of commit ce443afc21455 ("py: move
+    package source into src directory") from 2023. Since that change,
+    nft-test.py started using the host's nftables.py instead of the local
+    one. But since nft-test.py passes the local src/.libs/libnftables.so.1
+    as parameter when instantiating the Nftables class, we did nevertheless
+    use the local libnftables.
+
+    Fixes: ce443afc21455 ("py: move package source into src directory")
+    Reviewed-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Zhongqiu Duan <dzq.aishenghu0@gmail.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 376e62a..4799636 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -23,7 +23,7 @@ import traceback
+ import tempfile
+ 
+ TESTS_PATH = os.path.dirname(os.path.abspath(__file__))
+-sys.path.insert(0, os.path.join(TESTS_PATH, '../../py/'))
++sys.path.insert(0, os.path.join(TESTS_PATH, '../../py/src'))
+ os.environ['TZ'] = 'UTC-2'
+ 
+ from nftables import Nftables

@@ -1,0 +1,39 @@
+From e4df7c0617f8ed9d9ef2afcbd5acd398f7582b7d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:09:25 +0200
+Subject: [PATCH] evaluate: Fix incorrect checking the `base` variable in case
+ of IPV6
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f6b579344eee17e5587b6a7fcc444fe997cd8cb6
+
+commit f6b579344eee17e5587b6a7fcc444fe997cd8cb6
+Author: Maks Mishin <maks.mishinfz@gmail.com>
+Date:   Wed May 15 23:25:03 2024 +0300
+
+    evaluate: Fix incorrect checking the `base` variable in case of IPV6
+
+    Found by RASU JSC.
+
+    Fixes: 2b29ea5f3c3e ("src: ct: add eval part to inject dependencies for ct saddr/daddr")
+    Signed-off-by: Maks Mishin <maks.mishinFZ@gmail.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index d8e5dfd..7f5b64b 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1106,7 +1106,7 @@ static int ct_gen_nh_dependency(struct eval_ctx *ctx, struct expr *ct)
+ 		base = pctx->protocol[PROTO_BASE_NETWORK_HDR].desc;
+ 		if (base == &proto_ip)
+ 			ct->ct.nfproto = NFPROTO_IPV4;
+-		else if (base == &proto_ip)
++		else if (base == &proto_ip6)
+ 			ct->ct.nfproto = NFPROTO_IPV6;
+ 
+ 		if (base)

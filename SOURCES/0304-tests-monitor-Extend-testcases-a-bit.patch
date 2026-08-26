@@ -1,0 +1,120 @@
+From b9b90c2d9ad781549ce1cc23880ca86a7c8033f7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 15:35:17 +0200
+Subject: [PATCH] tests: monitor: Extend testcases a bit
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d4b07cdae6de28744492fa104c57eeb9a8eaac9b
+
+commit d4b07cdae6de28744492fa104c57eeb9a8eaac9b
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Aug 29 01:49:01 2025 +0200
+
+    tests: monitor: Extend testcases a bit
+
+    Try to cover for reduced table and chain deletion notifications by
+    creating them with data which is omitted by the kernel during deletion.
+
+    Also try to expose the difference in reported flowtable hook deletion
+    vs. flowtable deletion.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/testcases/chain.t            | 41 ++++++++++++++++++++++
+ tests/monitor/testcases/flowtable-simple.t | 12 +++++++
+ tests/monitor/testcases/table.t            | 15 ++++++++
+ 3 files changed, 68 insertions(+)
+ create mode 100644 tests/monitor/testcases/chain.t
+ create mode 100644 tests/monitor/testcases/table.t
+
+diff --git a/tests/monitor/testcases/chain.t b/tests/monitor/testcases/chain.t
+new file mode 100644
+index 0000000..975ccf1
+--- /dev/null
++++ b/tests/monitor/testcases/chain.t
+@@ -0,0 +1,41 @@
++I add table inet t
++O -
++J {"add": {"table": {"family": "inet", "name": "t", "handle": 0}}}
++
++I add chain inet t c
++O -
++J {"add": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0}}}
++
++I delete chain inet t c
++O -
++J {"delete": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0}}}
++
++I add chain inet t c { type filter hook input priority filter; }
++O add chain inet t c { type filter hook input priority 0; policy accept; }
++J {"add": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0, "type": "filter", "hook": "input", "prio": 0, "policy": "accept"}}}
++
++I delete chain inet t c
++O -
++J {"delete": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0}}}
++
++I add chain inet t c { type filter hook ingress priority filter; devices = { "lo" }; }
++O add chain inet t c { type filter hook ingress devices = { "lo" } priority 0; policy accept; }
++J {"add": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0, "dev": "lo", "type": "filter", "hook": "ingress", "prio": 0, "policy": "accept"}}}
++
++I delete chain inet t c
++O -
++J {"delete": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0}}}
++
++I add chain inet t c { type filter hook ingress priority filter; devices = { "eth1", "lo" }; }
++O add chain inet t c { type filter hook ingress devices = { "eth1", "lo" } priority 0; policy accept; }
++J {"add": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0, "dev": ["eth1", "lo"], "type": "filter", "hook": "ingress", "prio": 0, "policy": "accept"}}}
++
++I delete chain inet t c { type filter hook ingress priority filter; devices = { "eth1" }; }
++O delete chain inet t c { type filter hook ingress devices = { "eth1" } priority 0; policy accept; }
++J {"delete": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0, "dev": "eth1", "type": "filter", "hook": "ingress", "prio": 0, "policy": "accept"}}}
++
++I delete chain inet t c
++O -
++J {"delete": {"chain": {"family": "inet", "table": "t", "name": "c", "handle": 0}}}
++
++
+diff --git a/tests/monitor/testcases/flowtable-simple.t b/tests/monitor/testcases/flowtable-simple.t
+index 11254c5..e1889ae 100644
+--- a/tests/monitor/testcases/flowtable-simple.t
++++ b/tests/monitor/testcases/flowtable-simple.t
+@@ -8,3 +8,15 @@ J {"add": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0
+ I delete flowtable ip t ft
+ O -
+ J {"delete": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0}}}
++
++I add flowtable ip t ft { hook ingress priority 0; devices = { "eth1", "lo" }; }
++O -
++J {"add": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0, "hook": "ingress", "prio": 0, "dev": ["eth1", "lo"]}}}
++
++I delete flowtable ip t ft { hook ingress priority 0; devices = { "eth1" }; }
++O -
++J {"delete": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0, "hook": "ingress", "prio": 0, "dev": "eth1"}}}
++
++I delete flowtable ip t ft
++O -
++J {"delete": {"flowtable": {"family": "ip", "name": "ft", "table": "t", "handle": 0}}}
+diff --git a/tests/monitor/testcases/table.t b/tests/monitor/testcases/table.t
+new file mode 100644
+index 0000000..35a0f51
+--- /dev/null
++++ b/tests/monitor/testcases/table.t
+@@ -0,0 +1,15 @@
++I add table ip t
++O -
++J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
++
++I delete table ip t
++O -
++J {"delete": {"table": {"family": "ip", "name": "t", "handle": 0}}}
++
++I add table ip t { comment "foo bar"; flags dormant; }
++O add table ip t { flags dormant; }
++J {"add": {"table": {"family": "ip", "name": "t", "handle": 0, "flags": ["dormant"], "comment": "foo bar"}}}
++
++I delete table ip t
++O -
++J {"delete": {"table": {"family": "ip", "name": "t", "handle": 0}}}

@@ -1,0 +1,49 @@
+From a508a65b32f289343e923e1ae65913de4ebee53e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Jul 2026 17:18:39 +0200
+Subject: [PATCH] tests: monitor: Become $PWD agnostic
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 83eaf50c36fe8710ae6b6f991f5f7c7e2ec8d513
+
+commit 83eaf50c36fe8710ae6b6f991f5f7c7e2ec8d513
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Nov 7 14:39:51 2024 +0100
+
+    tests: monitor: Become $PWD agnostic
+
+    The call to 'cd' is problematic since later the script tries to 'exec
+    unshare -n $0'. This is not the only problem though: Individual test
+    cases specified on command line are expected to be relative to the
+    script's directory, too. Just get rid of these nonsensical restrictions.
+
+    Reported-by: Florian Westphal <fw@strlen.de>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index 7a00513..3ff8874 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -1,7 +1,6 @@
+ #!/bin/bash
+ 
+-cd $(dirname $0)
+-nft=${NFT:-../../src/nft}
++nft=${NFT:-$(dirname $0)/../../src/nft}
+ debug=false
+ test_json=false
+ 
+@@ -143,7 +142,7 @@ while [ -n "$1" ]; do
+ 		nft=nft
+ 		shift
+ 		;;
+-	testcases/*.t)
++	*.t)
+ 		testcases+=" $1"
+ 		shift
+ 		;;

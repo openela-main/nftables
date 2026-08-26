@@ -1,0 +1,77 @@
+From 65c523bdd547ea90488adebefcba672f0e676aca Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] evaluate: bogus error when adding devices to flowtable
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 59d304f47a121afda867d792c709bc2c81946979
+
+commit 59d304f47a121afda867d792c709bc2c81946979
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Nov 22 09:43:04 2023 +0100
+
+    evaluate: bogus error when adding devices to flowtable
+
+    Bail out if flowtable declaration is missing and no devices are
+    specified.
+
+    Otherwise, this reports a bogus error when adding new devices to an
+    existing flowtable.
+
+     # nft -v
+     nftables v1.0.9 (Old Doc Yak #3)
+     # ip link add dummy1 type dummy
+     # ip link set dummy1 up
+     # nft 'create flowtable inet filter f1 { hook ingress priority 0; counter }'
+     # nft 'add flowtable inet filter f1 { devices = { dummy1 } ; }'
+     Error: missing hook and priority in flowtable declaration
+     add flowtable inet filter f1 { devices = { dummy1 } ; }
+                               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+    Fixes: 5ad475fce5a1 ("evaluate: bail out if new flowtable does not specify hook and priority")
+    Reported-by: Martin Gignac <martin.gignac@gmail.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                | 2 +-
+ tests/shell/testcases/flowtable/0015destroy_0 | 8 ++++++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 30190ac..d204d3e 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -4862,7 +4862,7 @@ static int flowtable_evaluate(struct eval_ctx *ctx, struct flowtable *ft)
+ 		return table_not_found(ctx);
+ 
+ 	if (!ft_cache_find(table, ft->handle.flowtable.name)) {
+-		if (!ft->hook.name)
++		if (!ft->hook.name && !ft->dev_expr)
+ 			return chain_error(ctx, ft, "missing hook and priority in flowtable declaration");
+ 
+ 		ft_cache_add(flowtable_get(ft), table);
+diff --git a/tests/shell/testcases/flowtable/0015destroy_0 b/tests/shell/testcases/flowtable/0015destroy_0
+index d2a87da..cea3352 100755
+--- a/tests/shell/testcases/flowtable/0015destroy_0
++++ b/tests/shell/testcases/flowtable/0015destroy_0
+@@ -2,6 +2,11 @@
+ 
+ # NFT_TEST_REQUIRES(NFT_TEST_HAVE_destroy)
+ 
++trap "ip link del dummy1" EXIT
++
++ip link add dummy1 type dummy
++ip link set dummy1 up
++
+ $NFT add table t
+ 
+ # pass for non-existent flowtable
+@@ -9,4 +14,7 @@ $NFT destroy flowtable t f
+ 
+ # successfully delete existing flowtable
+ $NFT add flowtable t f '{ hook ingress priority 10; devices = { lo }; }'
++
++$NFT 'add flowtable t f { devices = { dummy1 } ; }'
++
+ $NFT destroy flowtable t f

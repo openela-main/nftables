@@ -1,0 +1,45 @@
+From 65ef3c4192edf76e2744646e64003fbf8da01311 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] cache: rule by index requires full cache
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 161beaeacd2e5218d66febc3db825bf6a27119c5
+
+commit 161beaeacd2e5218d66febc3db825bf6a27119c5
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Aug 15 12:34:08 2024 +0200
+
+    cache: rule by index requires full cache
+
+    In preparation for on-demand cache population with errors, set on
+    NFT_CACHE_FULL if rule index is used since this requires a full cache
+    with rules.
+
+    This is not a fix, index is already fetching a full cache before this
+    patch.
+
+    But follow up patches relax cache requirements, so add this patch in
+    first place to make sure index does not break.
+
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index e88cbae..42e60df 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -68,7 +68,7 @@ static unsigned int evaluate_cache_add(struct cmd *cmd, unsigned int flags)
+ 
+ 		if (cmd->handle.index.id ||
+ 		    cmd->handle.position.id)
+-			flags |= NFT_CACHE_RULE | NFT_CACHE_UPDATE;
++			flags |= NFT_CACHE_FULL | NFT_CACHE_UPDATE;
+ 		break;
+ 	default:
+ 		break;

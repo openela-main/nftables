@@ -1,0 +1,134 @@
+From 758237aabee466c34538f74317076e4c3a26db6e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:06 +0200
+Subject: [PATCH] tests: py: osf is ip-only
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 5b70e8efff75b5d4d04b6fdb56d8fe1924aaba0e
+Conflicts: Adjust to missing commit 0f566ac1c1dbd
+           ("tests: py: Update payload records")
+
+commit 5b70e8efff75b5d4d04b6fdb56d8fe1924aaba0e
+Author: Florian Westphal <fw@strlen.de>
+Date:   Wed Apr 22 19:22:50 2026 +0200
+
+    tests: py: osf is ip-only
+
+    Pending kernel patch rejects osf in inet/ip6, move this to ip to
+    prevent CI failure.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/{inet => ip}/osf.t             |  2 --
+ tests/py/{inet => ip}/osf.t.json        |  0
+ tests/py/{inet => ip}/osf.t.json.output |  0
+ tests/py/{inet => ip}/osf.t.payload     | 32 ++++++++++++-------------
+ 4 files changed, 16 insertions(+), 18 deletions(-)
+ rename tests/py/{inet => ip}/osf.t (92%)
+ rename tests/py/{inet => ip}/osf.t.json (100%)
+ rename tests/py/{inet => ip}/osf.t.json.output (100%)
+ rename tests/py/{inet => ip}/osf.t.payload (80%)
+
+diff --git a/tests/py/inet/osf.t b/tests/py/ip/osf.t
+similarity index 92%
+rename from tests/py/inet/osf.t
+rename to tests/py/ip/osf.t
+index c828541..368baef 100644
+--- a/tests/py/inet/osf.t
++++ b/tests/py/ip/osf.t
+@@ -1,8 +1,6 @@
+ :osfchain;type filter hook input priority 0
+ 
+ *ip;osfip;osfchain
+-*ip6;osfip6;osfchain
+-*inet;osfinet;osfchain
+ 
+ osf name "Linux";ok
+ osf ttl loose name "Linux";ok
+diff --git a/tests/py/inet/osf.t.json b/tests/py/ip/osf.t.json
+similarity index 100%
+rename from tests/py/inet/osf.t.json
+rename to tests/py/ip/osf.t.json
+diff --git a/tests/py/inet/osf.t.json.output b/tests/py/ip/osf.t.json.output
+similarity index 100%
+rename from tests/py/inet/osf.t.json.output
+rename to tests/py/ip/osf.t.json.output
+diff --git a/tests/py/inet/osf.t.payload b/tests/py/ip/osf.t.payload
+similarity index 80%
+rename from tests/py/inet/osf.t.payload
+rename to tests/py/ip/osf.t.payload
+index 6ddab97..9bb9e47 100644
+--- a/tests/py/inet/osf.t.payload
++++ b/tests/py/ip/osf.t.payload
+@@ -1,53 +1,53 @@
+ # osf name "Linux"
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ cmp eq reg 1 0x756e694c 0x00000078 0x00000000 0x00000000 ]
+ 
+ # osf ttl loose name "Linux"
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ cmp eq reg 1 0x756e694c 0x00000078 0x00000000 0x00000000 ]
+ 
+ # osf ttl skip name "Linux"
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ cmp eq reg 1 0x756e694c 0x00000078 0x00000000 0x00000000 ]
+ 
+ # osf ttl skip version "Linux:3.0"
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ cmp eq reg 1 0x756e694c 0x2e333a78 0x00000030 0x00000000 ]
+ 
+ # osf name { "Windows", "MacOs" }
+-__set%d osfinet 3 size 2
+-__set%d osfinet 0
++__set%d osfip 3 size 2
++__set%d osfip 0
+ 	element 646e6957 0073776f 00000000 00000000  : 0 [end]	element 4f63614d 00000073 00000000 00000000  : 0 [end]
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ lookup reg 1 set __set%d ]
+ 
+ # osf version { "Windows:XP", "MacOs:Sierra" }
+-__set%d osfinet 3 size 2
+-__set%d osfinet 0
++__set%d osfip 3 size 2
++__set%d osfip 0
+ 	element 646e6957 3a73776f 00005058 00000000  : 0 [end]	element 4f63614d 69533a73 61727265 00000000  : 0 [end]
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ lookup reg 1 set __set%d ]
+ 
+ # ct mark set osf name map { "Windows" : 0x00000001, "MacOs" : 0x00000002 }
+-__map%d osfinet b size 2
+-__map%d osfinet 0
++__map%d osfip b size 2
++__map%d osfip 0
+ 	element 646e6957 0073776f 00000000 00000000  : 00000001 0 [end]	element 4f63614d 00000073 00000000 00000000  : 00000002 0 [end]
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ lookup reg 1 set __map%d dreg 1 ]
+   [ ct set mark with reg 1 ]
+ 
+ # ct mark set osf version map { "Windows:XP" : 0x00000003, "MacOs:Sierra" : 0x00000004 }
+-__map%d osfinet b size 2
+-__map%d osfinet 0
++__map%d osfip b size 2
++__map%d osfip 0
+ 	element 646e6957 3a73776f 00005058 00000000  : 00000003 0 [end]	element 4f63614d 69533a73 61727265 00000000  : 00000004 0 [end]
+-inet osfinet osfchain
++ip osfip osfchain
+   [ osf dreg 1 ]
+   [ lookup reg 1 set __map%d dreg 1 ]
+   [ ct set mark with reg 1 ]

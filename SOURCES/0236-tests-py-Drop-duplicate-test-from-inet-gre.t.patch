@@ -1,0 +1,67 @@
+From 76891e5379ac0f70d4d775be2690da46ed3685f6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: Drop duplicate test from inet/gre.t
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 7a566cb4e7b98c5f6509d9cb25d0281d5198da28
+
+commit 7a566cb4e7b98c5f6509d9cb25d0281d5198da28
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 14:22:07 2025 +0200
+
+    tests: py: Drop duplicate test from inet/gre.t
+
+    The test was duplicate since day 1. The duplicate JSON equivalent was
+    added later (semi-automated), remove it as well.
+
+    Fixes: c04ef8d104ec6 ("tests: py: add gre tests")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/gre.t      |  1 -
+ tests/py/inet/gre.t.json | 17 -----------------
+ 2 files changed, 18 deletions(-)
+
+diff --git a/tests/py/inet/gre.t b/tests/py/inet/gre.t
+index a3e046a..a21e67e 100644
+--- a/tests/py/inet/gre.t
++++ b/tests/py/inet/gre.t
+@@ -16,7 +16,6 @@ gre icmp type echo-reply;ok
+ gre ether saddr 62:87:4d:d6:19:05;fail
+ gre vlan id 10;fail
+ gre ip dscp 0x02;ok
+-gre ip dscp 0x02;ok
+ gre ip saddr . gre ip daddr { 1.2.3.4 . 4.3.2.1 };ok
+ 
+ gre ip saddr set 1.2.3.4;fail
+diff --git a/tests/py/inet/gre.t.json b/tests/py/inet/gre.t.json
+index c443176..a354e6b 100644
+--- a/tests/py/inet/gre.t.json
++++ b/tests/py/inet/gre.t.json
+@@ -121,23 +121,6 @@
+     }
+ ]
+ 
+-# gre ip dscp 0x02
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "dscp",
+-                    "protocol": "ip",
+-                    "tunnel": "gre"
+-                }
+-            },
+-            "op": "==",
+-            "right": 2
+-        }
+-    }
+-]
+-
+ # gre ip saddr . gre ip daddr { 1.2.3.4 . 4.3.2.1 }
+ [
+     {

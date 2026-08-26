@@ -1,0 +1,39 @@
+From d433a3d688bf1ad724e06c57f3a8f14ddb655855 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:13:20 +0200
+Subject: [PATCH] json: Print single set flag as non-array
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6bedb12af1658562f277ca68d74cf1e9e7433a08
+Conflicts: Dropped changes to non-existent .json-nft dumps
+
+commit 6bedb12af1658562f277ca68d74cf1e9e7433a08
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu May 8 16:39:24 2025 +0200
+
+    json: Print single set flag as non-array
+
+    The code obviously intended to do this already but got the array length
+    check wrong.
+
+    Fixes: e70354f53e9f6 ("libnftables: Implement JSON output support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/json.c b/src/json.c
+index 2a94066..c1927ab 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -189,7 +189,7 @@ static json_t *set_print_json(struct output_ctx *octx, const struct set *set)
+ 	if (set->flags & NFT_SET_EVAL)
+ 		json_array_append_new(tmp, json_pack("s", "dynamic"));
+ 
+-	if (json_array_size(tmp) > 0) {
++	if (json_array_size(tmp) > 1) {
+ 		json_object_set_new(root, "flags", tmp);
+ 	} else {
+ 		if (json_array_size(tmp))

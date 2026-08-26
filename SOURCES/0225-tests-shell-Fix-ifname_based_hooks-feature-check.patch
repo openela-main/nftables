@@ -1,0 +1,83 @@
+From a162e24506fe30a4fee1cb5738dd1a3371f883ba Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] tests: shell: Fix ifname_based_hooks feature check
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 646acfaceb1f550c982c31ba6e60996b0bb012d7
+
+commit 646acfaceb1f550c982c31ba6e60996b0bb012d7
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jun 25 18:53:36 2025 +0200
+
+    tests: shell: Fix ifname_based_hooks feature check
+
+    The test was technically incorrect: Instead of detecting whether
+    interface hooks are name-based or not, it actually tested whether
+    netdev-family chains are removed along with their last hook.
+
+    Since the latter behaviour is established in kernel commit fc0133428e7a
+    ("netfilter: nf_tables: Tolerate chains with no remaining hooks") and
+    thus independent from the name-based hooks change, treating both as the
+    same kernel feature is not acceptable.
+
+    Fix this by detecting whether a netdev-family chain may be added despite
+    specifying a non-existent interface to hook into. Keep the old check
+    around with a better name, although unused for now.
+
+    Reported-by: Florian Westphal <fw@strlen.de>
+    Fixes: f27e5abd81f29 ("tests: shell: Adjust to ifname-based hooks")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/features/empty_netdev_chains.sh | 12 ++++++++++++
+ tests/shell/features/ifname_based_hooks.sh  | 18 +++++++++---------
+ 2 files changed, 21 insertions(+), 9 deletions(-)
+ create mode 100755 tests/shell/features/empty_netdev_chains.sh
+
+diff --git a/tests/shell/features/empty_netdev_chains.sh b/tests/shell/features/empty_netdev_chains.sh
+new file mode 100755
+index 0000000..cada695
+--- /dev/null
++++ b/tests/shell/features/empty_netdev_chains.sh
+@@ -0,0 +1,12 @@
++#!/bin/bash
++
++# check if netdev chains survive without a single device
++
++unshare -n bash -c "ip link add d0 type dummy; \
++	$NFT \"table netdev t { \
++		chain c { \
++			type filter hook ingress priority 0; devices = { d0 }; \
++		}; \
++	}\"; \
++	ip link del d0; \
++	$NFT list chain netdev t c"
+diff --git a/tests/shell/features/ifname_based_hooks.sh b/tests/shell/features/ifname_based_hooks.sh
+index cada695..1f6af53 100755
+--- a/tests/shell/features/ifname_based_hooks.sh
++++ b/tests/shell/features/ifname_based_hooks.sh
+@@ -1,12 +1,12 @@
+ #!/bin/bash
+ 
+-# check if netdev chains survive without a single device
++# check if adding a netdev-family chain hooking into a non-existent device is
++# accepted or not
+ 
+-unshare -n bash -c "ip link add d0 type dummy; \
+-	$NFT \"table netdev t { \
+-		chain c { \
+-			type filter hook ingress priority 0; devices = { d0 }; \
+-		}; \
+-	}\"; \
+-	ip link del d0; \
+-	$NFT list chain netdev t c"
++RULESET="table netdev t {
++	chain c {
++		type filter hook ingress priority 0
++		devices = { foobar123 }
++	}
++}"
++unshare -n $NFT -f - <<< "$RULESET"

@@ -1,0 +1,44 @@
+From c144fcc1a60e961676850677e3f01a875ec140d0 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:43 +0200
+Subject: [PATCH] segtree: incorrect type when aggregating concatenated set
+ ranges
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit c44995e31ba60c4823bb81fecd29020452b9e702
+
+commit c44995e31ba60c4823bb81fecd29020452b9e702
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Aug 13 15:19:23 2025 +0200
+
+    segtree: incorrect type when aggregating concatenated set ranges
+
+    Uncovered by the compound_expr_remove() replacement by type safe function
+    coming after this patch.
+
+    Add expression to the concatenation which is reachable via expr_value().
+
+    This bug is subtle, I could not spot any reproducible buggy behaviour
+    when using the wrong type when running the existing tests.
+
+    Fixes: 8ac2f3b2fca3 ("src: Add support for concatenated set ranges")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index ee68ce1..291d877 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -448,7 +448,7 @@ next:
+ 			mpz_clear(range);
+ 
+ 			r2 = list_entry(r2_next, typeof(*r2), list);
+-			compound_expr_remove(start, r1);
++			compound_expr_remove(expr_value(start), r1);
+ 
+ 			if (free_r1)
+ 				expr_free(r1);

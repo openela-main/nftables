@@ -1,0 +1,92 @@
+From 8db1ee0117fd65595833d0cc78641e4c5e6f02f3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] tests: py: fix json single-flag output for fib & synproxy
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit c2ee1d5978bf6ea10e3b1a74125da5b5e8468f26
+
+commit c2ee1d5978bf6ea10e3b1a74125da5b5e8468f26
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Jun 2 14:12:16 2025 +0200
+
+    tests: py: fix json single-flag output for fib & synproxy
+
+    Blamed commits change output format but did not adjust existing tests:
+      inet/fib.t: WARNING: line 16: '{"nftables": ..
+
+    Fixes: 38f99ee84fe6 ("json: Print single synproxy flags as non-array")
+    Fixes: dbe5c44f2b89 ("json: Print single fib flag as non-array")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Acked-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/fib.t.json.output      | 32 ++++++++++++++++++++++++++++
+ tests/py/inet/synproxy.t.json.output | 17 +++++++++++++++
+ 2 files changed, 49 insertions(+)
+ create mode 100644 tests/py/inet/synproxy.t.json.output
+
+diff --git a/tests/py/inet/fib.t.json.output b/tests/py/inet/fib.t.json.output
+index 52cd46b..e21f1e7 100644
+--- a/tests/py/inet/fib.t.json.output
++++ b/tests/py/inet/fib.t.json.output
+@@ -37,3 +37,35 @@
+     }
+ ]
+ 
++# fib daddr oif exists
++[
++    {
++        "match": {
++            "left": {
++                "fib": {
++                    "flags": "daddr",
++                    "result": "oif"
++                }
++            },
++            "op": "==",
++            "right": true
++        }
++    }
++]
++
++# fib daddr oif missing
++[
++    {
++        "match": {
++            "left": {
++                "fib": {
++                    "flags": "daddr",
++                    "result": "oif"
++                }
++            },
++            "op": "==",
++            "right": false
++        }
++    }
++]
++
+diff --git a/tests/py/inet/synproxy.t.json.output b/tests/py/inet/synproxy.t.json.output
+new file mode 100644
+index 0000000..e32cdfb
+--- /dev/null
++++ b/tests/py/inet/synproxy.t.json.output
+@@ -0,0 +1,17 @@
++# synproxy timestamp
++[
++    {
++        "synproxy": {
++            "flags": "timestamp"
++        }
++    }
++]
++
++# synproxy sack-perm
++[
++    {
++        "synproxy": {
++            "flags": "sack-perm"
++        }
++    }
++]

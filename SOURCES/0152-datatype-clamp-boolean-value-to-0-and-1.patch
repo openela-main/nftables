@@ -1,0 +1,80 @@
+From 2964a54e202b5609ee0fd1f707c81a31264ac1cd Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] datatype: clamp boolean value to 0 and 1
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit afb6a8e66a11178cbdbfc152c4aa9dda961b2140
+
+commit afb6a8e66a11178cbdbfc152c4aa9dda961b2140
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Fri Jan 31 12:54:32 2025 +0100
+
+    datatype: clamp boolean value to 0 and 1
+
+    If user provides a numeric value larger than 0 or 1, match never
+    happens:
+
+     # nft --debug=netlink add rule x y tcp option sack-perm 4
+     ip x y
+      [ exthdr load tcpopt 1b @ 4 + 0 present => reg 1 ]
+      [ cmp eq reg 1 0x00000004 ]
+
+    After this update:
+
+     # nft --debug=netlink add rule x y tcp option sack-perm 4
+     ip x y
+      [ exthdr load tcpopt 1b @ 4 + 0 present => reg 1 ]
+      [ cmp eq reg 1 0x00000001 ]
+
+    This is to address a rare corner case, in case user specifies the
+    boolean value through the integer base type.
+
+    Fixes: 9fd9baba43c8 ("Introduce boolean datatype and boolean expression")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/datatype.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/src/datatype.c b/src/datatype.c
+index c94c839..6f73dd3 100644
+--- a/src/datatype.c
++++ b/src/datatype.c
+@@ -1480,11 +1480,35 @@ static const struct symbol_table boolean_tbl = {
+ 	},
+ };
+ 
++static struct error_record *boolean_type_parse(struct parse_ctx *ctx,
++					       const struct expr *sym,
++					       struct expr **res)
++{
++	struct error_record *erec;
++	int num;
++
++	erec = integer_type_parse(ctx, sym, res);
++	if (erec)
++		return erec;
++
++	if (mpz_cmp_ui((*res)->value, 0))
++		num = 1;
++	else
++		num = 0;
++
++	expr_free(*res);
++
++	*res = constant_expr_alloc(&sym->location, &boolean_type,
++				   BYTEORDER_HOST_ENDIAN, 1, &num);
++	return NULL;
++}
++
+ const struct datatype boolean_type = {
+ 	.type		= TYPE_BOOLEAN,
+ 	.name		= "boolean",
+ 	.desc		= "boolean type",
+ 	.size		= 1,
++	.parse		= boolean_type_parse,
+ 	.basetype	= &integer_type,
+ 	.sym_tbl	= &boolean_tbl,
+ 	.json		= boolean_type_json,

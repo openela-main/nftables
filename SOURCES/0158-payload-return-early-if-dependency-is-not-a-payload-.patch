@@ -1,0 +1,47 @@
+From 8dfd461d9a2ca18d67bd52e3a8aa52febd73d265 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] payload: return early if dependency is not a payload
+ expression
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 50f45c004adbab6a077609088becf62d2651101f
+
+commit 50f45c004adbab6a077609088becf62d2651101f
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Feb 25 21:13:33 2025 +0100
+
+    payload: return early if dependency is not a payload expression
+
+     if (dep->left->payload.base != PROTO_BASE_TRANSPORT_HDR)
+
+    is legal only after checking that ->left points to an
+    EXPR_PAYLOAD expression. The dependency store can also contain
+    EXPR_META, in this case we access a bogus part of the union.
+
+    The payload_may_dependency_kill_icmp helper can't handle a META
+    dep either, so return early.
+
+    Fixes: 533565244d88 ("payload: check icmp dependency before removing previous icmp expression")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/payload.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/payload.c b/src/payload.c
+index 5de3d32..25c3660 100644
+--- a/src/payload.c
++++ b/src/payload.c
+@@ -895,7 +895,8 @@ static bool payload_may_dependency_kill(struct payload_dep_ctx *ctx,
+ 	if (expr->payload.base != PROTO_BASE_TRANSPORT_HDR)
+ 		return true;
+ 
+-	if (dep->left->payload.base != PROTO_BASE_TRANSPORT_HDR)
++	if (dep->left->etype != EXPR_PAYLOAD ||
++	    dep->left->payload.base != PROTO_BASE_TRANSPORT_HDR)
+ 		return true;
+ 
+ 	if (dep->left->payload.desc == &proto_icmp)

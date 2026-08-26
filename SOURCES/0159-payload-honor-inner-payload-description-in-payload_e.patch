@@ -1,0 +1,43 @@
+From b2e4263f5ada09a10011aa3f5286ecde3e6c064b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] payload: honor inner payload description in
+ payload_expr_cmp()
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 095a084dc0adf7079409e9ff65a31cabf937e615
+
+commit 095a084dc0adf7079409e9ff65a31cabf937e615
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Feb 26 00:39:01 2025 +0100
+
+    payload: honor inner payload description in payload_expr_cmp()
+
+    payload comparison must consider inner_desc.
+
+    No test update because I could not find any specific bug related to
+    this. I found it through source code inspection.
+
+    Fixes: 772892a018b4 ("src: add vxlan matching support")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/payload.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/payload.c b/src/payload.c
+index 25c3660..f31a812 100644
+--- a/src/payload.c
++++ b/src/payload.c
+@@ -62,7 +62,8 @@ static void payload_expr_print(const struct expr *expr, struct output_ctx *octx)
+ 
+ bool payload_expr_cmp(const struct expr *e1, const struct expr *e2)
+ {
+-	return e1->payload.desc   == e2->payload.desc &&
++	return e1->payload.inner_desc == e2->payload.inner_desc &&
++	       e1->payload.desc   == e2->payload.desc &&
+ 	       e1->payload.tmpl   == e2->payload.tmpl &&
+ 	       e1->payload.base   == e2->payload.base &&
+ 	       e1->payload.offset == e2->payload.offset;

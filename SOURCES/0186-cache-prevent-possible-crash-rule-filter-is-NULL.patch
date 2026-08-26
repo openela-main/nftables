@@ -1,0 +1,53 @@
+From d2fce2f32e46ec9a15ef64fff0f3e43ed935b495 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:33 +0200
+Subject: [PATCH] cache: prevent possible crash rule filter is NULL
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 2412e760826f315ada984f7ee433a2077f180c8b
+
+commit 2412e760826f315ada984f7ee433a2077f180c8b
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Apr 1 17:36:48 2025 +0200
+
+    cache: prevent possible crash rule filter is NULL
+
+    Similar to 3f0a47f9f00c ("cache: don't crash when filter is NULL").
+
+    No real crash observed but it is good to tigthen this.
+
+    Fixes: dbff26bfba83 ("cache: consolidate reset command")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index a58c596..3c624df 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -726,6 +726,7 @@ static int rule_cache_dump(struct netlink_ctx *ctx, const struct handle *h,
+ 	const char *chain = NULL;
+ 	uint64_t rule_handle = 0;
+ 	int family = h->family;
++	bool reset = false;
+ 	bool dump = true;
+ 
+ 	if (filter) {
+@@ -739,11 +740,12 @@ static int rule_cache_dump(struct netlink_ctx *ctx, const struct handle *h,
+ 		}
+ 		if (filter->list.family)
+ 			family = filter->list.family;
++
++		reset = filter->reset.rule;
+ 	}
+ 
+ 	rule_cache = mnl_nft_rule_dump(ctx, family,
+-				       table, chain, rule_handle, dump,
+-				       filter->reset.rule);
++				       table, chain, rule_handle, dump, reset);
+ 	if (rule_cache == NULL) {
+ 		if (errno == EINTR)
+ 			return -1;

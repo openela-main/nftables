@@ -1,0 +1,42 @@
+From ebe774e477b51465c58e58599a23872b82ec644c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:09:25 +0200
+Subject: [PATCH] monitor: too large shift exponent displaying payload
+ expression
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 016f37f1268fa1003c46c66655697d3f58d86598
+
+commit 016f37f1268fa1003c46c66655697d3f58d86598
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Jun 10 19:08:20 2024 +0200
+
+    monitor: too large shift exponent displaying payload expression
+
+    ASAN reports too large shift exponent when displaying traces for raw
+    payload expression:
+
+      trace id ec23e848 ip x y packet: oif "wlan0" src/netlink.c:2100:32: runtime error: shift exponent 1431657095 is too large for 32-bit type 'int'
+
+    skip if proto_unknown_template is set on in this payload expression.
+
+    Fixes: be5d9120e81e ("nft monitor [ trace ]")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 8637186..72f4ba4 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -2082,6 +2082,7 @@ restart:
+ 		/* Skip unknown and filtered expressions */
+ 		desc = lhs->payload.desc;
+ 		if (lhs->dtype == &invalid_type ||
++		    lhs->payload.tmpl == &proto_unknown_template ||
+ 		    desc->checksum_key == payload_hdr_field(lhs) ||
+ 		    desc->format.filter & (1 << payload_hdr_field(lhs))) {
+ 			expr_free(lhs);

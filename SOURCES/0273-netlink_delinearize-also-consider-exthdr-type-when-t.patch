@@ -1,0 +1,144 @@
+From 0fa73aa3252123a2632b11f2bdcd3c17d1484094 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] netlink_delinearize: also consider exthdr type when trimming
+ binops
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 01fe0f07a0ed9b3882fed82dcdfbae0ab1a3b04e
+
+commit 01fe0f07a0ed9b3882fed82dcdfbae0ab1a3b04e
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Feb 27 15:52:09 2025 +0100
+
+    netlink_delinearize: also consider exthdr type when trimming binops
+
+    This allows trimming the binop for exthdrs, this will make nft render
+       (tcp option mptcp unknown & 240) >> 4 . ip saddr @s1
+
+    as
+        tcp option mptcp subtype . ip saddr @s1
+
+    Also extend the typeof set tests with a set concatenating a
+    sub-byte-sized exthdr expression with a payload one.
+
+    The additional call to expr_postprocess() is needed, without this,
+    typeof_sets_0.nft fails because
+      frag frag-off @s4 accept
+
+    is shown as
+     meta nfproto ipv6 frag frag-off @s4 accept
+
+    Previouly, EXPR_EXTHDR would cause payload_binop_postprocess()
+    to return false which will then make the caller invoke
+    expr_postprocess(), but after handling EXPR_EXTHDR this doesn't happen
+    anymore.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink_delinearize.c                     | 10 +++++++++-
+ .../testcases/sets/dumps/typeof_sets_0.nft    | 10 ++++++++++
+ tests/shell/testcases/sets/typeof_sets_0      | 19 +++++++++++++++++++
+ 3 files changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index 95bc7a3..a0c6ac8 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -2610,8 +2610,16 @@ static bool payload_binop_postprocess(struct rule_pp_ctx *ctx,
+ 	if (expr->left->etype != EXPR_BINOP || expr->left->op != OP_AND)
+ 		return false;
+ 
+-	if (expr->left->left->etype != EXPR_PAYLOAD)
++	switch (expr->left->left->etype) {
++	case EXPR_EXTHDR:
++		break;
++	case EXPR_PAYLOAD:
++		break;
++	default:
+ 		return false;
++	}
++
++	expr_postprocess(ctx, &expr->left->left);
+ 
+ 	expr_set_type(expr->right, &integer_type,
+ 		      BYTEORDER_HOST_ENDIAN);
+diff --git a/tests/shell/testcases/sets/dumps/typeof_sets_0.nft b/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
+index ed45d84..34aaab6 100644
+--- a/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
++++ b/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
+@@ -65,6 +65,12 @@ table inet t {
+ 		elements = { mp-join, dss }
+ 	}
+ 
++	set s14 {
++		typeof tcp option mptcp subtype . ip daddr
++		elements = { remove-addr . 10.1.1.1,
++			     mp-join . 10.1.1.2 }
++	}
++
+ 	chain c1 {
+ 		osf name @s1 accept
+ 	}
+@@ -112,4 +118,8 @@ table inet t {
+ 	chain c13 {
+ 		tcp option mptcp subtype @s13 accept
+ 	}
++
++	chain c14 {
++		tcp option mptcp subtype . ip saddr @s14 accept
++	}
+ }
+diff --git a/tests/shell/testcases/sets/typeof_sets_0 b/tests/shell/testcases/sets/typeof_sets_0
+index 06c2f63..dbe7054 100755
+--- a/tests/shell/testcases/sets/typeof_sets_0
++++ b/tests/shell/testcases/sets/typeof_sets_0
+@@ -104,6 +104,11 @@ INPUT="table inet t {$INPUT_OSF_SET
+ 		typeof tcp option mptcp subtype
+ 		elements = { mp-join, dss }
+ 	}
++
++	set s14 {
++		typeof tcp option mptcp subtype . ip daddr
++		elements = { remove-addr . 10.1.1.1, mp-join . 10.1.1.2 }
++	}
+ $INPUT_OSF_CHAIN
+ 	chain c2 {
+ 		ether type vlan vlan id @s2 accept
+@@ -144,6 +149,10 @@ $INPUT_SCTP_CHAIN
+ 	chain c13 {
+ 		tcp option mptcp subtype @s13 accept
+ 	}
++
++	chain c14 {
++		tcp option mptcp subtype . ip saddr @s14 accept
++	}
+ }"
+ 
+ EXPECTED="table inet t {$INPUT_OSF_SET
+@@ -207,6 +216,12 @@ EXPECTED="table inet t {$INPUT_OSF_SET
+ 		typeof tcp option mptcp subtype
+ 		elements = { mp-join, dss }
+ 	}
++
++	set s14 {
++		typeof tcp option mptcp subtype . ip daddr
++		elements = { remove-addr . 10.1.1.1,
++			     mp-join . 10.1.1.2 }
++	}
+ $INPUT_OSF_CHAIN
+ 	chain c2 {
+ 		vlan id @s2 accept
+@@ -247,6 +262,10 @@ $INPUT_SCTP_CHAIN
+ 	chain c13 {
+ 		tcp option mptcp subtype @s13 accept
+ 	}
++
++	chain c14 {
++		tcp option mptcp subtype . ip saddr @s14 accept
++	}
+ }"
+ 
+ 

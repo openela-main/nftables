@@ -1,0 +1,41 @@
+From 9ea93637ba7186ec1486d1b8a32e6b0cc97eae0c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:19:33 +0200
+Subject: [PATCH] json: complete multi-statement set element support
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 14dc90737a57bd1c6dc0ebc3eb30ab3090cc0afb
+Conflicts: Dropped changes to non-existent .json-nft dumps
+
+commit 14dc90737a57bd1c6dc0ebc3eb30ab3090cc0afb
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Feb 16 12:26:45 2026 +0100
+
+    json: complete multi-statement set element support
+
+    Remove artificial limitation on the maximum number of statements per
+    element in listings.
+
+    Moreover, update tests/shell which are currently incorrect.
+
+    Fixes: e6d1d0d61195 ("src: add set element multi-statement support")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/json.c b/src/json.c
+index 340c2cc..e26adce 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -732,8 +732,6 @@ json_t *set_elem_expr_json(const struct expr *expr, struct output_ctx *octx)
+ 			/* XXX: detect and complain about clashes? */
+ 			json_object_update_missing(root, tmp);
+ 			json_decref(tmp);
+-			/* TODO: only one statement per element. */
+-			break;
+ 		}
+ 		return nft_json_pack("{s:o}", "elem", root);
+ 	}

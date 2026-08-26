@@ -1,0 +1,52 @@
+From 27fad9ad7d048138ec595a197d9408d5cf3b7195 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:22 +0200
+Subject: [PATCH] cache: honor -c/--check for reset commands
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 25f2ff13cf6bc84a16febddcf8c3eda2018c7ece
+
+commit 25f2ff13cf6bc84a16febddcf8c3eda2018c7ece
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon May 11 21:51:43 2026 +0200
+
+    cache: honor -c/--check for reset commands
+
+    Currently:
+
+      nft -c reset rules ip x
+
+    ignores -c/--check.
+
+    The reset and list commands use the netlink GET/DUMP nfnetlink API which
+    provides no check semantics, compared to the NEW/DELETE nfnetlink batch
+    API which indeed does.
+
+    Emulate -c/--check for the reset command by handling this as a list
+    command, so the state of the objects is just listed, not reset. This
+    allows to check for presence and dump the content of the objects.
+
+    Fixes: dbff26bfba83 ("cache: consolidate reset command")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index cac6421..c33811a 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -522,7 +522,10 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 			flags = evaluate_cache_get(cmd, flags);
+ 			break;
+ 		case CMD_RESET:
+-			flags = evaluate_cache_reset(cmd, flags, filter);
++			if (nft->check)
++				flags = evaluate_cache_list(nft, cmd, flags, filter);
++			else
++				flags = evaluate_cache_reset(cmd, flags, filter);
+ 			break;
+ 		case CMD_LIST:
+ 			flags = evaluate_cache_list(nft, cmd, flags, filter);

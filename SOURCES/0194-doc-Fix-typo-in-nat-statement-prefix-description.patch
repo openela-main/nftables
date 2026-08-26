@@ -1,0 +1,37 @@
+From 81c1ea7dd7b429b7c4215cb762c1ca075400be10 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:13:20 +0200
+Subject: [PATCH] doc: Fix typo in nat statement 'prefix' description
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 1b3c33a7931967fb7afe4efdf68deb7781786489
+
+commit 1b3c33a7931967fb7afe4efdf68deb7781786489
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu May 8 16:35:47 2025 +0200
+
+    doc: Fix typo in nat statement 'prefix' description
+
+    No point in repeating 'to map' here.
+
+    Fixes: 19d73ccdd39fa ("doc: add nat examples")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/statements.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/doc/statements.txt b/doc/statements.txt
+index 834adb2..fbd01af 100644
+--- a/doc/statements.txt
++++ b/doc/statements.txt
+@@ -428,7 +428,7 @@ Before kernel 4.18 nat statements require both prerouting and postrouting base c
+ to be present since otherwise packets on the return path won't be seen by
+ netfilter and therefore no reverse translation will take place.
+ 
+-The optional *prefix* keyword allows to map to map *n* source addresses to *n*
++The optional *prefix* keyword allows to map *n* source addresses to *n*
+ destination addresses.  See 'Advanced NAT examples' below.
+ 
+ .NAT statement values

@@ -1,0 +1,81 @@
+From 0ef6256eae2581795a6aa9070876ae4d909c7f50 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] netlink: fix stack overflow due to erroneous rounding
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b9e19cc396347df8c7f8cf5d14ba1d6172040f16
+
+commit b9e19cc396347df8c7f8cf5d14ba1d6172040f16
+Author: Florian Westphal <fw@strlen.de>
+Date:   Wed Dec 20 15:40:54 2023 +0100
+
+    netlink: fix stack overflow due to erroneous rounding
+
+    Byteorder switch in this function may undersize the conversion
+    buffer by one byte, this needs to use div_round_up().
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c                                         | 11 ++++++++---
+ .../bogons/nft-f/byteorder_switch_stack_overflow      |  6 ++++++
+ 2 files changed, 14 insertions(+), 3 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/byteorder_switch_stack_overflow
+
+diff --git a/src/netlink.c b/src/netlink.c
+index a366758..8637186 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -254,6 +254,11 @@ static int netlink_export_pad(unsigned char *data, const mpz_t v,
+ 	return netlink_padded_len(i->len) / BITS_PER_BYTE;
+ }
+ 
++static void byteorder_switch_expr_value(mpz_t v, const struct expr *e)
++{
++	mpz_switch_byteorder(v, div_round_up(e->len, BITS_PER_BYTE));
++}
++
+ static int __netlink_gen_concat_key(uint32_t flags, const struct expr *i,
+ 				    unsigned char *data)
+ {
+@@ -268,7 +273,7 @@ static int __netlink_gen_concat_key(uint32_t flags, const struct expr *i,
+ 
+ 		if (expr_basetype(expr)->type == TYPE_INTEGER &&
+ 		    expr->byteorder == BYTEORDER_HOST_ENDIAN)
+-			mpz_switch_byteorder(expr->value, expr->len / BITS_PER_BYTE);
++			byteorder_switch_expr_value(expr->value, expr);
+ 
+ 		i = expr;
+ 		break;
+@@ -280,7 +285,7 @@ static int __netlink_gen_concat_key(uint32_t flags, const struct expr *i,
+ 			mpz_init_bitmask(v, i->len - i->prefix_len);
+ 
+ 			if (i->byteorder == BYTEORDER_HOST_ENDIAN)
+-				mpz_switch_byteorder(v, i->len / BITS_PER_BYTE);
++				byteorder_switch_expr_value(v, i);
+ 
+ 			mpz_add(v, i->prefix->value, v);
+ 			count = netlink_export_pad(data, v, i);
+@@ -298,7 +303,7 @@ static int __netlink_gen_concat_key(uint32_t flags, const struct expr *i,
+ 		expr = (struct expr *)i;
+ 		if (expr_basetype(expr)->type == TYPE_INTEGER &&
+ 		    expr->byteorder == BYTEORDER_HOST_ENDIAN)
+-			mpz_switch_byteorder(expr->value, expr->len / BITS_PER_BYTE);
++			byteorder_switch_expr_value(expr->value, expr);
+ 		break;
+ 	default:
+ 		BUG("invalid expression type '%s' in set", expr_ops(i)->name);
+diff --git a/tests/shell/testcases/bogons/nft-f/byteorder_switch_stack_overflow b/tests/shell/testcases/bogons/nft-f/byteorder_switch_stack_overflow
+new file mode 100644
+index 0000000..0164052
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/byteorder_switch_stack_overflow
+@@ -0,0 +1,6 @@
++table inet x {
++	chain nat_dns_acme {
++		udp length . @th,260,118 vmap { 47-63 . 0xe373135363130333131303735353203 : goto nat_dns_dnstc, }
++		drop
++	}
++}

@@ -1,0 +1,77 @@
+From 1a6c930476d44c9e6ee77b71a9acbb03881eba8f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] src: BASECHAIN flag no longer implies presence of priority
+ expression
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 44ea1936463728475768861073ca4ba34a5c2f75
+
+commit 44ea1936463728475768861073ca4ba34a5c2f75
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Jun 12 20:17:15 2025 +0200
+
+    src: BASECHAIN flag no longer implies presence of priority expression
+
+    The included bogon will crash nft because print side assumes that BASECHAIN
+    flag presence also means that priority expression is available.
+
+    Make the print side conditional.
+
+    Fixes: a66b5ad9540d ("src: allow for updating devices on existing netdev chain")
+    Suggested-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c                                       | 16 ++++++++++------
+ .../bogons/nft-f/null_ingress_type_crash         |  6 ++++++
+ 2 files changed, 16 insertions(+), 6 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/null_ingress_type_crash
+
+diff --git a/src/rule.c b/src/rule.c
+index 6f247a1..9a54a99 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -1045,8 +1045,10 @@ static void chain_print_declaration(const struct chain *chain,
+ 		nft_print(octx, "\n\t\tcomment \"%s\"", chain->comment);
+ 	nft_print(octx, "\n");
+ 	if (chain->flags & CHAIN_F_BASECHAIN) {
+-		nft_print(octx, "\t\ttype %s hook %s", chain->type.str,
+-			  hooknum2str(chain->handle.family, chain->hook.num));
++		if (chain->type.str)
++			nft_print(octx, "\t\ttype %s hook %s", chain->type.str,
++				  hooknum2str(chain->handle.family, chain->hook.num));
++
+ 		if (chain->dev_array_len == 1) {
+ 			nft_print(octx, " device \"%s\"", chain->dev_array[0]);
+ 		} else if (chain->dev_array_len > 1) {
+@@ -1058,10 +1060,12 @@ static void chain_print_declaration(const struct chain *chain,
+ 			}
+ 			nft_print(octx, " }");
+ 		}
+-		nft_print(octx, " priority %s;",
+-			  prio2str(octx, priobuf, sizeof(priobuf),
+-				   chain->handle.family, chain->hook.num,
+-				   chain->priority.expr));
++
++		if (chain->priority.expr)
++			nft_print(octx, " priority %s;",
++				  prio2str(octx, priobuf, sizeof(priobuf),
++					   chain->handle.family, chain->hook.num,
++					   chain->priority.expr));
+ 		if (chain->policy) {
+ 			mpz_export_data(&policy, chain->policy->value,
+ 					BYTEORDER_HOST_ENDIAN, sizeof(int));
+diff --git a/tests/shell/testcases/bogons/nft-f/null_ingress_type_crash b/tests/shell/testcases/bogons/nft-f/null_ingress_type_crash
+new file mode 100644
+index 0000000..2ed88af
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/null_ingress_type_crash
+@@ -0,0 +1,6 @@
++table netdev filter1 {
++	chain c {
++		devices = { lo }
++	}
++}
++list ruleset

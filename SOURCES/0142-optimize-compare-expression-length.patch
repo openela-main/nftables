@@ -1,0 +1,61 @@
+From 673238f2b9afd60196bb5c4a3be0c3632ddf52d1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:44 +0200
+Subject: [PATCH] optimize: compare expression length
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit bc0311378285d41850e3508df905d75959ba4239
+
+commit bc0311378285d41850e3508df905d75959ba4239
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Nov 18 12:44:06 2024 +0100
+
+    optimize: compare expression length
+
+    do not merge raw payload expressions with different length.
+
+    Other expression rely on key comparison which is assumed to have the
+    same length already.
+
+    Fixes: 60dcc01d6351 ("optimize: add __expr_cmp()")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c                                      |  2 ++
+ .../testcases/optimizations/nomerge_raw_payload     | 13 +++++++++++++
+ 2 files changed, 15 insertions(+)
+ create mode 100755 tests/shell/testcases/optimizations/nomerge_raw_payload
+
+diff --git a/src/optimize.c b/src/optimize.c
+index 9f0965c..8024590 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -38,6 +38,8 @@ static bool __expr_cmp(const struct expr *expr_a, const struct expr *expr_b)
+ {
+ 	if (expr_a->etype != expr_b->etype)
+ 		return false;
++	if (expr_a->len != expr_b->len)
++		return false;
+ 
+ 	switch (expr_a->etype) {
+ 	case EXPR_PAYLOAD:
+diff --git a/tests/shell/testcases/optimizations/nomerge_raw_payload b/tests/shell/testcases/optimizations/nomerge_raw_payload
+new file mode 100755
+index 0000000..bb8678a
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/nomerge_raw_payload
+@@ -0,0 +1,13 @@
++#!/bin/bash
++
++set -e
++
++RULESET="table ip x {
++        chain y {
++                type filter hook prerouting priority raw; policy accept;
++                @th,160,32 0x02736c00 drop comment \"sl\"
++                @th,160,112 0x870697a7a6173656f03636f6d00 drop comment \"pizzaseo.com\"
++        }
++}"
++
++$NFT -o -f - <<< $RULESET

@@ -1,0 +1,51 @@
+From e6e30f10da2708b692c5c5ec00db9343878e03ab Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] cache: reset filter for each command
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 29cb49d0ca92b840938823dec697d8c5488d7253
+
+commit 29cb49d0ca92b840938823dec697d8c5488d7253
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Aug 26 10:18:34 2024 +0200
+
+    cache: reset filter for each command
+
+    Inconditionally reset filter for each command in the batch, this is safer.
+
+    Fixes: 3f1d3912c3a6 ("cache: filter out tables that are not requested")
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 42e60df..365431e 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -407,6 +407,11 @@ err_name_too_long:
+ 	return -1;
+ }
+ 
++static void reset_filter(struct nft_cache_filter *filter)
++{
++	memset(&filter->list, 0, sizeof(filter->list));
++}
++
+ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 		       struct list_head *msgs, struct nft_cache_filter *filter,
+ 		       unsigned int *pflags)
+@@ -418,8 +423,7 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 		if (nft_handle_validate(cmd, msgs) < 0)
+ 			return -1;
+ 
+-		if (filter->list.table && cmd->op != CMD_LIST)
+-			memset(&filter->list, 0, sizeof(filter->list));
++		reset_filter(filter);
+ 
+ 		switch (cmd->op) {
+ 		case CMD_ADD:

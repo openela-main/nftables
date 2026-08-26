@@ -1,0 +1,42 @@
+From 490ad53a45cf8ebc2635486a3620a5dfa3f6c29a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:05 +0200
+Subject: [PATCH] segtree: Fix for variable-sized object may not be initialized
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 96ba00889f9d4932d8bc2b08461f05793a9a2ac4
+
+commit 96ba00889f9d4932d8bc2b08461f05793a9a2ac4
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Mar 18 22:05:34 2026 +0100
+
+    segtree: Fix for variable-sized object may not be initialized
+
+    Seen with gcc-11.5.0 on an aarch64 machine, build failed. Looking at the
+    code, r1len (or r1->len, actually) really seems variable. So use
+    memset() and fix build for that older compiler version at least.
+
+    Fixes: e8b17865833b8 ("segtree: Fix range aggregation on Big Endian")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Acked-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index b8ec99c..5924460 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -411,8 +411,9 @@ void concat_range_aggregate(struct expr *set)
+ 			    string_type) {
+ 				unsigned int r1len = div_round_up(r1->len, BITS_PER_BYTE);
+ 				unsigned int str_len = prefix_len / BITS_PER_BYTE;
+-				char data[r1len + 1] = {};
++				char data[r1len + 1];
+ 
++				memset(data, 0, r1len + 1);
+ 				mpz_export_data(data, r1->value, BYTEORDER_HOST_ENDIAN, r1len);
+ 				data[str_len] = '*';
+ 

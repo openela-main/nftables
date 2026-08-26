@@ -1,0 +1,180 @@
+From 3e8c6761ca0584071c7cfb2260050bae62e06487 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:20 +0200
+Subject: [PATCH] optimize: compact bitmask matching in set/map
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 447ac8a3e13f4706b0900d26c5c89dfcaa6773aa
+
+commit 447ac8a3e13f4706b0900d26c5c89dfcaa6773aa
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Mar 26 21:54:06 2025 +0100
+
+    optimize: compact bitmask matching in set/map
+
+    Check if right hand side of relational is a bitmask, ie.
+
+         relational
+           /   \
+        ...     or
+               /  \
+           value   or
+                  /  \
+             value    value
+
+    then, if left hand side is a binop expression, compare left and right
+    hand sides (not only left hand of this binop expression) to check for
+    redundant matches in consecutive rules, ie.
+
+            relational
+              /   \
+           and     ...
+          /   \
+     payload  value
+
+    before this patch, only payload in the binop expression was compared.
+
+    This allows to compact several rules matching tcp flags in a set/map, eg.
+
+     # nft -c -o -f ruleset.nft
+     Merging:
+     ruleset.nft:7:17-76:                 tcp flags & (fin | syn | rst | ack | urg) == fin | ack | urg
+     ruleset.nft:8:17-70:                 tcp flags & (fin | syn | rst | ack | urg) == fin | ack
+     ruleset.nft:9:17-64:                 tcp flags & (fin | syn | rst | ack | urg) == fin
+     ruleset.nft:10:17-70:                 tcp flags & (fin | syn | rst | ack | urg) == syn | ack
+     ruleset.nft:11:17-64:                 tcp flags & (fin | syn | rst | ack | urg) == syn
+     ruleset.nft:12:17-70:                 tcp flags & (fin | syn | rst | ack | urg) == rst | ack
+     ruleset.nft:13:17-64:                 tcp flags & (fin | syn | rst | ack | urg) == rst
+     ruleset.nft:14:17-70:                 tcp flags & (fin | syn | rst | ack | urg) == ack | urg
+     ruleset.nft:15:17-64:                 tcp flags & (fin | syn | rst | ack | urg) == ack
+     into:
+            tcp flags & (fin | syn | rst | ack | urg) == { fin | ack | urg, fin | ack, fin, syn | ack, syn, rst | ack, rst, ack | urg, ack }
+     Merging:
+     ruleset.nft:17:17-61:                 tcp flags & (ack | urg) == ack jump ack_chain
+     ruleset.bft:18:17-61:                 tcp flags & (ack | urg) == urg jump urg_chain
+     into:
+            tcp flags & (ack | urg) vmap { ack : jump ack_chain, urg : jump urg_chain }
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c                                | 35 ++++++++++++++++++-
+ tests/shell/testcases/optimizations/bitmask   | 26 ++++++++++++++
+ .../testcases/optimizations/dumps/bitmask.nft | 14 ++++++++
+ 3 files changed, 74 insertions(+), 1 deletion(-)
+ create mode 100755 tests/shell/testcases/optimizations/bitmask
+ create mode 100644 tests/shell/testcases/optimizations/dumps/bitmask.nft
+
+diff --git a/src/optimize.c b/src/optimize.c
+index 8024590..c4295f9 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -125,7 +125,17 @@ static bool __expr_cmp(const struct expr *expr_a, const struct expr *expr_b)
+ 			return false;
+ 		break;
+ 	case EXPR_BINOP:
+-		return __expr_cmp(expr_a->left, expr_b->left);
++		if (!__expr_cmp(expr_a->left, expr_b->left))
++			return false;
++
++		return __expr_cmp(expr_a->right, expr_b->right);
++	case EXPR_SYMBOL:
++		if (expr_a->symtype != expr_b->symtype)
++			return false;
++		if (expr_a->symtype != SYMBOL_VALUE)
++			return false;
++
++		return !strcmp(expr_a->identifier, expr_b->identifier);
+ 	default:
+ 		return false;
+ 	}
+@@ -133,6 +143,25 @@ static bool __expr_cmp(const struct expr *expr_a, const struct expr *expr_b)
+ 	return true;
+ }
+ 
++static bool is_bitmask(const struct expr *expr)
++{
++	switch (expr->etype) {
++	case EXPR_BINOP:
++		if (expr->op == OP_OR &&
++		    !is_bitmask(expr->left))
++			return false;
++
++		return is_bitmask(expr->right);
++	case EXPR_VALUE:
++	case EXPR_SYMBOL:
++		return true;
++	default:
++		break;
++	}
++
++	return false;
++}
++
+ static bool stmt_expr_supported(const struct expr *expr)
+ {
+ 	switch (expr->right->etype) {
+@@ -143,6 +172,10 @@ static bool stmt_expr_supported(const struct expr *expr)
+ 	case EXPR_LIST:
+ 	case EXPR_VALUE:
+ 		return true;
++	case EXPR_BINOP:
++		if (is_bitmask(expr->right))
++			return true;
++		break;
+ 	default:
+ 		break;
+ 	}
+diff --git a/tests/shell/testcases/optimizations/bitmask b/tests/shell/testcases/optimizations/bitmask
+new file mode 100755
+index 0000000..064d956
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/bitmask
+@@ -0,0 +1,26 @@
++#!/bin/bash
++
++set -e
++
++RULESET='table inet t {
++	chain ack_chain {}
++	chain urg_chain {}
++
++        chain c {
++                tcp flags & (syn | rst | ack | urg) == ack | urg
++                tcp flags & (fin | syn | rst | ack | urg) == fin | ack | urg
++                tcp flags & (fin | syn | rst | ack | urg) == fin | ack
++                tcp flags & (fin | syn | rst | ack | urg) == fin
++                tcp flags & (fin | syn | rst | ack | urg) == syn | ack
++                tcp flags & (fin | syn | rst | ack | urg) == syn
++                tcp flags & (fin | syn | rst | ack | urg) == rst | ack
++                tcp flags & (fin | syn | rst | ack | urg) == rst
++                tcp flags & (fin | syn | rst | ack | urg) == ack | urg
++                tcp flags & (fin | syn | rst | ack | urg) == ack
++                tcp flags & (rst | ack | urg) == rst | ack
++                tcp flags & (ack | urg) == ack jump ack_chain
++                tcp flags & (ack | urg) == urg jump urg_chain
++        }
++}'
++
++$NFT -o -f - <<< $RULESET
+diff --git a/tests/shell/testcases/optimizations/dumps/bitmask.nft b/tests/shell/testcases/optimizations/dumps/bitmask.nft
+new file mode 100644
+index 0000000..758b32a
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/dumps/bitmask.nft
+@@ -0,0 +1,14 @@
++table inet t {
++	chain ack_chain {
++	}
++
++	chain urg_chain {
++	}
++
++	chain c {
++		tcp flags & (syn | rst | ack | urg) == ack | urg
++		tcp flags & (fin | syn | rst | ack | urg) == { fin | ack | urg, fin | ack, fin, syn | ack, syn, rst | ack, rst, ack | urg, ack }
++		tcp flags & (rst | ack | urg) == rst | ack
++		tcp flags & (ack | urg) vmap { ack : jump ack_chain, urg : jump urg_chain }
++	}
++}

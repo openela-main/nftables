@@ -1,0 +1,70 @@
+From 0e06c0f34882d70f4cb8242dfa3653f5f325378a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: Drop stale entry from ip/snat.t.json
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 71d90776fc56b14250f2306c4e19b50c23bd3ae3
+
+commit 71d90776fc56b14250f2306c4e19b50c23bd3ae3
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 15:03:29 2025 +0200
+
+    tests: py: Drop stale entry from ip/snat.t.json
+
+    The test syntax was changed, but the respective JSON equivalent remained
+    in place.
+
+    Fixes: 9b169bfc650eb ("src: remove STMT_NAT_F_INTERVAL flags and interval keyword")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/ip/snat.t.json | 33 ---------------------------------
+ 1 file changed, 33 deletions(-)
+
+diff --git a/tests/py/ip/snat.t.json b/tests/py/ip/snat.t.json
+index 967560e..60bd093 100644
+--- a/tests/py/ip/snat.t.json
++++ b/tests/py/ip/snat.t.json
+@@ -283,39 +283,6 @@
+     }
+ ]
+ 
+-# snat ip interval to ip saddr map { 10.141.11.4 : 192.168.2.2-192.168.2.4 }
+-[
+-    {
+-        "snat": {
+-            "addr": {
+-                "map": {
+-                    "data": {
+-                        "set": [
+-                            [
+-                                "10.141.11.4",
+-                                {
+-                                    "range": [
+-                                        "192.168.2.2",
+-                                        "192.168.2.4"
+-                                    ]
+-                                }
+-                            ]
+-                        ]
+-                    },
+-                    "key": {
+-                        "payload": {
+-                            "field": "saddr",
+-                            "protocol": "ip"
+-                        }
+-                    }
+-                }
+-            },
+-            "family": "ip",
+-            "type_flags": "interval"
+-        }
+-    }
+-]
+-
+ # snat ip prefix to ip saddr map { 10.141.11.0/24 : 192.168.2.0/24 }
+ [
+     {

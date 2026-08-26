@@ -1,0 +1,64 @@
+From a7072eb98d9549db87c4d76eb6ca3556728277b5 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] rule: fix sym refcount assertion
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b73298405cda74b3a87a1818bb92f53298d34170
+
+commit b73298405cda74b3a87a1818bb92f53298d34170
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Jan 15 14:27:15 2024 +0100
+
+    rule: fix sym refcount assertion
+
+    Scope release must happen last.
+    afl provided a reproducer where policy is a define, because
+    scope is released too early we get:
+    nft: src/rule.c:559: scope_release: Assertion `sym->refcnt == 1' failed.
+
+    ... because chain->policy is EXPR_SYMBOL.
+
+    Fixes: 627c451b2351 ("src: allow variables in the chain priority specification")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c                                              | 6 +++++-
+ tests/shell/testcases/bogons/nft-f/define_policy_assert | 3 +++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/define_policy_assert
+
+diff --git a/src/rule.c b/src/rule.c
+index 633fae7..e2d972c 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -729,7 +729,6 @@ void chain_free(struct chain *chain)
+ 	list_for_each_entry_safe(rule, next, &chain->rules, list)
+ 		rule_free(rule);
+ 	handle_free(&chain->handle);
+-	scope_release(&chain->scope);
+ 	free_const(chain->type.str);
+ 	expr_free(chain->dev_expr);
+ 	for (i = 0; i < chain->dev_array_len; i++)
+@@ -738,6 +737,11 @@ void chain_free(struct chain *chain)
+ 	expr_free(chain->priority.expr);
+ 	expr_free(chain->policy);
+ 	free_const(chain->comment);
++
++	/* MUST be released after all expressions, they could
++	 * hold refcounts.
++	 */
++	scope_release(&chain->scope);
+ 	free(chain);
+ }
+ 
+diff --git a/tests/shell/testcases/bogons/nft-f/define_policy_assert b/tests/shell/testcases/bogons/nft-f/define_policy_assert
+new file mode 100644
+index 0000000..f1e58b5
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/define_policy_assert
+@@ -0,0 +1,3 @@
++chain y x { priority filter
++define p = foo
++policy $p

@@ -1,0 +1,53 @@
+From 1a81b2faa37e30603561d4b10ac007dc29e509b1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] src: improve error reporting for destroy command
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f27f032b8da584d4447dc03b3ccd3370433e2c0f
+
+commit f27f032b8da584d4447dc03b3ccd3370433e2c0f
+Author: 谢致邦 (XIE Zhibang) <Yeking@Red54.com>
+Date:   Wed Feb 21 15:17:09 2024 +0000
+
+    src: improve error reporting for destroy command
+
+    Example for older kernels (<6.3):
+    nft destroy table ip missingtable
+
+    Before:
+    Error: Could not process rule: Invalid argument
+
+    After:
+    Error: "destroy" command is not supported, perhaps kernel support is
+    missing?
+
+    Fixes: e1dfd5cc4c46 ("src: add support to command "destroy"")
+    Signed-off-by: 谢致邦 (XIE Zhibang) <Yeking@Red54.com>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cmd.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/cmd.c b/src/cmd.c
+index 68c476c..21533e0 100644
+--- a/src/cmd.c
++++ b/src/cmd.c
+@@ -311,6 +311,12 @@ void nft_cmd_error(struct netlink_ctx *ctx, struct cmd *cmd,
+ 		break;
+ 	}
+ 
++	if (cmd->op == CMD_DESTROY && err->err == EINVAL) {
++		netlink_io_error(ctx, loc,
++				 "\"destroy\" command is not supported, perhaps kernel support is missing?");
++		return;
++	}
++
+ 	netlink_io_error(ctx, loc, "Could not process rule: %s",
+ 			 strerror(err->err));
+ }

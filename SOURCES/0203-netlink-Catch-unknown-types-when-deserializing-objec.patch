@@ -1,0 +1,41 @@
+From 2de3fcf082ef827a5e337958b9145c08b3f334b0 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:03 +0200
+Subject: [PATCH] netlink: Catch unknown types when deserializing objects
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 690f19eadde5cb607ec3d8d471c86d558c7229bd
+
+commit 690f19eadde5cb607ec3d8d471c86d558c7229bd
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri May 16 19:41:19 2025 +0200
+
+    netlink: Catch unknown types when deserializing objects
+
+    Print an error message and discard the object instead of returning it to
+    the caller. At least when trying to print it, we would hit an assert()
+    in obj_type_name() anyway.
+
+    Fixes: 4756d92e517ae ("src: listing of stateful objects")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 1007571..bf2cf53 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -1769,6 +1769,10 @@ struct obj *netlink_delinearize_obj(struct netlink_ctx *ctx,
+ 		obj->synproxy.flags =
+ 			nftnl_obj_get_u32(nlo, NFTNL_OBJ_SYNPROXY_FLAGS);
+ 		break;
++	default:
++		netlink_io_error(ctx, NULL, "Unknown object type %u", type);
++		obj_free(obj);
++		return NULL;
+ 	}
+ 	obj->type = type;
+ 

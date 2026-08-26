@@ -1,0 +1,41 @@
+From 8105f96d1a3c8e8f0294b35af4a45fe8fe1c7d3b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] rule: skip CMD_OBJ_SETELEMS with no elements after set flush
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 8b7a533f8f8b276bfa71dcb306d6857e54015234
+
+commit 8b7a533f8f8b276bfa71dcb306d6857e54015234
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Nov 20 00:41:13 2025 +0100
+
+    rule: skip CMD_OBJ_SETELEMS with no elements after set flush
+
+    Set declaration + set flush results in a crash because CMD_OBJ_SETELEMS
+    does not expect no elements. This internal command only shows up if set
+    contains elements, however, evaluation flushes set content after the set
+    expansion. Skip this command CMD_OBJ_SETELEMS if set is empty.
+
+    Fixes: d3c8051cb767 ("rule: rework CMD_OBJ_SETELEMS logic")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/rule.c b/src/rule.c
+index f64cd68..30c3a87 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -1476,6 +1476,9 @@ static int do_add_setelems(struct netlink_ctx *ctx, struct cmd *cmd,
+ {
+ 	struct set *set = cmd->set;
+ 
++	if (!set->init)
++		return 0;
++
+ 	return __do_add_elements(ctx, cmd, set, set->init, flags);
+ }
+ 

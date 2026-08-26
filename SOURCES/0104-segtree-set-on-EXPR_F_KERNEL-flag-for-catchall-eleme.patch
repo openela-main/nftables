@@ -1,0 +1,43 @@
+From a49ad23fb841de5c9c7debd135eb3cb8fe47d444 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:08 +0200
+Subject: [PATCH] segtree: set on EXPR_F_KERNEL flag for catchall elements in
+ the cache
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit dc6950a80110d6e6f63bd6f5c308d202db698f46
+
+commit dc6950a80110d6e6f63bd6f5c308d202db698f46
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jul 4 14:35:07 2024 +0200
+
+    segtree: set on EXPR_F_KERNEL flag for catchall elements in the cache
+
+    Catchall set element deletion requires this flag to be set on,
+    otherwise it bogusly reports that such element does not exist
+    in the set.
+
+    Fixes: f1cc44edb218 ("src: add EXPR_F_KERNEL to identify expression in the kernel")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index 7d246de..c5f27c9 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -653,8 +653,10 @@ void interval_map_decompose(struct expr *set)
+ 	expr_free(i);
+ 
+ out:
+-	if (catchall)
++	if (catchall) {
++		catchall->flags |= EXPR_F_KERNEL;
+ 		compound_expr_add(set, catchall);
++	}
+ 
+ 	free(ranges);
+ 	free(elements);

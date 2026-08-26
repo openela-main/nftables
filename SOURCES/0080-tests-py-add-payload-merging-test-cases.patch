@@ -1,0 +1,337 @@
+From a2ec860212bf27ca45a5c9ec55b91b3eb1c8060f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] tests: py: add payload merging test cases
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 04fc306359a49bc9f314ae82520218f5dfebfef1
+
+commit 04fc306359a49bc9f314ae82520218f5dfebfef1
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Mar 8 14:40:12 2024 +0100
+
+    tests: py: add payload merging test cases
+
+    Add a test case that would fail without preceeding fix.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/payloadmerge.t         |  14 ++
+ tests/py/inet/payloadmerge.t.json    | 211 +++++++++++++++++++++++++++
+ tests/py/inet/payloadmerge.t.payload |  66 +++++++++
+ 3 files changed, 291 insertions(+)
+ create mode 100644 tests/py/inet/payloadmerge.t
+ create mode 100644 tests/py/inet/payloadmerge.t.json
+ create mode 100644 tests/py/inet/payloadmerge.t.payload
+
+diff --git a/tests/py/inet/payloadmerge.t b/tests/py/inet/payloadmerge.t
+new file mode 100644
+index 0000000..04ba1ce
+--- /dev/null
++++ b/tests/py/inet/payloadmerge.t
+@@ -0,0 +1,14 @@
++:input;type filter hook input priority 0
++
++*ip;test-ip4;input
++*ip6;test-ip6;input
++*inet;test-inet;input
++
++tcp sport 1 tcp dport 2;ok
++tcp sport != 1 tcp dport != 2;ok
++tcp sport 1 tcp dport != 2;ok
++tcp sport != 1 tcp dport 2;ok
++meta l4proto != 6 th dport 2;ok
++meta l4proto 6 tcp dport 22;ok;tcp dport 22
++tcp sport > 1 tcp dport > 2;ok
++tcp sport 1 tcp dport > 2;ok
+diff --git a/tests/py/inet/payloadmerge.t.json b/tests/py/inet/payloadmerge.t.json
+new file mode 100644
+index 0000000..e5b66cf
+--- /dev/null
++++ b/tests/py/inet/payloadmerge.t.json
+@@ -0,0 +1,211 @@
++# tcp sport 1 tcp dport 2
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "sport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "==",
++            "right": 1
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "==",
++            "right": 2
++        }
++    }
++]
++
++# tcp sport != 1 tcp dport != 2
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "sport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "!=",
++            "right": 1
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "!=",
++            "right": 2
++        }
++    }
++]
++
++# tcp sport 1 tcp dport != 2
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "sport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "==",
++            "right": 1
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "!=",
++            "right": 2
++        }
++    }
++]
++
++# tcp sport != 1 tcp dport 2
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "sport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "!=",
++            "right": 1
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "==",
++            "right": 2
++        }
++    }
++]
++
++# meta l4proto != 6 th dport 2
++[
++    {
++        "match": {
++            "left": {
++                "meta": {
++                    "key": "l4proto"
++                }
++            },
++            "op": "!=",
++            "right": 6
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "th"
++                }
++            },
++            "op": "==",
++            "right": 2
++        }
++    }
++]
++
++# meta l4proto 6 tcp dport 22
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "==",
++            "right": 22
++        }
++    }
++]
++
++# tcp sport > 1 tcp dport > 2
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "sport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": ">",
++            "right": 1
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": ">",
++            "right": 2
++        }
++    }
++]
++
++# tcp sport 1 tcp dport > 2
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "sport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": "==",
++            "right": 1
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "dport",
++                    "protocol": "tcp"
++                }
++            },
++            "op": ">",
++            "right": 2
++        }
++    }
++]
++
+diff --git a/tests/py/inet/payloadmerge.t.payload b/tests/py/inet/payloadmerge.t.payload
+new file mode 100644
+index 0000000..a0465cd
+--- /dev/null
++++ b/tests/py/inet/payloadmerge.t.payload
+@@ -0,0 +1,66 @@
++# tcp sport 1 tcp dport 2
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ payload load 4b @ transport header + 0 => reg 1 ]
++  [ cmp eq reg 1 0x02000100 ]
++
++# tcp sport != 1 tcp dport != 2
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ payload load 2b @ transport header + 0 => reg 1 ]
++  [ cmp neq reg 1 0x00000100 ]
++  [ payload load 2b @ transport header + 2 => reg 1 ]
++  [ cmp neq reg 1 0x00000200 ]
++
++# tcp sport 1 tcp dport != 2
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ payload load 2b @ transport header + 0 => reg 1 ]
++  [ cmp eq reg 1 0x00000100 ]
++  [ payload load 2b @ transport header + 2 => reg 1 ]
++  [ cmp neq reg 1 0x00000200 ]
++
++# tcp sport != 1 tcp dport 2
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ payload load 2b @ transport header + 0 => reg 1 ]
++  [ cmp neq reg 1 0x00000100 ]
++  [ payload load 2b @ transport header + 2 => reg 1 ]
++  [ cmp eq reg 1 0x00000200 ]
++
++# meta l4proto != 6 th dport 2
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp neq reg 1 0x00000006 ]
++  [ payload load 2b @ transport header + 2 => reg 1 ]
++  [ cmp eq reg 1 0x00000200 ]
++
++# meta l4proto 6 tcp dport 22
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ payload load 2b @ transport header + 2 => reg 1 ]
++  [ cmp eq reg 1 0x00001600 ]
++
++# tcp sport > 1 tcp dport > 2
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ payload load 2b @ transport header + 0 => reg 1 ]
++  [ cmp gt reg 1 0x00000100 ]
++  [ payload load 2b @ transport header + 2 => reg 1 ]
++  [ cmp gt reg 1 0x00000200 ]
++
++# tcp sport 1 tcp dport > 2
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ payload load 2b @ transport header + 0 => reg 1 ]
++  [ cmp eq reg 1 0x00000100 ]
++  [ payload load 2b @ transport header + 2 => reg 1 ]
++  [ cmp gt reg 1 0x00000200 ]
++

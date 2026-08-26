@@ -1,0 +1,68 @@
+From 765603a3236f4d50de140148bd2a0a950c334aab Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:08 +0200
+Subject: [PATCH] parser_bison: recursive table declaration in deprecated meter
+ statement
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit a70a217079ef83482fc093d8549f8cdeaeaa3cae
+
+commit a70a217079ef83482fc093d8549f8cdeaeaa3cae
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Jul 3 00:08:01 2024 +0200
+
+    parser_bison: recursive table declaration in deprecated meter statement
+
+    This is allowing for recursive table NAME declarations such as:
+
+     ... table xyz1 table xyz2 { ... }
+
+    remove it.
+
+    Fixes: 3ed5e31f4a32 ("src: add flow statement")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 20 ++++----------------
+ 1 file changed, 4 insertions(+), 16 deletions(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 678dd50..87cf9ae 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -4178,10 +4178,11 @@ map_stmt		:	set_stmt_op	set_ref_expr '{' set_elem_expr_stmt	COLON	set_elem_expr_
+ 			}
+ 			;
+ 
+-meter_stmt		:	flow_stmt_legacy_alloc		flow_stmt_opts	'{' meter_key_expr stmt '}'
++meter_stmt		:	flow_stmt_legacy_alloc		TABLE identifier	'{' meter_key_expr stmt '}'
+ 			{
+-				$1->meter.key  = $4;
+-				$1->meter.stmt = $5;
++				$1->meter.name = $3;
++				$1->meter.key  = $5;
++				$1->meter.stmt = $6;
+ 				$$->location  = @$;
+ 				$$ = $1;
+ 			}
+@@ -4194,19 +4195,6 @@ flow_stmt_legacy_alloc	:	FLOW
+ 			}
+ 			;
+ 
+-flow_stmt_opts		:	flow_stmt_opt
+-			{
+-				$<stmt>$	= $<stmt>0;
+-			}
+-			|	flow_stmt_opts		flow_stmt_opt
+-			;
+-
+-flow_stmt_opt		:	TABLE			identifier
+-			{
+-				$<stmt>0->meter.name = $2;
+-			}
+-			;
+-
+ meter_stmt_alloc	:	METER	identifier		'{' meter_key_expr stmt '}'
+ 			{
+ 				$$ = meter_stmt_alloc(&@$);

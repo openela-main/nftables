@@ -1,0 +1,39 @@
+From e08be9cb13b49c4b8e6c2eb8ed50f70abb362a39 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] cache: remove full cache requirement when echo flag is set on
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 53a503ad4a1abfa0374b3d12e884b69dc6df4b4f
+
+commit 53a503ad4a1abfa0374b3d12e884b69dc6df4b4f
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Aug 29 12:42:12 2024 +0200
+
+    cache: remove full cache requirement when echo flag is set on
+
+    The echo flag does not use the cache infrastructure yet, it relies on
+    the monitor cache which follows the netlink_echo_callback() path.
+
+    Fixes: 01e5c6f0ed03 ("src: add cache level flags")
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 82553a9..450be45 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -499,8 +499,6 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 		case CMD_INSERT:
+ 		case CMD_CREATE:
+ 			flags = evaluate_cache_add(cmd, flags);
+-			if (nft_output_echo(&nft->output))
+-				flags |= NFT_CACHE_FULL;
+ 			break;
+ 		case CMD_REPLACE:
+ 			flags = NFT_CACHE_FULL;

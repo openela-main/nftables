@@ -1,0 +1,210 @@
+From 039d41bcd5dc8728690f5e9a6cf7c1b68bd05905 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] parser: tcpopt: fix tcp option parsing with NUM + length
+ field
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 59a33d08ab3a75b2ae370b6816942793f49fa8db
+
+commit 59a33d08ab3a75b2ae370b6816942793f49fa8db
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Dec 5 12:56:08 2023 +0100
+
+    parser: tcpopt: fix tcp option parsing with NUM + length field
+
+    tcp option 254 length ge 4
+
+    ... will segfault.
+    The crash bug is that tcpopt_expr_alloc() can return NULL if we cannot
+    find a suitable template for the requested kind + field combination,
+    so add the needed error handling in the bison parser.
+
+    However, we can handle this.  NOP and EOL have templates, all other
+    options (known or unknown) must also have a length field.
+
+    So also add a fallback template to handle both kind and length, even
+    if only a numeric option is given that nft doesn't recognize.
+
+    Don't bother with output, above will be printed via raw syntax, i.e.
+    tcp option @254,8,8 >= 4.
+
+    Fixes: 24d8da308342 ("tcpopt: allow to check for presence of any tcp option")
+    Reported-by: Maciej Żenczykowski <zenczykowski@gmail.com>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y                            |  4 ++
+ src/tcpopt.c                                  | 44 +++++++++++----
+ .../packetpath/dumps/tcp_options.nodump       |  0
+ tests/shell/testcases/packetpath/tcp_options  | 55 +++++++++++++++++++
+ 4 files changed, 93 insertions(+), 10 deletions(-)
+ create mode 100644 tests/shell/testcases/packetpath/dumps/tcp_options.nodump
+ create mode 100755 tests/shell/testcases/packetpath/tcp_options
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 751b3e1..9386a9c 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -5837,6 +5837,10 @@ tcp_hdr_expr		:	TCP	tcp_hdr_field
+ 			|	TCP	OPTION	tcp_hdr_option_kind_and_field
+ 			{
+ 				$$ = tcpopt_expr_alloc(&@$, $3.kind, $3.field);
++				if ($$ == NULL) {
++					erec_queue(error(&@1, "Could not find a tcp option template"), state->msgs);
++					YYERROR;
++				}
+ 			}
+ 			|	TCP	OPTION	AT	close_scope_at	tcp_hdr_option_type	COMMA	NUM	COMMA	NUM
+ 			{
+diff --git a/src/tcpopt.c b/src/tcpopt.c
+index 3fcb273..8111a50 100644
+--- a/src/tcpopt.c
++++ b/src/tcpopt.c
+@@ -118,6 +118,13 @@ static const struct exthdr_desc tcpopt_mptcp = {
+ 		[TCPOPT_MPTCP_SUBTYPE]  = PHT("subtype", 16, 4),
+ 	},
+ };
++
++static const struct exthdr_desc tcpopt_fallback = {
++	.templates	= {
++		[TCPOPT_COMMON_KIND]	= PHT("kind",   0, 8),
++		[TCPOPT_COMMON_LENGTH]	= PHT("length", 8, 8),
++	},
++};
+ #undef PHT
+ 
+ const struct exthdr_desc *tcpopt_protocols[] = {
+@@ -133,6 +140,17 @@ const struct exthdr_desc *tcpopt_protocols[] = {
+ 	[TCPOPT_KIND_FASTOPEN]		= &tcpopt_fastopen,
+ };
+ 
++static void tcpopt_assign_tmpl(struct expr *expr,
++			       const struct proto_hdr_template *tmpl,
++			       const struct exthdr_desc *desc)
++{
++	expr->exthdr.op     = NFT_EXTHDR_OP_TCPOPT;
++
++	expr->exthdr.desc   = desc;
++	expr->exthdr.tmpl   = tmpl;
++	expr->exthdr.offset = tmpl->offset;
++}
++
+ /**
+  * tcpopt_expr_alloc - allocate tcp option extension expression
+  *
+@@ -182,18 +200,26 @@ struct expr *tcpopt_expr_alloc(const struct location *loc,
+ 		desc = tcpopt_protocols[kind];
+ 
+ 	if (!desc) {
+-		if (field != TCPOPT_COMMON_KIND || kind > 255)
++		if (kind > 255)
+ 			return NULL;
+ 
++		desc = &tcpopt_fallback;
++
++		switch (field) {
++		case TCPOPT_COMMON_KIND:
++		case TCPOPT_COMMON_LENGTH:
++			tmpl = &desc->templates[field];
++			break;
++		default:
++			tmpl = &tcpopt_unknown_template;
++			break;
++		}
++
+ 		expr = expr_alloc(loc, EXPR_EXTHDR, &integer_type,
+ 				  BYTEORDER_BIG_ENDIAN, 8);
+ 
+-		desc = tcpopt_protocols[TCPOPT_NOP];
+-		tmpl = &desc->templates[field];
+-		expr->exthdr.desc   = desc;
+-		expr->exthdr.tmpl   = tmpl;
+-		expr->exthdr.op = NFT_EXTHDR_OP_TCPOPT;
+ 		expr->exthdr.raw_type = kind;
++		tcpopt_assign_tmpl(expr, tmpl, desc);
+ 		return expr;
+ 	}
+ 
+@@ -203,11 +229,9 @@ struct expr *tcpopt_expr_alloc(const struct location *loc,
+ 
+ 	expr = expr_alloc(loc, EXPR_EXTHDR, tmpl->dtype,
+ 			  BYTEORDER_BIG_ENDIAN, tmpl->len);
+-	expr->exthdr.desc   = desc;
+-	expr->exthdr.tmpl   = tmpl;
+-	expr->exthdr.op     = NFT_EXTHDR_OP_TCPOPT;
++
+ 	expr->exthdr.raw_type = desc->type;
+-	expr->exthdr.offset = tmpl->offset;
++	tcpopt_assign_tmpl(expr, tmpl, desc);
+ 
+ 	return expr;
+ }
+diff --git a/tests/shell/testcases/packetpath/dumps/tcp_options.nodump b/tests/shell/testcases/packetpath/dumps/tcp_options.nodump
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/shell/testcases/packetpath/tcp_options b/tests/shell/testcases/packetpath/tcp_options
+new file mode 100755
+index 0000000..1c9ee53
+--- /dev/null
++++ b/tests/shell/testcases/packetpath/tcp_options
+@@ -0,0 +1,55 @@
++#!/bin/bash
++
++have_socat="no"
++socat -h > /dev/null && have_socat="yes"
++
++ip link set lo up
++
++$NFT -f /dev/stdin <<EOF
++table inet t {
++	counter nomatchc {}
++	counter sackpermc {}
++	counter maxsegc {}
++	counter nopc {}
++
++	chain c {
++		type filter hook output priority 0;
++		tcp dport != 22345 accept
++		tcp flags syn / fin,syn,rst,ack tcp option 254  length ge 4 counter name nomatchc drop
++		tcp flags syn / fin,syn,rst,ack tcp option fastopen length ge 2 reset tcp option fastopen counter name nomatchc
++		tcp flags syn / fin,syn,rst,ack tcp option sack-perm missing counter name nomatchc
++		tcp flags syn / fin,syn,rst,ack tcp option sack-perm exists counter name sackpermc
++		tcp flags syn / fin,syn,rst,ack tcp option maxseg size gt 1400 counter name maxsegc
++		tcp flags syn / fin,syn,rst,ack tcp option nop missing counter name nomatchc
++		tcp flags syn / fin,syn,rst,ack tcp option nop exists counter name nopc
++		tcp flags syn / fin,syn,rst,ack drop
++	}
++}
++EOF
++
++if [ $? -ne 0 ]; then
++	exit 1
++fi
++
++if [ $have_socat != "yes" ]; then
++	echo "Ran partial test, socat not available (skipped)"
++	exit 77
++fi
++
++# This will fail (drop in output -> connect fails with eperm)
++socat -u STDIN TCP:127.0.0.1:22345,connect-timeout=1 < /dev/null > /dev/null
++
++# can't validate via dump file, syn rexmit can cause counters to be > 1 in rare cases.
++
++$NFT list counter inet t nomatchc
++
++# nomatchc must be 0.
++$NFT list counter inet t nomatchc | grep -q "packets 0" || exit 1
++
++# these counters must not be 0.
++for nz in sackpermc maxsegc nopc; do
++	$NFT list counter inet t $nz
++	$NFT list counter inet t $nz | grep -q "packets 0" && exit 1
++done
++
++exit 0

@@ -1,0 +1,118 @@
+From 659ffd42a84dba638b913a615f35a8fbae37e960 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:22 +0200
+Subject: [PATCH] src: remove EXPR_SET_ELEM in range_expr_value_{low,high}()
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 33e759b0d1f6369c7e82ca528a81a32928ac9483
+
+commit 33e759b0d1f6369c7e82ca528a81a32928ac9483
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Feb 5 03:41:17 2026 +0100
+
+    src: remove EXPR_SET_ELEM in range_expr_value_{low,high}()
+
+    Call range_expr_value_{low,high}() with the key instead to skip one
+    level of indirection.
+
+    This is to prepare for the future removal of EXPR_SET_ELEM.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/expression.c |  4 ----
+ src/intervals.c  | 12 ++++++------
+ src/segtree.c    |  8 ++++----
+ 3 files changed, 10 insertions(+), 14 deletions(-)
+
+diff --git a/src/expression.c b/src/expression.c
+index 781d689..da3075e 100644
+--- a/src/expression.c
++++ b/src/expression.c
+@@ -1585,8 +1585,6 @@ void range_expr_value_low(mpz_t rop, const struct expr *expr)
+ 		return range_expr_value_low(rop, expr->left);
+ 	case EXPR_MAPPING:
+ 		return range_expr_value_low(rop, expr->left);
+-	case EXPR_SET_ELEM:
+-		return range_expr_value_low(rop, expr->key);
+ 	default:
+ 		BUG("invalid range expression type %s\n", expr_name(expr));
+ 	}
+@@ -1612,8 +1610,6 @@ void range_expr_value_high(mpz_t rop, const struct expr *expr)
+ 		return range_expr_value_high(rop, expr->right);
+ 	case EXPR_MAPPING:
+ 		return range_expr_value_high(rop, expr->left);
+-	case EXPR_SET_ELEM:
+-		return range_expr_value_high(rop, expr->key);
+ 	default:
+ 		BUG("invalid range expression type %s\n", expr_name(expr));
+ 	}
+diff --git a/src/intervals.c b/src/intervals.c
+index 31adb82..83cfbe3 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -175,8 +175,8 @@ static void setelem_automerge(struct set_automerge_ctx *ctx)
+ 		if (i->key->etype == EXPR_SET_ELEM_CATCHALL)
+ 			continue;
+ 
+-		range_expr_value_low(range.low, i);
+-		range_expr_value_high(range.high, i);
++		range_expr_value_low(range.low, i->key);
++		range_expr_value_high(range.high, i->key);
+ 
+ 		if (!prev ||
+ 		    interval_expr_key(prev)->timeout != interval_expr_key(i)->timeout ||
+@@ -414,8 +414,8 @@ static int setelem_delete(struct list_head *msgs, struct set *set,
+ 			mpz_bitmask(range.low, i->len);
+ 			mpz_bitmask(range.high, i->len);
+ 		} else {
+-			range_expr_value_low(range.low, i);
+-			range_expr_value_high(range.high, i);
++			range_expr_value_low(range.low, i->key);
++			range_expr_value_high(range.high, i->key);
+ 		}
+ 
+ 		if (!prev && elem->flags & EXPR_F_REMOVE) {
+@@ -576,8 +576,8 @@ static int setelem_overlap(struct list_head *msgs, struct set *set,
+ 		if (i->key->etype == EXPR_SET_ELEM_CATCHALL)
+ 			continue;
+ 
+-		range_expr_value_low(range.low, i);
+-		range_expr_value_high(range.high, i);
++		range_expr_value_low(range.low, i->key);
++		range_expr_value_high(range.high, i->key);
+ 
+ 		if (!prev) {
+ 			prev = elem;
+diff --git a/src/segtree.c b/src/segtree.c
+index 3cdecfc..3f31176 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -94,9 +94,9 @@ struct expr *get_set_intervals(const struct set *set, const struct expr *init)
+ 			compound_expr_add(new_init, expr_clone(i));
+ 			break;
+ 		default:
+-			range_expr_value_low(low, i);
++			range_expr_value_low(low, i->key);
+ 			set_elem_expr_add(set, new_init, low, 0, i->byteorder);
+-			range_expr_value_high(high, i);
++			range_expr_value_high(high, i->key);
+ 			mpz_add_ui(high, high, 1);
+ 			set_elem_expr_add(set, new_init, high,
+ 					  EXPR_F_INTERVAL_END, i->byteorder);
+@@ -145,11 +145,11 @@ static struct expr *get_set_interval_find(const struct set *cache_set,
+ 			/* fall-through */
+ 		case EXPR_PREFIX:
+ 		case EXPR_RANGE:
+-			range_expr_value_low(val, i);
++			range_expr_value_low(val, i->key);
+ 			if (left && mpz_cmp(expr_value(left)->value, val))
+ 				break;
+ 
+-			range_expr_value_high(val, i);
++			range_expr_value_high(val, i->key);
+ 			if (right && mpz_cmp(expr_value(right)->value, val))
+ 				break;
+ 

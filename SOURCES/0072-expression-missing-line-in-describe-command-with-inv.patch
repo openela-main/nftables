@@ -1,0 +1,50 @@
+From 7390323f695abb24d5886f671e4faccd8d44f1eb Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] expression: missing line in describe command with invalid
+ expression
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 2b24dd29c5fa1c7e4cf44f0753752d25106273a0
+
+commit 2b24dd29c5fa1c7e4cf44f0753752d25106273a0
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Feb 13 17:09:20 2024 +0100
+
+    expression: missing line in describe command with invalid expression
+
+    Before:
+
+     duh@testbed:~# nft describe blah
+     symbol expression, datatype invalid (invalid)duh@testbed:#
+
+    After:
+
+     duh@testbed:~# nft describe blah
+     symbol expression, datatype invalid (invalid)
+     duh@testbed:#
+
+    Fixes: 48aca2de80a7 ("iptopt: fix crash with invalid field/type combo")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/expression.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/expression.c b/src/expression.c
+index dde48b6..cb2573f 100644
+--- a/src/expression.c
++++ b/src/expression.c
+@@ -140,8 +140,10 @@ void expr_describe(const struct expr *expr, struct output_ctx *octx)
+ 		nft_print(octx, "%s expression, datatype %s (%s)",
+ 			  expr_name(expr), dtype->name, dtype->desc);
+ 
+-		if (dtype == &invalid_type)
++		if (dtype == &invalid_type) {
++			nft_print(octx, "\n");
+ 			return;
++		}
+ 	}
+ 
+ 	if (dtype->basetype != NULL) {

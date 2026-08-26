@@ -1,0 +1,57 @@
+From d5019748ad5b02980c7ff7349d6e55245c831a7c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] json: fix use after free in table_flags_json()
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b04512cf30de1ba6657facba5ebe2321e17c2727
+
+commit b04512cf30de1ba6657facba5ebe2321e17c2727
+Author: Thomas Haller <thaller@redhat.com>
+Date:   Tue Nov 14 16:29:25 2023 +0100
+
+    json: fix use after free in table_flags_json()
+
+    Add `$NFT -j list ruleset` to the end of "tests/shell/testcases/transactions/table_onoff".
+    Then valgrind will find this issue:
+
+      $ make -j && ./tests/shell/run-tests.sh tests/shell/testcases/transactions/table_onoff -V
+
+    Gives:
+
+      ==286== Invalid read of size 4
+      ==286==    at 0x49B0261: do_dump (dump.c:211)
+      ==286==    by 0x49B08B8: do_dump (dump.c:378)
+      ==286==    by 0x49B08B8: do_dump (dump.c:378)
+      ==286==    by 0x49B04F7: do_dump (dump.c:273)
+      ==286==    by 0x49B08B8: do_dump (dump.c:378)
+      ==286==    by 0x49B0E84: json_dump_callback (dump.c:465)
+      ==286==    by 0x48AF22A: do_command_list_json (json.c:2016)
+      ==286==    by 0x48732F1: do_command_list (rule.c:2335)
+      ==286==    by 0x48737F5: do_command (rule.c:2605)
+      ==286==    by 0x48A867D: nft_netlink (libnftables.c:42)
+      ==286==    by 0x48A92B1: nft_run_cmd_from_buffer (libnftables.c:597)
+      ==286==    by 0x402CBA: main (main.c:533)
+
+    Fixes: e70354f53e9f ("libnftables: Implement JSON output support")
+    Signed-off-by: Thomas Haller <thaller@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/json.c b/src/json.c
+index 98fa026..6809cd5 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -497,7 +497,7 @@ static json_t *table_flags_json(const struct table *table)
+ 		json_decref(root);
+ 		return NULL;
+ 	case 1:
+-		json_unpack(root, "[o]", &tmp);
++		json_unpack(root, "[O]", &tmp);
+ 		json_decref(root);
+ 		root = tmp;
+ 		break;

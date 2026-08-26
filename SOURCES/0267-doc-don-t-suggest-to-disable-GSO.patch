@@ -1,0 +1,69 @@
+From cbb04fd1e16d51c0ffb1ca6938259ad0590f910c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] doc: don't suggest to disable GSO
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 35cd3e7cff079c561ba616c792d5fdf13f6bd331
+
+commit 35cd3e7cff079c561ba616c792d5fdf13f6bd331
+Author: Ronan Pigott <ronan@rjp.ie>
+Date:   Sun Oct 6 09:36:03 2024 -0700
+
+    doc: don't suggest to disable GSO
+
+    The kernel can form aggregate packets whether or not GSO is enabled.
+    Disabling GSO is not a useful suggestion in this case.
+
+    Fixes: 05628cdd677d (doc: describe behaviour of {ip,ip6} length)
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/payload-expression.txt | 26 ++++++++++++--------------
+ 1 file changed, 12 insertions(+), 14 deletions(-)
+
+diff --git a/doc/payload-expression.txt b/doc/payload-expression.txt
+index d648785..b806890 100644
+--- a/doc/payload-expression.txt
++++ b/doc/payload-expression.txt
+@@ -134,13 +134,12 @@ Destination address |
+ ipv4_addr
+ |======================
+ 
+-Careful with matching on *ip length*: If GRO/GSO is enabled, then the Linux
+-kernel might aggregate several packets into one big packet that is larger than
+-MTU. Moreover, if GRO/GSO maximum size is larger than 65535 (see man ip-link(8),
+-specifically gro_ipv6_max_size and gso_ipv6_max_size), then *ip length* might
+-be 0 for such jumbo packets. *meta length* allows you to match on the packet
+-length including the IP header size.  If you want to perform heuristics on the
+-*ip length* field, then disable GRO/GSO.
++Careful with matching on *ip length*: The Linux kernel might aggregate several
++packets into one big packet that is larger than MTU. Moreover, if GRO/GSO
++maximum size is larger than 65535 (see man ip-link(8), specifically
++gro_ipv4_max_size and gso_ipv4_max_size), then *ip length* might be 0 for such
++jumbo packets. *meta length* allows you to match on the packet length including
++the IP header size.
+ 
+ ICMP HEADER EXPRESSION
+ ~~~~~~~~~~~~~~~~~~~~~~
+@@ -252,13 +251,12 @@ Destination address |
+ ipv6_addr
+ |=======================
+ 
+-Careful with matching on *ip6 length*: If GRO/GSO is enabled, then the Linux
+-kernel might aggregate several packets into one big packet that is larger than
+-MTU. Moreover, if GRO/GSO maximum size is larger than 65535 (see man ip-link(8),
+-specifically gro_ipv6_max_size and gso_ipv6_max_size), then *ip6 length* might
+-be 0 for such jumbo packets. *meta length* allows you to match on the packet
+-length including the IP header size.  If you want to perform heuristics on the
+-*ip6 length* field, then disable GRO/GSO.
++Careful with matching on *ip6 length*: The Linux kernel might aggregate several
++packets into one big packet that is larger than MTU. Moreover, if GRO/GSO
++maximum size is larger than 65535 (see man ip-link(8), specifically
++gro_max_size and gso_max_size), then *ip6 length* might be 0 for such
++jumbo packets. *meta length* allows you to match on the packet length including
++the IPv6 header size.
+ 
+ .Using ip6 header expressions
+ -----------------------------

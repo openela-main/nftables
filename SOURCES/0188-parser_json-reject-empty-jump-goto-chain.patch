@@ -1,0 +1,51 @@
+From fc871acfc0278c8e0c90361cc55a94c5d1947480 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:34 +0200
+Subject: [PATCH] parser_json: reject empty jump/goto chain
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 9cce81701a033c4ff5e804fbf7a1149acb9e115a
+
+commit 9cce81701a033c4ff5e804fbf7a1149acb9e115a
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Mar 31 17:55:45 2025 +0200
+
+    parser_json: reject empty jump/goto chain
+
+    When parsing a verdict map json where element jumps to chain represented
+    as empty string.
+
+    internal:0:0-0: Error: Parsing list expression item at index 0 failed.
+    internal:0:0-0: Error: Invalid set elem at index 0.
+    internal:0:0-0: Error: Invalid set elem expression.
+    internal:0:0-0: Error: Parsing command array at index 2 failed.
+
+    Fixes: 586ad210368b ("libnftables: Implement JSON parser")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index b76dbdc..6468c3d 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -1322,9 +1322,13 @@ static struct expr *json_parse_verdict_expr(struct json_ctx *ctx,
+ 		if (strcmp(type, verdict_tbl[i].name))
+ 			continue;
+ 
+-		if (verdict_tbl[i].need_chain &&
+-		    json_unpack_err(ctx, root, "{s:s}", "target", &chain))
+-			return NULL;
++		if (verdict_tbl[i].need_chain) {
++			if (json_unpack_err(ctx, root, "{s:s}", "target", &chain))
++				return NULL;
++
++			if (!chain || chain[0] == '\0')
++				return NULL;
++		}
+ 
+ 		return verdict_expr_alloc(int_loc, verdict_tbl[i].verdict,
+ 					  json_alloc_chain_expr(chain));

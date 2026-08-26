@@ -1,0 +1,99 @@
+From 47ee410b237d907322baed7f01b6dc0abbb6fe29 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] json: Support maps with concatenated data
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit c56d77cc82988391ab8f2514214c0088cbc7d89e
+
+commit c56d77cc82988391ab8f2514214c0088cbc7d89e
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Sat Mar 9 00:27:38 2024 +0100
+
+    json: Support maps with concatenated data
+
+    Dump such maps with an array of types in "map" property, make the parser
+    aware of this.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c        | 10 +++++-----
+ src/parser_json.c | 18 +++++++++---------
+ 2 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/src/json.c b/src/json.c
+index 5faeb4d..90d9795 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -130,15 +130,15 @@ static json_t *set_stmt_list_json(const struct list_head *stmt_list,
+ 
+ static json_t *set_print_json(struct output_ctx *octx, const struct set *set)
+ {
+-	json_t *root, *tmp;
+-	const char *type, *datatype_ext = NULL;
++	json_t *root, *tmp, *datatype_ext = NULL;
++	const char *type;
+ 
+ 	if (set_is_datamap(set->flags)) {
+ 		type = "map";
+-		datatype_ext = set->data->dtype->name;
++		datatype_ext = set_dtype_json(set->data);
+ 	} else if (set_is_objmap(set->flags)) {
+ 		type = "map";
+-		datatype_ext = obj_type_name(set->objtype);
++		datatype_ext = json_string(obj_type_name(set->objtype));
+ 	} else if (set_is_meter(set->flags)) {
+ 		type = "meter";
+ 	} else {
+@@ -155,7 +155,7 @@ static json_t *set_print_json(struct output_ctx *octx, const struct set *set)
+ 	if (set->comment)
+ 		json_object_set_new(root, "comment", json_string(set->comment));
+ 	if (datatype_ext)
+-		json_object_set_new(root, "map", json_string(datatype_ext));
++		json_object_set_new(root, "map", datatype_ext);
+ 
+ 	if (!(set->flags & (NFT_SET_CONSTANT))) {
+ 		if (set->policy != NFT_SET_POL_PERFORMANCE) {
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 523dbd2..a144f4c 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -3300,7 +3300,7 @@ static struct cmd *json_parse_cmd_add_set(struct json_ctx *ctx, json_t *root,
+ 					  enum cmd_ops op, enum cmd_obj obj)
+ {
+ 	struct handle h = { 0 };
+-	const char *family = "", *policy, *dtype_ext = NULL;
++	const char *family = "", *policy;
+ 	json_t *tmp, *stmt_json;
+ 	struct set *set;
+ 
+@@ -3353,19 +3353,19 @@ static struct cmd *json_parse_cmd_add_set(struct json_ctx *ctx, json_t *root,
+ 		return NULL;
+ 	}
+ 
+-	if (!json_unpack(root, "{s:s}", "map", &dtype_ext)) {
+-		const struct datatype *dtype;
++	if (!json_unpack(root, "{s:o}", "map", &tmp)) {
++		if (json_is_string(tmp)) {
++			const char *s = json_string_value(tmp);
+ 
+-		set->objtype = string_to_nft_object(dtype_ext);
++			set->objtype = string_to_nft_object(s);
++		}
+ 		if (set->objtype) {
+ 			set->flags |= NFT_SET_OBJECT;
+-		} else if ((dtype = datatype_lookup_byname(dtype_ext))) {
+-			set->data = constant_expr_alloc(&netlink_location,
+-							dtype, dtype->byteorder,
+-							dtype->size, NULL);
++		} else if ((set->data = json_parse_dtype_expr(ctx, tmp))) {
+ 			set->flags |= NFT_SET_MAP;
+ 		} else {
+-			json_error(ctx, "Invalid map type '%s'.", dtype_ext);
++			json_error(ctx, "Invalid map type '%s'.",
++				   json_dumps(tmp, 0));
+ 			set_free(set);
+ 			handle_free(&h);
+ 			return NULL;

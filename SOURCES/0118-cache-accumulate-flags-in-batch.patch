@@ -1,0 +1,78 @@
+From 32c5ed1dea1e3a1bb5889c640936d098e3e0691d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] cache: accumulate flags in batch
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 68c8fb5f7c988a38a694c77c65e789e0cb8dfd8a
+
+commit 68c8fb5f7c988a38a694c77c65e789e0cb8dfd8a
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Aug 26 10:19:39 2024 +0200
+
+    cache: accumulate flags in batch
+
+    Recent updates are relaxing cache requirements:
+
+      babc6ee8773c ("cache: populate chains on demand from error path")
+
+    Flags describe cache requirements for a given batch, accumulate flags
+    that are inferred from commands in this batch.
+
+    Fixes: 7df42800cf89 ("src: single cache_update() call to build cache before evaluation")
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 365431e..3940ab5 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -416,13 +416,14 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 		       struct list_head *msgs, struct nft_cache_filter *filter,
+ 		       unsigned int *pflags)
+ {
+-	unsigned int flags = NFT_CACHE_EMPTY;
++	unsigned int flags, batch_flags = NFT_CACHE_EMPTY;
+ 	struct cmd *cmd;
+ 
+ 	list_for_each_entry(cmd, cmds, list) {
+ 		if (nft_handle_validate(cmd, msgs) < 0)
+ 			return -1;
+ 
++		flags = NFT_CACHE_EMPTY;
+ 		reset_filter(filter);
+ 
+ 		switch (cmd->op) {
+@@ -450,13 +451,13 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 			flags = evaluate_cache_get(cmd, flags);
+ 			break;
+ 		case CMD_RESET:
+-			flags |= evaluate_cache_reset(cmd, flags, filter);
++			flags = evaluate_cache_reset(cmd, flags, filter);
+ 			break;
+ 		case CMD_LIST:
+-			flags |= evaluate_cache_list(nft, cmd, flags, filter);
++			flags = evaluate_cache_list(nft, cmd, flags, filter);
+ 			break;
+ 		case CMD_MONITOR:
+-			flags |= NFT_CACHE_FULL;
++			flags = NFT_CACHE_FULL;
+ 			break;
+ 		case CMD_FLUSH:
+ 			flags = evaluate_cache_flush(cmd, flags, filter);
+@@ -471,8 +472,9 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 		default:
+ 			break;
+ 		}
++		batch_flags |= flags;
+ 	}
+-	*pflags = flags;
++	*pflags = batch_flags;
+ 
+ 	return 0;
+ }

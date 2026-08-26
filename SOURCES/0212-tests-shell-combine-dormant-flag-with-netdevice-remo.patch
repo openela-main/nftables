@@ -1,0 +1,39 @@
+From 640c7a71905492b32eea65ab227f3d2792e6509b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] tests: shell: combine dormant flag with netdevice removal
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f09171e077f8a9642593e3807e5ca22828befb08
+
+commit f09171e077f8a9642593e3807e5ca22828befb08
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Apr 24 20:43:58 2024 +0200
+
+    tests: shell: combine dormant flag with netdevice removal
+
+    Exercise table is dormant and netdevice is gone combination.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ .../testcases/chains/netdev_chain_dormant_autoremove     | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+ create mode 100755 tests/shell/testcases/chains/netdev_chain_dormant_autoremove
+
+diff --git a/tests/shell/testcases/chains/netdev_chain_dormant_autoremove b/tests/shell/testcases/chains/netdev_chain_dormant_autoremove
+new file mode 100755
+index 0000000..0a684e5
+--- /dev/null
++++ b/tests/shell/testcases/chains/netdev_chain_dormant_autoremove
+@@ -0,0 +1,9 @@
++#!/bin/bash
++
++set -e
++
++ip link add dummy0 type dummy
++ip link add dummy1 type dummy
++$NFT add table netdev test { flags dormant\; }
++$NFT add chain netdev test ingress { type filter hook ingress devices = { "dummy0", "dummy1" } priority 0\; policy drop\; }
++ip link del dummy0

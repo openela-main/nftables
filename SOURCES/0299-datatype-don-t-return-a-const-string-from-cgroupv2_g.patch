@@ -1,0 +1,52 @@
+From 2dde3c831187f0afdded2d1f94e1582be05b9d2b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:22 +0200
+Subject: [PATCH] datatype: don't return a const string from
+ cgroupv2_get_path()
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 1f867d0d07122f54f76e20af3c636ce66102b683
+
+commit 1f867d0d07122f54f76e20af3c636ce66102b683
+Author: Thomas Haller <thaller@redhat.com>
+Date:   Tue Oct 24 11:57:07 2023 +0200
+
+    datatype: don't return a const string from cgroupv2_get_path()
+
+    The caller is supposed to free the allocated string. Return a non-const
+    string to make that clearer.
+
+    Signed-off-by: Thomas Haller <thaller@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/datatype.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/datatype.c b/src/datatype.c
+index 1e7e12d..8404ff1 100644
+--- a/src/datatype.c
++++ b/src/datatype.c
+@@ -1582,10 +1582,10 @@ const struct datatype policy_type = {
+ 
+ #define SYSFS_CGROUPSV2_PATH	"/sys/fs/cgroup"
+ 
+-static const char *cgroupv2_get_path(const char *path, uint64_t id)
++static char *cgroupv2_get_path(const char *path, uint64_t id)
+ {
+-	const char *cgroup_path = NULL;
+ 	char dent_name[PATH_MAX + 1];
++	char *cgroup_path = NULL;
+ 	struct dirent *dent;
+ 	struct stat st;
+ 	DIR *d;
+@@ -1623,7 +1623,7 @@ static void cgroupv2_type_print(const struct expr *expr,
+ 				struct output_ctx *octx)
+ {
+ 	uint64_t id = mpz_get_uint64(expr->value);
+-	const char *cgroup_path;
++	char *cgroup_path;
+ 
+ 	cgroup_path = cgroupv2_get_path(SYSFS_CGROUPSV2_PATH, id);
+ 	if (cgroup_path)

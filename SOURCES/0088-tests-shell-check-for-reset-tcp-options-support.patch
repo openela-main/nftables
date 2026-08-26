@@ -1,0 +1,47 @@
+From 23fdf421ab37132dae2ed324f1e6d6f634d82f56 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:43 +0200
+Subject: [PATCH] tests: shell: check for reset tcp options support
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6a39fd3b68ac8a96340b87b9dc8380a9cd4e6398
+
+commit 6a39fd3b68ac8a96340b87b9dc8380a9cd4e6398
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Apr 8 23:05:28 2024 +0200
+
+    tests: shell: check for reset tcp options support
+
+    Fixes: 59a33d08ab3a ("parser: tcpopt: fix tcp option parsing with NUM + length field")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/features/reset_tcp_options.nft   | 5 +++++
+ tests/shell/testcases/packetpath/tcp_options | 2 ++
+ 2 files changed, 7 insertions(+)
+ create mode 100644 tests/shell/features/reset_tcp_options.nft
+
+diff --git a/tests/shell/features/reset_tcp_options.nft b/tests/shell/features/reset_tcp_options.nft
+new file mode 100644
+index 0000000..47d1c7b
+--- /dev/null
++++ b/tests/shell/features/reset_tcp_options.nft
+@@ -0,0 +1,5 @@
++table inet t {
++        chain c {
++		reset tcp option fastopen
++	}
++}
+diff --git a/tests/shell/testcases/packetpath/tcp_options b/tests/shell/testcases/packetpath/tcp_options
+index 8855222..57e228c 100755
+--- a/tests/shell/testcases/packetpath/tcp_options
++++ b/tests/shell/testcases/packetpath/tcp_options
+@@ -1,5 +1,7 @@
+ #!/bin/bash
+ 
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_reset_tcp_options)
++
+ have_socat="no"
+ socat -h > /dev/null && have_socat="yes"
+ 

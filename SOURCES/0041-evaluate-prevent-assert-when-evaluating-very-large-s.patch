@@ -1,0 +1,59 @@
+From 8523567b0fc4d2c0f978ee43234d984d5e75795c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: prevent assert when evaluating very large shift
+ values
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 26723202e600604ab7cf48915507cfcb7a313620
+
+commit 26723202e600604ab7cf48915507cfcb7a313620
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Dec 1 14:16:14 2023 +0100
+
+    evaluate: prevent assert when evaluating very large shift values
+
+    Error out instead of 'nft: gmputil.c:67: mpz_get_uint32: Assertion `cnt <= 1' failed.'.
+
+    Fixes: edecd58755a8 ("evaluate: support shifts larger than the width of the left operand")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                       | 9 +++++++--
+ tests/shell/testcases/bogons/nft-f/huge_shift_assert | 5 +++++
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/huge_shift_assert
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 2955ac5..1d13db1 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1312,9 +1312,14 @@ static int constant_binop_simplify(struct eval_ctx *ctx, struct expr **expr)
+ static int expr_evaluate_shift(struct eval_ctx *ctx, struct expr **expr)
+ {
+ 	struct expr *op = *expr, *left = op->left, *right = op->right;
+-	unsigned int shift = mpz_get_uint32(right->value);
+-	unsigned int max_shift_len;
++	unsigned int shift, max_shift_len;
+ 
++	/* mpz_get_uint32 has assert() for huge values */
++	if (mpz_cmp_ui(right->value, UINT_MAX) > 0)
++		return expr_binary_error(ctx->msgs, right, left,
++					 "shifts exceeding %u bits are not supported", UINT_MAX);
++
++	shift = mpz_get_uint32(right->value);
+ 	if (ctx->stmt_len > left->len)
+ 		max_shift_len = ctx->stmt_len;
+ 	else
+diff --git a/tests/shell/testcases/bogons/nft-f/huge_shift_assert b/tests/shell/testcases/bogons/nft-f/huge_shift_assert
+new file mode 100644
+index 0000000..7599f85
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/huge_shift_assert
+@@ -0,0 +1,5 @@
++table ip t {
++        chain c {
++		counter name meta mark >> 88888888888888888888
++        }
++}

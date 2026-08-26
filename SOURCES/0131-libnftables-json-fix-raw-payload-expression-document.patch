@@ -1,0 +1,38 @@
+From 1e1a40f903ac7f8350d642d2a5bf55f78926a64b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:26 +0200
+Subject: [PATCH] libnftables-json: fix raw payload expression documentation
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 570320ab9a0752c7749a6c9cc85b34a5e7ab91b5
+
+commit 570320ab9a0752c7749a6c9cc85b34a5e7ab91b5
+Author: Eric Long <i@hack3r.moe>
+Date:   Thu Oct 17 23:33:17 2024 +0800
+
+    libnftables-json: fix raw payload expression documentation
+
+    Raw payload expression accesses payload data in bits, not bytes.
+
+    Fixes: 872f373dc50f7 ("doc: Add JSON schema documentation")
+    Signed-off-by: Eric Long <i@hack3r.moe>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/libnftables-json.adoc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/doc/libnftables-json.adoc b/doc/libnftables-json.adoc
+index cc70f0f..1bdb5c5 100644
+--- a/doc/libnftables-json.adoc
++++ b/doc/libnftables-json.adoc
+@@ -1182,7 +1182,7 @@ ____
+ 
+ Construct a payload expression, i.e. a reference to a certain part of packet
+ data. The first form creates a raw payload expression to point at a random
+-number (*len*) of bytes at a certain offset (*offset*) from a given reference
++number (*len*) of bits at a certain offset (*offset*) from a given reference
+ point (*base*). The following *base* values are accepted:
+ 
+ *"ll"*::

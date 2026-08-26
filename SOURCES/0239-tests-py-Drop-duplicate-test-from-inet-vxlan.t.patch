@@ -1,0 +1,79 @@
+From e6fb7ad53edde922c73adda9a2f16cb2be474ed7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: Drop duplicate test from inet/vxlan.t
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit bc66b02a6bb86a71d0a42ea7851f9aeea20edf1c
+
+commit bc66b02a6bb86a71d0a42ea7851f9aeea20edf1c
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 14:38:22 2025 +0200
+
+    tests: py: Drop duplicate test from inet/vxlan.t
+
+    The test was duplicate since day 1. The duplicate JSON equivalent was
+    added later (semi-automated), remove it as well.
+
+    Fixes: df81baa4c2bef ("tests: py: add vxlan tests")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/vxlan.t      |  1 -
+ tests/py/inet/vxlan.t.json | 29 -----------------------------
+ 2 files changed, 30 deletions(-)
+
+diff --git a/tests/py/inet/vxlan.t b/tests/py/inet/vxlan.t
+index 10cdb7a..b6db0fe 100644
+--- a/tests/py/inet/vxlan.t
++++ b/tests/py/inet/vxlan.t
+@@ -17,7 +17,6 @@ udp dport 4789 vxlan icmp type echo-reply;ok
+ udp dport 4789 vxlan ether saddr 62:87:4d:d6:19:05;ok
+ udp dport 4789 vxlan vlan id 10;ok
+ udp dport 4789 vxlan ip dscp 0x02;ok
+-udp dport 4789 vxlan ip dscp 0x02;ok
+ udp dport 4789 vxlan ip saddr . vxlan ip daddr { 1.2.3.4 . 4.3.2.1 };ok
+ 
+ udp dport 4789 vxlan ip saddr set 1.2.3.4;fail
+diff --git a/tests/py/inet/vxlan.t.json b/tests/py/inet/vxlan.t.json
+index 91b3d29..3c147cb 100644
+--- a/tests/py/inet/vxlan.t.json
++++ b/tests/py/inet/vxlan.t.json
+@@ -264,35 +264,6 @@
+     }
+ ]
+ 
+-# udp dport 4789 vxlan ip dscp 0x02
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "dport",
+-                    "protocol": "udp"
+-                }
+-            },
+-            "op": "==",
+-            "right": 4789
+-        }
+-    },
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "dscp",
+-                    "protocol": "ip",
+-                    "tunnel": "vxlan"
+-                }
+-            },
+-            "op": "==",
+-            "right": 2
+-        }
+-    }
+-]
+-
+ # udp dport 4789 vxlan ip saddr . vxlan ip daddr { 1.2.3.4 . 4.3.2.1 }
+ [
+     {

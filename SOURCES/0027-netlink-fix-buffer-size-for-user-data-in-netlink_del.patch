@@ -1,0 +1,41 @@
+From 643ad1a2a68d58fd7fbbaefd1af83c60f229ef0b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] netlink: fix buffer size for user data in
+ netlink_delinearize_chain()
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 505a6794422238f9f1d590fe8c1ee3ea7fd46579
+
+commit 505a6794422238f9f1d590fe8c1ee3ea7fd46579
+Author: Thomas Haller <thaller@redhat.com>
+Date:   Wed Nov 8 19:22:20 2023 +0100
+
+    netlink: fix buffer size for user data in netlink_delinearize_chain()
+
+    The correct define is NFTNL_UDATA_CHAIN_MAX and not NFTNL_UDATA_OBJ_MAX.
+    In current libnftnl, they both are defined as 1, so (with current libnftnl)
+    there is no difference.
+
+    Fixes: 702ac2b72c0e ("src: add comment support for chains")
+    Signed-off-by: Thomas Haller <thaller@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 04bba59..a366758 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -617,7 +617,7 @@ static int qsort_device_cmp(const void *a, const void *b)
+ struct chain *netlink_delinearize_chain(struct netlink_ctx *ctx,
+ 					const struct nftnl_chain *nlc)
+ {
+-	const struct nftnl_udata *ud[NFTNL_UDATA_OBJ_MAX + 1] = {};
++	const struct nftnl_udata *ud[NFTNL_UDATA_CHAIN_MAX + 1] = {};
+ 	int priority, policy, len = 0, i;
+ 	const char * const *dev_array;
+ 	struct chain *chain;

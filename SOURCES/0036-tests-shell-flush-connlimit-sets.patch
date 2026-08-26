@@ -1,0 +1,59 @@
+From 93fe20fda0915183e19c513515d3f98e2d2c2df3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] tests: shell: flush connlimit sets
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit bab3ede002da778e18fa5f30ac7b05c4de5e1de8
+
+commit bab3ede002da778e18fa5f30ac7b05c4de5e1de8
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Nov 21 16:33:17 2023 +0100
+
+    tests: shell: flush connlimit sets
+
+    Restored elements via set declaration are removed almost inmediately by
+    GC, this is causing spurious failures in test runs.
+
+    Flush sets to ensure dump is always consistent. Still, cover that
+    restoring a set with connlimit elements do not.
+
+    Fixes: 95d348d55a9e ("tests: shell: extend connlimit test")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/sets/0062set_connlimit_0           | 3 +++
+ tests/shell/testcases/sets/dumps/0062set_connlimit_0.nft | 2 --
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/tests/shell/testcases/sets/0062set_connlimit_0 b/tests/shell/testcases/sets/0062set_connlimit_0
+index 48d589f..dab1da0 100755
+--- a/tests/shell/testcases/sets/0062set_connlimit_0
++++ b/tests/shell/testcases/sets/0062set_connlimit_0
+@@ -24,3 +24,6 @@ RULESET="table ip x {
+ }"
+ 
+ $NFT -f - <<< $RULESET
++
++$NFT flush set ip x est-connlimit
++$NFT flush set ip x new-connlimit
+diff --git a/tests/shell/testcases/sets/dumps/0062set_connlimit_0.nft b/tests/shell/testcases/sets/dumps/0062set_connlimit_0.nft
+index 080d675..13bbb95 100644
+--- a/tests/shell/testcases/sets/dumps/0062set_connlimit_0.nft
++++ b/tests/shell/testcases/sets/dumps/0062set_connlimit_0.nft
+@@ -3,7 +3,6 @@ table ip x {
+ 		type ipv4_addr
+ 		size 65535
+ 		flags dynamic
+-		elements = { 84.245.120.167 ct count over 20 }
+ 	}
+ 
+ 	set new-connlimit {
+@@ -11,6 +10,5 @@ table ip x {
+ 		size 65535
+ 		flags dynamic
+ 		ct count over 20
+-		elements = { 84.245.120.167 ct count over 20 }
+ 	}
+ }

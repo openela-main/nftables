@@ -1,0 +1,36 @@
+From 1b8794fe549b6e242b99eebf477a9508e25e6ac4 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:43 +0200
+Subject: [PATCH] tests: shell: payload matching requires egress support
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b13c0379bcf11caf64734240ec8fbcaa668c4016
+
+commit b13c0379bcf11caf64734240ec8fbcaa668c4016
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Apr 8 20:25:12 2024 +0200
+
+    tests: shell: payload matching requires egress support
+
+    Older kernels do not support for egress hook.
+
+    Fixes: 84da729e067a ("tests: shell: add test to cover payload transport match and mangle")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/packetpath/payload | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tests/shell/testcases/packetpath/payload b/tests/shell/testcases/packetpath/payload
+index 9f4587d..4c5c42d 100755
+--- a/tests/shell/testcases/packetpath/payload
++++ b/tests/shell/testcases/packetpath/payload
+@@ -1,5 +1,7 @@
+ #!/bin/bash
+ 
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_netdev_egress)
++
+ rnd=$(mktemp -u XXXXXXXX)
+ ns1="nft1payload-$rnd"
+ ns2="nft2payload-$rnd"

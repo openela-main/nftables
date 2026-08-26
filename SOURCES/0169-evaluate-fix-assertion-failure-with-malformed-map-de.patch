@@ -1,0 +1,65 @@
+From 6498d3cfa78662f9be30a95b699f8dfa5a6308f7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] evaluate: fix assertion failure with malformed map
+ definitions
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 7fa22984d7841a0feeaaeb0c2ed5d3cb637097e0
+
+commit 7fa22984d7841a0feeaaeb0c2ed5d3cb637097e0
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Mar 20 14:33:05 2025 +0100
+
+    evaluate: fix assertion failure with malformed map definitions
+
+    Included bogon triggers:
+    nft: src/evaluate.c:2267: expr_evaluate_mapping: Assertion `set->data != NULL' failed.
+
+    After this fix, following errors will be shown:
+    Error: unqualified type invalid specified in map definition. Try "typeof expression" instead of "type datatype".
+    map m {
+        ^
+    map m {
+        ^
+    Error: map has no mapping data
+
+    Fixes: 343a51702656 ("src: store expr, not dtype to track data in sets")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                              | 5 ++++-
+ .../bogons/nft-f/malformed_map_expr_evaluate_mapping_assert | 6 ++++++
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/malformed_map_expr_evaluate_mapping_assert
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 81fad84..710786f 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -2176,7 +2176,10 @@ static int expr_evaluate_mapping(struct eval_ctx *ctx, struct expr **expr)
+ 				  "Key must be a constant");
+ 	mapping->flags |= mapping->left->flags & EXPR_F_SINGLETON;
+ 
+-	assert(set->data != NULL);
++	/* This can happen for malformed map definitions */
++	if (!set->data)
++		return set_error(ctx, set, "map has no mapping data");
++
+ 	if (!set_is_anonymous(set->flags) &&
+ 	    set->data->flags & EXPR_F_INTERVAL)
+ 		datalen = set->data->len / 2;
+diff --git a/tests/shell/testcases/bogons/nft-f/malformed_map_expr_evaluate_mapping_assert b/tests/shell/testcases/bogons/nft-f/malformed_map_expr_evaluate_mapping_assert
+new file mode 100644
+index 0000000..c77a9c3
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/malformed_map_expr_evaluate_mapping_assert
+@@ -0,0 +1,6 @@
++table ip x {
++        map m {
++                typeof ct saddr :ct expectation
++                elements = { * : none}
++        }
++}

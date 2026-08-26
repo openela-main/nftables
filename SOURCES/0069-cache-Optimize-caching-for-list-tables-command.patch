@@ -1,0 +1,49 @@
+From 5bc0de5ef742c4746ca45a8940998fcfeef29b6f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] cache: Optimize caching for 'list tables' command
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 674eb7fa2895813b25f6fbfcc9417fc0788fade1
+
+commit 674eb7fa2895813b25f6fbfcc9417fc0788fade1
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Feb 6 19:26:57 2024 +0100
+
+    cache: Optimize caching for 'list tables' command
+
+    No point in fetching anything other than existing tables from kernel:
+    'list tables' merely prints existing table names, no contents.
+
+    Also populate filter's family field to reduce overhead when listing
+    tables in one family with many tables in another one. It works without
+    further adjustments because nftnl_nlmsg_build_hdr() will use the value
+    for nfgen_family.
+
+    Reported-by: anton.khazan@gmail.com
+    Link: https://bugzilla.netfilter.org/show_bug.cgi?id=1735
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index a3cd795..c000e32 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -203,8 +203,12 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ {
+ 	switch (cmd->obj) {
+ 	case CMD_OBJ_TABLE:
+-		if (filter && cmd->handle.table.name) {
++		if (filter)
+ 			filter->list.family = cmd->handle.family;
++		if (!cmd->handle.table.name) {
++			flags |= NFT_CACHE_TABLE;
++			break;
++		} else if (filter) {
+ 			filter->list.table = cmd->handle.table.name;
+ 		}
+ 		flags |= NFT_CACHE_FULL;

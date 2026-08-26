@@ -1,0 +1,44 @@
+From c984bf1e1f071f237da349cb1d566ac7d0c3fa7a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:25 +0200
+Subject: [PATCH] cache: position does not require full cache
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d414f756af9d638fe0c0002b2df31c8c17a15002
+
+commit d414f756af9d638fe0c0002b2df31c8c17a15002
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Aug 29 12:42:17 2024 +0200
+
+    cache: position does not require full cache
+
+    position refers to the rule handle, it has similar cache requirements as
+    replace rule command, relax cache requirements.
+
+    Commit e5382c0d08e3 ("src: Support intra-transaction rule references")
+    uses position.id for index support which requires a full cache, but
+    only in such case.
+
+    Fixes: 01e5c6f0ed03 ("src: add cache level flags")
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 12286b3..41c5a6f 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -66,8 +66,7 @@ static unsigned int evaluate_cache_add(struct cmd *cmd, unsigned int flags)
+ 			 NFT_CACHE_OBJECT |
+ 			 NFT_CACHE_FLOWTABLE;
+ 
+-		if (cmd->handle.index.id ||
+-		    cmd->handle.position.id)
++		if (cmd->handle.index.id)
+ 			flags |= NFT_CACHE_FULL | NFT_CACHE_UPDATE;
+ 		break;
+ 	default:

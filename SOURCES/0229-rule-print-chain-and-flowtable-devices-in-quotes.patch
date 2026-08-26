@@ -1,0 +1,263 @@
+From b92b3d36998beea4910dd8d69af90ffbd089f1d9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] rule: print chain and flowtable devices in quotes
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit eb30f236d91a8d61ece789e28e6540b3a3fa2a6a
+
+commit eb30f236d91a8d61ece789e28e6540b3a3fa2a6a
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Jul 9 00:13:56 2025 +0200
+
+    rule: print chain and flowtable devices in quotes
+
+    Print devices in quotes, for consistency with:
+
+    - the existing chain listing with single device:
+
+      type filter hook ingress device "lo" priority filter; policy accept
+
+    - the ifname datatype used in sets.
+
+    In general, tokens that are user-defined, not coming in the datatype
+    symbol list, are enclosed in quotes.
+
+    Fixes: 3fdc7541fba0 ("src: add multidevice support for netdev chain")
+    Acked-by: Florian Westphal <fw@strlen.de>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c                                           |  4 ++--
+ tests/shell/features/flowtable_counter.sh            |  2 +-
+ .../testcases/chains/dumps/0042chain_variable_0.nft  |  4 ++--
+ .../testcases/flowtable/dumps/0001flowtable_0.nft    |  2 +-
+ .../flowtable/dumps/0002create_flowtable_0.nft       |  2 +-
+ .../flowtable/dumps/0003add_after_flush_0.nft        |  2 +-
+ .../flowtable/dumps/0005delete_in_use_1.nft          |  2 +-
+ .../flowtable/dumps/0012flowtable_variable_0.nft     |  4 ++--
+ .../flowtable/dumps/0013addafterdelete_0.nft         |  2 +-
+ .../flowtable/dumps/0014addafterdelete_0.nft         |  2 +-
+ tests/shell/testcases/listing/0020flowtable_0        | 12 ++++++------
+ .../testcases/listing/dumps/0020flowtable_0.nft      |  4 ++--
+ 12 files changed, 21 insertions(+), 21 deletions(-)
+
+diff --git a/src/rule.c b/src/rule.c
+index bfcf4a2..5826f11 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -1057,7 +1057,7 @@ static void chain_print_declaration(const struct chain *chain,
+ 		} else if (chain->dev_array_len > 1) {
+ 			nft_print(octx, " devices = { ");
+ 			for (i = 0; i < chain->dev_array_len; i++) {
+-				nft_print(octx, "%s", chain->dev_array[i]);
++				nft_print(octx, "\"%s\"", chain->dev_array[i]);
+ 					if (i + 1 != chain->dev_array_len)
+ 						nft_print(octx, ", ");
+ 			}
+@@ -2138,7 +2138,7 @@ static void flowtable_print_declaration(const struct flowtable *flowtable,
+ 	if (flowtable->dev_array_len > 0) {
+ 		nft_print(octx, "%s%sdevices = { ", opts->tab, opts->tab);
+ 		for (i = 0; i < flowtable->dev_array_len; i++) {
+-			nft_print(octx, "%s", flowtable->dev_array[i]);
++			nft_print(octx, "\"%s\"", flowtable->dev_array[i]);
+ 			if (i + 1 != flowtable->dev_array_len)
+ 				nft_print(octx, ", ");
+ 		}
+diff --git a/tests/shell/features/flowtable_counter.sh b/tests/shell/features/flowtable_counter.sh
+index a4c4c62..5d47215 100755
+--- a/tests/shell/features/flowtable_counter.sh
++++ b/tests/shell/features/flowtable_counter.sh
+@@ -6,7 +6,7 @@
+ EXPECTED="table ip filter2 {
+ 	flowtable main_ft2 {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { \"lo\" }
+ 		counter
+ 	}
+ }"
+diff --git a/tests/shell/testcases/chains/dumps/0042chain_variable_0.nft b/tests/shell/testcases/chains/dumps/0042chain_variable_0.nft
+index 84a908d..08a1901 100644
+--- a/tests/shell/testcases/chains/dumps/0042chain_variable_0.nft
++++ b/tests/shell/testcases/chains/dumps/0042chain_variable_0.nft
+@@ -5,12 +5,12 @@ table netdev filter1 {
+ }
+ table netdev filter2 {
+ 	chain Main_Ingress2 {
+-		type filter hook ingress devices = { d23456789012345, lo } priority -500; policy accept;
++		type filter hook ingress devices = { "d23456789012345", "lo" } priority -500; policy accept;
+ 	}
+ }
+ table netdev filter3 {
+ 	chain Main_Ingress3 {
+-		type filter hook ingress devices = { d23456789012345, lo } priority -500; policy accept;
++		type filter hook ingress devices = { "d23456789012345", "lo" } priority -500; policy accept;
+ 	}
+ 
+ 	chain Main_Egress3 {
+diff --git a/tests/shell/testcases/flowtable/dumps/0001flowtable_0.nft b/tests/shell/testcases/flowtable/dumps/0001flowtable_0.nft
+index 629bfe8..79fa591 100644
+--- a/tests/shell/testcases/flowtable/dumps/0001flowtable_0.nft
++++ b/tests/shell/testcases/flowtable/dumps/0001flowtable_0.nft
+@@ -1,7 +1,7 @@
+ table inet t {
+ 	flowtable f {
+ 		hook ingress priority filter + 10
+-		devices = { lo }
++		devices = { "lo" }
+ 	}
+ 
+ 	chain c {
+diff --git a/tests/shell/testcases/flowtable/dumps/0002create_flowtable_0.nft b/tests/shell/testcases/flowtable/dumps/0002create_flowtable_0.nft
+index aecfb2a..2d0ea90 100644
+--- a/tests/shell/testcases/flowtable/dumps/0002create_flowtable_0.nft
++++ b/tests/shell/testcases/flowtable/dumps/0002create_flowtable_0.nft
+@@ -1,6 +1,6 @@
+ table ip t {
+ 	flowtable f {
+ 		hook ingress priority filter + 10
+-		devices = { lo }
++		devices = { "lo" }
+ 	}
+ }
+diff --git a/tests/shell/testcases/flowtable/dumps/0003add_after_flush_0.nft b/tests/shell/testcases/flowtable/dumps/0003add_after_flush_0.nft
+index dd904f4..39de91b 100644
+--- a/tests/shell/testcases/flowtable/dumps/0003add_after_flush_0.nft
++++ b/tests/shell/testcases/flowtable/dumps/0003add_after_flush_0.nft
+@@ -1,6 +1,6 @@
+ table ip x {
+ 	flowtable y {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { "lo" }
+ 	}
+ }
+diff --git a/tests/shell/testcases/flowtable/dumps/0005delete_in_use_1.nft b/tests/shell/testcases/flowtable/dumps/0005delete_in_use_1.nft
+index c1d79e7..b01b302 100644
+--- a/tests/shell/testcases/flowtable/dumps/0005delete_in_use_1.nft
++++ b/tests/shell/testcases/flowtable/dumps/0005delete_in_use_1.nft
+@@ -1,7 +1,7 @@
+ table ip x {
+ 	flowtable y {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { "lo" }
+ 	}
+ 
+ 	chain x {
+diff --git a/tests/shell/testcases/flowtable/dumps/0012flowtable_variable_0.nft b/tests/shell/testcases/flowtable/dumps/0012flowtable_variable_0.nft
+index df1c51a..7863822 100644
+--- a/tests/shell/testcases/flowtable/dumps/0012flowtable_variable_0.nft
++++ b/tests/shell/testcases/flowtable/dumps/0012flowtable_variable_0.nft
+@@ -1,14 +1,14 @@
+ table ip filter1 {
+ 	flowtable Main_ft1 {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { "lo" }
+ 		counter
+ 	}
+ }
+ table ip filter2 {
+ 	flowtable Main_ft2 {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { "lo" }
+ 		counter
+ 	}
+ }
+diff --git a/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft b/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft
+index 67db7d0..585f63b 100644
+--- a/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft
++++ b/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft
+@@ -1,6 +1,6 @@
+ table inet filter {
+ 	flowtable f {
+ 		hook ingress priority filter - 1
+-		devices = { lo }
++		devices = { "lo" }
+ 	}
+ }
+diff --git a/tests/shell/testcases/flowtable/dumps/0014addafterdelete_0.nft b/tests/shell/testcases/flowtable/dumps/0014addafterdelete_0.nft
+index 145aa08..12f97a7 100644
+--- a/tests/shell/testcases/flowtable/dumps/0014addafterdelete_0.nft
++++ b/tests/shell/testcases/flowtable/dumps/0014addafterdelete_0.nft
+@@ -1,7 +1,7 @@
+ table inet filter {
+ 	flowtable f {
+ 		hook ingress priority filter - 1
+-		devices = { lo }
++		devices = { "lo" }
+ 		counter
+ 	}
+ 
+diff --git a/tests/shell/testcases/listing/0020flowtable_0 b/tests/shell/testcases/listing/0020flowtable_0
+index 600b524..21dea2d 100755
+--- a/tests/shell/testcases/listing/0020flowtable_0
++++ b/tests/shell/testcases/listing/0020flowtable_0
+@@ -6,11 +6,11 @@ set -e
+ 
+ FLOWTABLES="flowtable f {
+ 	hook ingress priority filter
+-	devices = { lo }
++	devices = { \"lo\" }
+ }
+ flowtable f2 {
+ 	hook ingress priority filter
+-	devices = { d0 }
++	devices = { \"d0\" }
+ }"
+ 
+ RULESET="table inet filter {
+@@ -23,23 +23,23 @@ table ip filter {
+ EXPECTED="table inet filter {
+ 	flowtable f {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { \"lo\" }
+ 	}
+ }"
+ EXPECTED2="table ip filter {
+ 	flowtable f2 {
+ 		hook ingress priority filter
+-		devices = { d0 }
++		devices = { \"d0\" }
+ 	}
+ }"
+ EXPECTED3="table ip filter {
+ 	flowtable f {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { \"lo\" }
+ 	}
+ 	flowtable f2 {
+ 		hook ingress priority filter
+-		devices = { d0 }
++		devices = { \"d0\" }
+ 	}
+ }"
+ 
+diff --git a/tests/shell/testcases/listing/dumps/0020flowtable_0.nft b/tests/shell/testcases/listing/dumps/0020flowtable_0.nft
+index 4a64e53..0962e73 100644
+--- a/tests/shell/testcases/listing/dumps/0020flowtable_0.nft
++++ b/tests/shell/testcases/listing/dumps/0020flowtable_0.nft
+@@ -1,7 +1,7 @@
+ table inet filter {
+ 	flowtable f {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { "lo" }
+ 	}
+ 
+ 	flowtable f2 {
+@@ -11,7 +11,7 @@ table inet filter {
+ table ip filter {
+ 	flowtable f {
+ 		hook ingress priority filter
+-		devices = { lo }
++		devices = { "lo" }
+ 	}
+ 
+ 	flowtable f2 {

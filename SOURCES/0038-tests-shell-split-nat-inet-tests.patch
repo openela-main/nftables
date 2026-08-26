@@ -1,0 +1,115 @@
+From 2c05e5e6b0c3aedcefbe73dbab6ac7b4f1b13138 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] tests: shell: split nat inet tests
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b975de80bd1dbf0a04c6cb7a42e46c323c865de8
+
+commit b975de80bd1dbf0a04c6cb7a42e46c323c865de8
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Nov 21 20:45:48 2023 +0100
+
+    tests: shell: split nat inet tests
+
+    Detach nat inet from existing tests not to reduce test coverage.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ .../optimizations/dumps/merge_nat.nft         | 11 ----------
+ .../optimizations/dumps/merge_nat_inet.nft    | 11 ++++++++++
+ tests/shell/testcases/optimizations/merge_nat | 16 --------------
+ .../testcases/optimizations/merge_nat_inet    | 21 +++++++++++++++++++
+ 4 files changed, 32 insertions(+), 27 deletions(-)
+ create mode 100644 tests/shell/testcases/optimizations/dumps/merge_nat_inet.nft
+ create mode 100755 tests/shell/testcases/optimizations/merge_nat_inet
+
+diff --git a/tests/shell/testcases/optimizations/dumps/merge_nat.nft b/tests/shell/testcases/optimizations/dumps/merge_nat.nft
+index 61feb27..f6c119e 100644
+--- a/tests/shell/testcases/optimizations/dumps/merge_nat.nft
++++ b/tests/shell/testcases/optimizations/dumps/merge_nat.nft
+@@ -19,14 +19,3 @@ table ip test4 {
+ 		tcp dport 85 redirect
+ 	}
+ }
+-table inet nat {
+-	chain prerouting {
+-		oif "lo" accept
+-		dnat ip to iifname . ip daddr . tcp dport map { "enp2s0" . 72.2.3.70 . 80 : 10.1.1.52 . 80, "enp2s0" . 72.2.3.66 . 53122 : 10.1.1.10 . 22, "enp2s0" . 72.2.3.66 . 443 : 10.1.1.52 . 443 }
+-	}
+-
+-	chain postrouting {
+-		oif "lo" accept
+-		snat ip to ip daddr map { 72.2.3.66 : 10.2.2.2, 72.2.3.67 : 10.2.3.3 }
+-	}
+-}
+diff --git a/tests/shell/testcases/optimizations/dumps/merge_nat_inet.nft b/tests/shell/testcases/optimizations/dumps/merge_nat_inet.nft
+new file mode 100644
+index 0000000..a1a1135
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/dumps/merge_nat_inet.nft
+@@ -0,0 +1,11 @@
++table inet nat {
++	chain prerouting {
++		oif "lo" accept
++		dnat ip to iifname . ip daddr . tcp dport map { "enp2s0" . 72.2.3.70 . 80 : 10.1.1.52 . 80, "enp2s0" . 72.2.3.66 . 53122 : 10.1.1.10 . 22, "enp2s0" . 72.2.3.66 . 443 : 10.1.1.52 . 443 }
++	}
++
++	chain postrouting {
++		oif "lo" accept
++		snat ip to ip daddr map { 72.2.3.66 : 10.2.2.2, 72.2.3.67 : 10.2.3.3 }
++	}
++}
+diff --git a/tests/shell/testcases/optimizations/merge_nat b/tests/shell/testcases/optimizations/merge_nat
+index bfe9787..3ffcbd5 100755
+--- a/tests/shell/testcases/optimizations/merge_nat
++++ b/tests/shell/testcases/optimizations/merge_nat
+@@ -36,19 +36,3 @@ RULESET="table ip test4 {
+ }"
+ 
+ $NFT -o -f - <<< $RULESET
+-
+-RULESET="table inet nat {
+-	chain prerouting {
+-		oif lo accept
+-		iifname enp2s0 ip daddr 72.2.3.66 tcp dport 53122 dnat to 10.1.1.10:22
+-		iifname enp2s0 ip daddr 72.2.3.66 tcp dport 443 dnat to 10.1.1.52:443
+-		iifname enp2s0 ip daddr 72.2.3.70 tcp dport 80 dnat to 10.1.1.52:80
+-	}
+-	chain postrouting {
+-		oif lo accept
+-		ip daddr 72.2.3.66 snat to 10.2.2.2
+-		ip daddr 72.2.3.67 snat to 10.2.3.3
+-	}
+-}"
+-
+-$NFT -o -f - <<< $RULESET
+diff --git a/tests/shell/testcases/optimizations/merge_nat_inet b/tests/shell/testcases/optimizations/merge_nat_inet
+new file mode 100755
+index 0000000..ff1916d
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/merge_nat_inet
+@@ -0,0 +1,21 @@
++#!/bin/bash
++
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_inet_nat)
++
++set -e
++
++RULESET="table inet nat {
++	chain prerouting {
++		oif lo accept
++		iifname enp2s0 ip daddr 72.2.3.66 tcp dport 53122 dnat to 10.1.1.10:22
++		iifname enp2s0 ip daddr 72.2.3.66 tcp dport 443 dnat to 10.1.1.52:443
++		iifname enp2s0 ip daddr 72.2.3.70 tcp dport 80 dnat to 10.1.1.52:80
++	}
++	chain postrouting {
++		oif lo accept
++		ip daddr 72.2.3.66 snat to 10.2.2.2
++		ip daddr 72.2.3.67 snat to 10.2.3.3
++	}
++}"
++
++$NFT -o -f - <<< $RULESET

@@ -1,0 +1,63 @@
+From 50d322fb2d90b0a07b3f2e6544dec853ac22ac85 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:08 +0200
+Subject: [PATCH] parser_json: use stdin buffer if available
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit e48f32701ff65d522c2f29f34bf4f3ce8e562057
+
+commit e48f32701ff65d522c2f29f34bf4f3ce8e562057
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Jul 9 16:59:52 2024 +0200
+
+    parser_json: use stdin buffer if available
+
+    Since 5c2b2b0a2ba7 ("src: error reporting with -f and read from stdin")
+    stdin is stored in a buffer, update json support to use it instead of
+    reading from /dev/stdin.
+
+    Some systems do not provide /dev/stdin symlink to /proc/self/fd/0
+    according to reporter (that mentions Yocto Linux as example).
+
+    Fixes: 935f82e7dd49 ("Support 'nft -f -' to read from stdin")
+    Acked-by: Phil Sutter <phil@nwl.cc>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/libnftables.c | 3 +--
+ src/parser_json.c | 7 +++++++
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/libnftables.c b/src/libnftables.c
+index 8f8acd1..02570c4 100644
+--- a/src/libnftables.c
++++ b/src/libnftables.c
+@@ -795,8 +795,7 @@ int nft_run_cmd_from_filename(struct nft_ctx *nft, const char *filename)
+ 	if (!strcmp(filename, "-"))
+ 		filename = "/dev/stdin";
+ 
+-	if (!strcmp(filename, "/dev/stdin") &&
+-	    !nft_output_json(&nft->output))
++	if (!strcmp(filename, "/dev/stdin"))
+ 		nft->stdin_buf = stdin_to_buffer();
+ 
+ 	if (nft->optimize_flags) {
+diff --git a/src/parser_json.c b/src/parser_json.c
+index ce36397..047c6fa 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -4333,6 +4333,13 @@ int nft_parse_json_filename(struct nft_ctx *nft, const char *filename,
+ 	json_error_t err;
+ 	int ret;
+ 
++	if (nft->stdin_buf) {
++		json_indesc.type = INDESC_STDIN;
++		json_indesc.name = "/dev/stdin";
++
++		return nft_parse_json_buffer(nft, nft->stdin_buf, msgs, cmds);
++	}
++
+ 	json_indesc.type = INDESC_FILE;
+ 	json_indesc.name = filename;
+ 

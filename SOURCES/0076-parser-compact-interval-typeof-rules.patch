@@ -1,0 +1,92 @@
+From c9d37a13faaa05ee0d260b3828bc25e612ffae20 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] parser: compact interval typeof rules
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 81fc7aee0d523d61077518534036ff10beddb3e9
+
+commit 81fc7aee0d523d61077518534036ff10beddb3e9
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Feb 27 15:50:05 2024 +0100
+
+    parser: compact interval typeof rules
+
+    There are two nearly identical blocks for typeof maps:
+    one with INTERVAL keyword present and one without.
+
+    Compact this into a single block.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 34 ++++++++++++++--------------------
+ 1 file changed, 14 insertions(+), 20 deletions(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index e81336f..82aac8d 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -812,8 +812,8 @@ int nft_lex(void *, void *, void *);
+ 
+ %type <expr>			symbol_expr verdict_expr integer_expr variable_expr chain_expr policy_expr
+ %destructor { expr_free($$); }	symbol_expr verdict_expr integer_expr variable_expr chain_expr policy_expr
+-%type <expr>			primary_expr shift_expr and_expr typeof_expr typeof_data_expr
+-%destructor { expr_free($$); }	primary_expr shift_expr and_expr typeof_expr typeof_data_expr
++%type <expr>			primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_verdict_expr
++%destructor { expr_free($$); }	primary_expr shift_expr and_expr typeof_expr typeof_data_expr typeof_verdict_expr
+ %type <expr>			exclusive_or_expr inclusive_or_expr
+ %destructor { expr_free($$); }	exclusive_or_expr inclusive_or_expr
+ %type <expr>			basic_expr
+@@ -2115,7 +2115,7 @@ subchain_block		:	/* empty */	{ $$ = $<chain>-1; }
+ 			}
+ 			;
+ 
+-typeof_data_expr	:	primary_expr
++typeof_verdict_expr	:	primary_expr
+ 			{
+ 				struct expr *e = $1;
+ 
+@@ -2147,6 +2147,17 @@ typeof_data_expr	:	primary_expr
+ 			}
+ 			;
+ 
++typeof_data_expr	:	INTERVAL	typeof_expr
++			{
++				$2->flags |= EXPR_F_INTERVAL;
++				$$ = $2;
++			}
++			|	typeof_verdict_expr
++			{
++				$$ = $1;
++			}
++			;
++
+ typeof_expr		:	primary_expr
+ 			{
+ 				if (expr_ops($1)->build_udata == NULL) {
+@@ -2326,23 +2337,6 @@ map_block		:	/* empty */	{ $$ = $<set>-1; }
+ 				$1->flags |= NFT_SET_MAP;
+ 				$$ = $1;
+ 			}
+-			|	map_block	TYPEOF
+-						typeof_expr	COLON	INTERVAL	typeof_expr
+-						stmt_separator
+-			{
+-				if (already_set($1->key, &@2, state)) {
+-					expr_free($3);
+-					expr_free($6);
+-					YYERROR;
+-				}
+-
+-				$1->key = $3;
+-				$1->data = $6;
+-				$1->data->flags |= EXPR_F_INTERVAL;
+-
+-				$1->flags |= NFT_SET_MAP;
+-				$$ = $1;
+-			}
+ 			|	map_block	TYPE
+ 						data_type_expr	COLON	map_block_obj_type
+ 						stmt_separator	close_scope_type

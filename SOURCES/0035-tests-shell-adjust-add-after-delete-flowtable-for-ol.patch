@@ -1,0 +1,74 @@
+From 29629b90e74c3228434c4fc27e97c39c0761ed7e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] tests: shell: adjust add-after-delete flowtable for older
+ kernels
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 566182cd8259cfc22f9fd949e9ad3c15ed6a7945
+
+commit 566182cd8259cfc22f9fd949e9ad3c15ed6a7945
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Nov 20 13:54:03 2023 +0100
+
+    tests: shell: adjust add-after-delete flowtable for older kernels
+
+    Remove counter from flowtable, older kernels (<=5.4) do not support this
+    in testcases/flowtable/0013addafterdelete_0 so this bug is still
+    covered.
+
+    Skip testcases/flowtable/0014addafterdelete_0 if flowtable counter
+    support is not available.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/flowtable/0013addafterdelete_0           | 2 --
+ tests/shell/testcases/flowtable/0014addafterdelete_0           | 2 ++
+ tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft | 1 -
+ 3 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/tests/shell/testcases/flowtable/0013addafterdelete_0 b/tests/shell/testcases/flowtable/0013addafterdelete_0
+index b23ab97..56c9834 100755
+--- a/tests/shell/testcases/flowtable/0013addafterdelete_0
++++ b/tests/shell/testcases/flowtable/0013addafterdelete_0
+@@ -7,7 +7,6 @@ RULESET='table inet filter {
+     flowtable f {
+ 	hook ingress priority filter - 1
+ 	devices = { lo }
+-	counter
+     }
+ }'
+ 
+@@ -20,7 +19,6 @@ table inet filter {
+     flowtable f {
+ 	hook ingress priority filter - 1
+ 	devices = { lo }
+-	counter
+     }
+ }'
+ 
+diff --git a/tests/shell/testcases/flowtable/0014addafterdelete_0 b/tests/shell/testcases/flowtable/0014addafterdelete_0
+index 6a24c4b..1ac6510 100755
+--- a/tests/shell/testcases/flowtable/0014addafterdelete_0
++++ b/tests/shell/testcases/flowtable/0014addafterdelete_0
+@@ -1,5 +1,7 @@
+ #!/bin/bash
+ 
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_flowtable_counter)
++
+ set -e
+ 
+ RULESET='table inet filter {
+diff --git a/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft b/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft
+index 83fdd5d..67db7d0 100644
+--- a/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft
++++ b/tests/shell/testcases/flowtable/dumps/0013addafterdelete_0.nft
+@@ -2,6 +2,5 @@ table inet filter {
+ 	flowtable f {
+ 		hook ingress priority filter - 1
+ 		devices = { lo }
+-		counter
+ 	}
+ }

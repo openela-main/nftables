@@ -1,0 +1,244 @@
+From 8ddff86558d1307e8cdd1f225f4633f867f272ed Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:30:58 +0200
+Subject: [PATCH] mergesort: Fix sorting of string values
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 340d904a974ed206fcc4d8ca32540762fd8e59e0
+Conflicts: Dropped changes to non-existent test and .json-nft dumps
+
+commit 340d904a974ed206fcc4d8ca32540762fd8e59e0
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Nov 13 00:03:37 2025 +0100
+
+    mergesort: Fix sorting of string values
+
+    Sorting order was obviously wrong, e.g. "ppp0" ordered before "eth1".
+    Moreover, this happened on Little Endian only so sorting order actually
+    depended on host's byteorder. By reimporting string values as Big
+    Endian, both issues are fixed: On one hand, GMP-internal byteorder no
+    longer depends on host's byteorder, on the other comparing strings
+    really starts with the first character, not the last.
+
+    Fixes: 14ee0a979b622 ("src: sort set elements in netlink_get_setelems()")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mergesort.c                               |  7 +++
+ tests/py/any/meta.t.json.output               | 54 -------------------
+ tests/py/any/queue.t.json.output              |  4 +-
+ tests/py/inet/osf.t.json.output               | 54 +++++++++++++++++++
+ .../shell/testcases/maps/dumps/0012map_0.nft  |  8 +--
+ .../sets/dumps/sets_with_ifnames.nft          |  2 +-
+ 6 files changed, 68 insertions(+), 61 deletions(-)
+
+diff --git a/src/mergesort.c b/src/mergesort.c
+index 0452d60..65e8aa7 100644
+--- a/src/mergesort.c
++++ b/src/mergesort.c
+@@ -37,6 +37,13 @@ static mpz_srcptr expr_msort_value(const struct expr *expr, mpz_t value)
+ 	case EXPR_RANGE:
+ 		return expr_msort_value(expr->left, value);
+ 	case EXPR_VALUE:
++		if (expr_basetype(expr)->type == TYPE_STRING) {
++			char buf[expr->len];
++
++			mpz_export_data(buf, expr->value, BYTEORDER_HOST_ENDIAN, expr->len);
++			mpz_import_data(value, buf, BYTEORDER_BIG_ENDIAN, expr->len);
++			return value;
++		}
+ 		return expr->value;
+ 	case EXPR_RANGE_VALUE:
+ 		return expr->range.low;
+diff --git a/tests/py/any/meta.t.json.output b/tests/py/any/meta.t.json.output
+index 4e9e669..329073e 100644
+--- a/tests/py/any/meta.t.json.output
++++ b/tests/py/any/meta.t.json.output
+@@ -233,60 +233,6 @@
+     }
+ ]
+ 
+-# meta iifname {"dummy0", "lo"}
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "meta": { "key": "iifname" }
+-            },
+-	    "op": "==",
+-            "right": {
+-                "set": [
+-                    "lo",
+-                    "dummy0"
+-                ]
+-            }
+-        }
+-    }
+-]
+-
+-# meta iifname != {"dummy0", "lo"}
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "meta": { "key": "iifname" }
+-            },
+-            "op": "!=",
+-            "right": {
+-                "set": [
+-                    "lo",
+-                    "dummy0"
+-                ]
+-            }
+-        }
+-    }
+-]
+-
+-# meta oifname { "dummy0", "lo"}
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "meta": { "key": "oifname" }
+-            },
+-	    "op": "==",
+-            "right": {
+-                "set": [
+-                    "lo",
+-                    "dummy0"
+-                ]
+-            }
+-        }
+-    }
+-]
+-
+ # meta skuid {"bin", "root", "daemon"} accept
+ [
+     {
+diff --git a/tests/py/any/queue.t.json.output b/tests/py/any/queue.t.json.output
+index ea37223..90670cc 100644
+--- a/tests/py/any/queue.t.json.output
++++ b/tests/py/any/queue.t.json.output
+@@ -104,11 +104,11 @@
+                                 0
+                             ],
+                             [
+-                                "ppp0",
++                                "eth1",
+                                 2
+                             ],
+                             [
+-                                "eth1",
++                                "ppp0",
+                                 2
+                             ]
+                         ]
+diff --git a/tests/py/inet/osf.t.json.output b/tests/py/inet/osf.t.json.output
+index 922e395..77ca7e3 100644
+--- a/tests/py/inet/osf.t.json.output
++++ b/tests/py/inet/osf.t.json.output
+@@ -18,6 +18,26 @@
+     }
+ ]
+ 
++# osf version { "Windows:XP", "MacOs:Sierra" }
++[
++    {
++        "match": {
++            "left": {
++                "osf": {
++                    "key": "version"
++                }
++            },
++            "op": "==",
++            "right": {
++                "set": [
++                    "MacOs:Sierra",
++                    "Windows:XP"
++                ]
++            }
++        }
++    }
++]
++
+ # ct mark set osf name map { "Windows" : 0x00000001, "MacOs" : 0x00000002 }
+ [
+     {
+@@ -51,3 +71,37 @@
+         }
+     }
+ ]
++
++# ct mark set osf version map { "Windows:XP" : 0x00000003, "MacOs:Sierra" : 0x00000004 }
++[
++    {
++        "mangle": {
++            "key": {
++                "ct": {
++                    "key": "mark"
++                }
++            },
++            "value": {
++                "map": {
++                    "data": {
++                        "set": [
++                            [
++                                "MacOs:Sierra",
++                                4
++                            ],
++                            [
++                                "Windows:XP",
++                                3
++                            ]
++                        ]
++                    },
++                    "key": {
++                        "osf": {
++                            "key": "version"
++                        }
++                    }
++                }
++            }
++        }
++    }
++]
+diff --git a/tests/shell/testcases/maps/dumps/0012map_0.nft b/tests/shell/testcases/maps/dumps/0012map_0.nft
+index 895490c..b199a00 100644
+--- a/tests/shell/testcases/maps/dumps/0012map_0.nft
++++ b/tests/shell/testcases/maps/dumps/0012map_0.nft
+@@ -1,9 +1,9 @@
+ table ip x {
+ 	map z {
+ 		type ifname : verdict
+-		elements = { "lo" : accept,
+-			     "eth0" : drop,
+-			     "eth1" : drop }
++		elements = { "eth0" : drop,
++			     "eth1" : drop,
++			     "lo" : accept }
+ 	}
+ 
+ 	map w {
+@@ -14,7 +14,7 @@ table ip x {
+ 	}
+ 
+ 	chain y {
+-		iifname vmap { "lo" : accept, "eth0" : drop, "eth1" : drop }
++		iifname vmap { "eth0" : drop, "eth1" : drop, "lo" : accept }
+ 	}
+ 
+ 	chain k {
+diff --git a/tests/shell/testcases/sets/dumps/sets_with_ifnames.nft b/tests/shell/testcases/sets/dumps/sets_with_ifnames.nft
+index 77a8baf..8abca03 100644
+--- a/tests/shell/testcases/sets/dumps/sets_with_ifnames.nft
++++ b/tests/shell/testcases/sets/dumps/sets_with_ifnames.nft
+@@ -39,7 +39,7 @@ table inet testifsets {
+ 	chain v4icmp {
+ 		iifname @simple counter packets 0 bytes 0
+ 		iifname @simple_wild counter packets 0 bytes 0
+-		iifname { "eth0", "abcdef0" } counter packets 0 bytes 0
++		iifname { "abcdef0", "eth0" } counter packets 0 bytes 0
+ 		iifname { "abcdef*", "eth0" } counter packets 0 bytes 0
+ 		iifname vmap @map_wild
+ 	}

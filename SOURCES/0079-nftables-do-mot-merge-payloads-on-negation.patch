@@ -1,0 +1,40 @@
+From b146a3efdff7e834790e3ee8b605e5e7033fb8c9 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] nftables: do mot merge payloads on negation
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f35a0d78fe870737fa39d859bd2e3ac25bf1b12e
+
+commit f35a0d78fe870737fa39d859bd2e3ac25bf1b12e
+Author: Sriram Rajagopalan <bglsriram@gmail.com>
+Date:   Wed Mar 13 01:32:42 2024 -0700
+
+    nftables: do mot merge payloads on negation
+
+    else, a rule like
+      tcp sport != 22 tcp dport != 23
+
+    will match even if the destination is 23 as long as sport is != 22.
+    (or vice versa).
+
+    Signed-off-by: Sriram Rajagopalan <sriramr@arista.com>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/rule.c b/src/rule.c
+index 85718c7..89101f9 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -2778,7 +2778,6 @@ static void stmt_reduce(const struct rule *rule)
+ 			switch (stmt->expr->op) {
+ 			case OP_EQ:
+ 			case OP_IMPLICIT:
+-			case OP_NEQ:
+ 				break;
+ 			default:
+ 				continue;

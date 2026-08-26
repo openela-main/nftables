@@ -1,0 +1,88 @@
+From c048668173d9ed624dc95124b46be6a5478aa332 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Jul 2026 17:18:39 +0200
+Subject: [PATCH] tests: monitor: Test JSON echo mode as well
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 4a179d991b025a2a55762a6fe1e6c1a58fb5a677
+
+commit 4a179d991b025a2a55762a6fe1e6c1a58fb5a677
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Sep 3 15:30:31 2025 +0200
+
+    tests: monitor: Test JSON echo mode as well
+
+    Reuse the expected JSON monitor output for --echo testing as it is
+    supposed to be "identical" - apart from formatting differences. To match
+    lines of commands (monitor output) against a single line of JSON object
+    (echo output), join the former's lines and drop the surrounding object
+    in the latter since this seems to be the simplest way.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 27 +++++++++++++++++++--------
+ 1 file changed, 19 insertions(+), 8 deletions(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index 3ff8874..509b93f 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -49,7 +49,7 @@ echo_output_append() {
+ 		grep '^\(add\|replace\|insert\)' $command_file >>$output_file
+ 		return
+ 	}
+-	[[ "$*" =~ ^(add|replace|insert) ]] && echo "$*" >>$output_file
++	[[ "$*" =~ ^(\{\")?(add|replace|insert) ]] && echo "$*" >>$output_file
+ }
+ json_output_filter() { # (filename)
+ 	# unify handle values
+@@ -93,16 +93,32 @@ monitor_run_test() {
+ 
+ echo_run_test() {
+ 	echo_output=$(mktemp -p $testdir)
++	echo_args="-nn -e"
++	$test_json && echo_args+=" -j"
+ 	local rc=0
+ 
+ 	$debug && {
+ 		echo "command file:"
+ 		cat $command_file
+ 	}
+-	$nft -nn -e -f - <$command_file >$echo_output || {
++	$nft $echo_args -f - <$command_file >$echo_output || {
+ 		err "nft command failed!"
+ 		rc=1
+ 	}
++	if $test_json; then
++		# Extract commands from the surrounding JSON object
++		sed -i -e 's/^{"nftables": \[//' -e 's/\]}$//' $echo_output
++		json_output_filter $echo_output
++
++		# Replace newlines by ", " in output file
++		readarray -t output_file_lines <$output_file
++		sep=""
++		for ((i = 0; i < ${#output_file_lines[*]}; i++)); do
++			printf "${sep}${output_file_lines[$i]}"
++			sep=", "
++		done >$output_file
++		[ $i -gt 0 ] && echo "" >>$output_file
++	fi
+ 	mydiff -q $echo_output $output_file >/dev/null 2>&1
+ 	if [[ $rc == 0 && $? != 0 ]]; then
+ 		err "echo output differs!"
+@@ -156,12 +172,7 @@ while [ -n "$1" ]; do
+ 	esac
+ done
+ 
+-if $test_json; then
+-	variants="monitor"
+-else
+-	variants="monitor echo"
+-fi
+-
++variants="monitor echo"
+ rc=0
+ for variant in $variants; do
+ 	run_test=${variant}_run_test

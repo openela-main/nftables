@@ -1,0 +1,134 @@
+From 965035f7ecc717e5344f8ee1264e3c645f3061fc Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] fib: allow to use it in set statements
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 525b58568dca5ab9998595fc45313eac2764b6b1
+
+commit 525b58568dca5ab9998595fc45313eac2764b6b1
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Jun 24 18:11:10 2025 +0200
+
+    fib: allow to use it in set statements
+
+    Allow to use fib expression in set statements, eg.
+
+     meta mark set ip saddr . fib daddr check map { 1.2.3.4 . exists : 0x00000001 }
+
+    Fixes: 4a75ed32132d ("src: add fib expression")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y          |  1 +
+ src/parser_json.c           |  2 +-
+ tests/py/inet/fib.t         |  2 ++
+ tests/py/inet/fib.t.json    | 45 +++++++++++++++++++++++++++++++++++++
+ tests/py/inet/fib.t.payload |  8 +++++++
+ 5 files changed, 57 insertions(+), 1 deletion(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index c62d44f..62cd895 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -3837,6 +3837,7 @@ primary_stmt_expr	:	symbol_expr			{ $$ = $1; }
+ 			|	payload_expr			{ $$ = $1; }
+ 			|	keyword_expr			{ $$ = $1; }
+ 			|	socket_expr			{ $$ = $1; }
++			|	fib_expr			{ $$ = $1; }
+ 			|	osf_expr			{ $$ = $1; }
+ 			|	'('	basic_stmt_expr	')'	{ $$ = $2; }
+ 			;
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 3a2f00c..6cefb39 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -1591,7 +1591,7 @@ static struct expr *json_parse_expr(struct json_ctx *ctx, json_t *root)
+ 		/* below two are hash expr */
+ 		{ "jhash", json_parse_hash_expr, CTX_F_STMT | CTX_F_PRIMARY | CTX_F_SET_RHS | CTX_F_SES | CTX_F_MAP | CTX_F_CONCAT },
+ 		{ "symhash", json_parse_hash_expr, CTX_F_STMT | CTX_F_PRIMARY | CTX_F_SET_RHS | CTX_F_SES | CTX_F_MAP | CTX_F_CONCAT },
+-		{ "fib", json_parse_fib_expr, CTX_F_PRIMARY | CTX_F_SET_RHS | CTX_F_SES | CTX_F_MAP | CTX_F_CONCAT },
++		{ "fib", json_parse_fib_expr, CTX_F_STMT | CTX_F_PRIMARY | CTX_F_SET_RHS | CTX_F_SES | CTX_F_MAP | CTX_F_CONCAT },
+ 		{ "|", json_parse_binop_expr, CTX_F_RHS | CTX_F_STMT | CTX_F_PRIMARY | CTX_F_SET_RHS | CTX_F_SES | CTX_F_MAP | CTX_F_CONCAT },
+ 		{ "^", json_parse_binop_expr, CTX_F_RHS | CTX_F_STMT | CTX_F_PRIMARY | CTX_F_SET_RHS | CTX_F_SES | CTX_F_MAP | CTX_F_CONCAT },
+ 		{ "&", json_parse_binop_expr, CTX_F_RHS | CTX_F_STMT | CTX_F_PRIMARY | CTX_F_SET_RHS | CTX_F_SES | CTX_F_MAP | CTX_F_CONCAT },
+diff --git a/tests/py/inet/fib.t b/tests/py/inet/fib.t
+index f9c03b3..60b77a4 100644
+--- a/tests/py/inet/fib.t
++++ b/tests/py/inet/fib.t
+@@ -17,3 +17,5 @@ fib daddr check missing;ok
+ fib daddr oif exists;ok;fib daddr check exists
+ 
+ fib daddr check vmap { missing : drop, exists : accept };ok
++
++meta mark set fib daddr check . ct mark map { exists . 0x00000000 : 0x00000001 };ok
+diff --git a/tests/py/inet/fib.t.json b/tests/py/inet/fib.t.json
+index c2e9d45..14a6249 100644
+--- a/tests/py/inet/fib.t.json
++++ b/tests/py/inet/fib.t.json
+@@ -159,3 +159,48 @@
+         }
+     }
+ ]
++
++# meta mark set fib daddr check . ct mark map { exists . 0x00000000 : 0x00000001 }
++[
++    {
++        "mangle": {
++            "key": {
++                "meta": {
++                    "key": "mark"
++                }
++            },
++            "value": {
++                "map": {
++                    "data": {
++                        "set": [
++                            [
++                                {
++                                    "concat": [
++                                        true,
++                                        0
++                                    ]
++                                },
++                                1
++                            ]
++                        ]
++                    },
++                    "key": {
++                        "concat": [
++                            {
++                                "fib": {
++                                    "flags": "daddr",
++                                    "result": "check"
++                                }
++                            },
++                            {
++                                "ct": {
++                                    "key": "mark"
++                                }
++                            }
++                        ]
++                    }
++                }
++            }
++        }
++    }
++]
+diff --git a/tests/py/inet/fib.t.payload b/tests/py/inet/fib.t.payload
+index e09a260..02d92b5 100644
+--- a/tests/py/inet/fib.t.payload
++++ b/tests/py/inet/fib.t.payload
+@@ -36,3 +36,11 @@ ip test-ip prerouting
+ ip test-ip prerouting
+   [ fib daddr oif present => reg 1 ]
+   [ lookup reg 1 set __map%d dreg 0 ]
++
++# meta mark set fib daddr check . ct mark map { exists . 0x00000000 : 0x00000001 }
++        element 00000001 00000000  : 00000001 0 [end]
++ip test-ip prerouting
++  [ fib daddr oif present => reg 1 ]
++  [ ct load mark => reg 9 ]
++  [ lookup reg 1 set __map%d dreg 1 ]
++  [ meta set mark with reg 1 ]

@@ -1,0 +1,94 @@
+From 21c9b6d963d6aeff380324e411a0a871b422b923 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] tests: shell: prefer project nft to system-wide nft
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 8440983b7671feb3bb86c4c148af743addf3e00b
+
+commit 8440983b7671feb3bb86c4c148af743addf3e00b
+Author: Florian Westphal <fw@strlen.de>
+Date:   Sat Jan 6 13:23:24 2024 +0100
+
+    tests: shell: prefer project nft to system-wide nft
+
+    Use $NFT (src/nft, in-tree binary), not the one installed by the distro.
+    Else we may not find newly added bugs unless user did "make install" or
+    bug has propagated to release.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/packetpath/payload      | 38 +++++++++----------
+ tests/shell/testcases/parsing/large_rule_pipe |  2 +-
+ 2 files changed, 20 insertions(+), 20 deletions(-)
+
+diff --git a/tests/shell/testcases/packetpath/payload b/tests/shell/testcases/packetpath/payload
+index 1a89d85..9f4587d 100755
+--- a/tests/shell/testcases/packetpath/payload
++++ b/tests/shell/testcases/packetpath/payload
+@@ -102,19 +102,19 @@ table inet payload_inet {
+ 
+ 	ip netns exec "$ns1" $NFT list ruleset
+ 
+-	ip netns exec "$ns1" nft list counter netdev payload_netdev ingress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter netdev payload_netdev mangle_ingress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter netdev payload_netdev mangle_ingress_match | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter netdev payload_netdev egress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter netdev payload_netdev mangle_egress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter netdev payload_netdev mangle_egress_match | grep -v "packets 0" > /dev/null || exit 1
+-
+-	ip netns exec "$ns1" nft list counter inet payload_inet input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter inet payload_inet mangle_input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter inet payload_inet mangle_input_match | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter inet payload_inet output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter inet payload_inet mangle_output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter inet payload_inet mangle_output_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev ingress | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_ingress | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_ingress_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev egress | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_egress | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_egress_match | grep -v "packets 0" > /dev/null || exit 1
++
++	ip netns exec "$ns1" $NFT list counter inet payload_inet input | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_input | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_input_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet output | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_output | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_output_match | grep -v "packets 0" > /dev/null || exit 1
+ 
+ 	#
+ 	# ... next stage
+@@ -166,12 +166,12 @@ RULESET="table bridge payload_bridge {
+ 
+ 	ip netns exec "$ns1" $NFT list ruleset
+ 
+-	ip netns exec "$ns1" nft list counter bridge payload_bridge input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter bridge payload_bridge mangle_input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter bridge payload_bridge mangle_input_match | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter bridge payload_bridge output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter bridge payload_bridge mangle_output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" nft list counter bridge payload_bridge mangle_output_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge input | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_input | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_input_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge output | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_output | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_output_match | grep -v "packets 0" > /dev/null || exit 1
+ }
+ 
+ run_test "4" "10.141.10.2" "10.141.10.3" "24"
+diff --git a/tests/shell/testcases/parsing/large_rule_pipe b/tests/shell/testcases/parsing/large_rule_pipe
+index fac0afa..b6760c0 100755
+--- a/tests/shell/testcases/parsing/large_rule_pipe
++++ b/tests/shell/testcases/parsing/large_rule_pipe
+@@ -566,6 +566,6 @@ table inet firewalld {
+ 	}
+ }"
+ 
+-( echo "flush ruleset;"; echo "${RULESET}" ) | nft -f -
++( echo "flush ruleset;"; echo "${RULESET}" ) | $NFT -f -
+ 
+ exit 0

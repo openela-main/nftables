@@ -1,0 +1,132 @@
+From 6d277e247b5022f59f733acbbe74f609937d5b9d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] src: expand create commands
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 04a1ddc2012964c0a00350973328f5954887cedb
+
+commit 04a1ddc2012964c0a00350973328f5954887cedb
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Nov 13 14:39:23 2023 +0100
+
+    src: expand create commands
+
+    create commands also need to be expanded, otherwise elements are never
+    evaluated:
+
+     # cat ruleset.nft
+     define ip-block-4 = { 1.1.1.1 }
+     create set netdev filter ip-block-4-test {
+            type ipv4_addr
+            flags interval
+            auto-merge
+            elements = $ip-block-4
+     }
+     # nft -f ruleset.nft
+     BUG: unhandled expression type 0
+     nft: src/intervals.c:211: interval_expr_key: Assertion `0' failed.
+     Aborted
+
+    Same applies to chains in the form of:
+
+     create chain x y {
+            counter
+     }
+
+    which is also accepted by the parser.
+
+    Update tests/shell to improve coverage for these use cases.
+
+    Fixes: 56c90a2dd2eb ("evaluate: expand sets and maps before evaluation")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/libnftables.c                                    |  3 ++-
+ tests/shell/testcases/include/0020include_chain_0    |  7 +++++++
+ .../testcases/include/dumps/0020include_chain_0.nft  |  5 +++++
+ tests/shell/testcases/sets/0049set_define_0          | 12 ++++++++++++
+ .../shell/testcases/sets/dumps/0049set_define_0.nft  |  7 +++++++
+ 5 files changed, 33 insertions(+), 1 deletion(-)
+
+diff --git a/src/libnftables.c b/src/libnftables.c
+index ec90200..0dee1ba 100644
+--- a/src/libnftables.c
++++ b/src/libnftables.c
+@@ -532,7 +532,8 @@ static int nft_evaluate(struct nft_ctx *nft, struct list_head *msgs,
+ 		collapsed = true;
+ 
+ 	list_for_each_entry(cmd, cmds, list) {
+-		if (cmd->op != CMD_ADD)
++		if (cmd->op != CMD_ADD &&
++		    cmd->op != CMD_CREATE)
+ 			continue;
+ 
+ 		nft_cmd_expand(cmd);
+diff --git a/tests/shell/testcases/include/0020include_chain_0 b/tests/shell/testcases/include/0020include_chain_0
+index 8f78e8c..49b6f76 100755
+--- a/tests/shell/testcases/include/0020include_chain_0
++++ b/tests/shell/testcases/include/0020include_chain_0
+@@ -20,4 +20,11 @@ RULESET2="chain inet filter input2 {
+ 
+ echo "$RULESET2" > $tmpfile1
+ 
++RULESET3="create chain inet filter output2 {
++	type filter hook output priority filter; policy accept;
++	ip daddr 1.2.3.4 tcp dport { 22, 443, 123 } drop
++}"
++
++echo "$RULESET3" >> $tmpfile1
++
+ $NFT -o -f - <<< $RULESET
+diff --git a/tests/shell/testcases/include/dumps/0020include_chain_0.nft b/tests/shell/testcases/include/dumps/0020include_chain_0.nft
+index 3ad6db1..bf596ff 100644
+--- a/tests/shell/testcases/include/dumps/0020include_chain_0.nft
++++ b/tests/shell/testcases/include/dumps/0020include_chain_0.nft
+@@ -3,4 +3,9 @@ table inet filter {
+ 		type filter hook input priority filter; policy accept;
+ 		ip saddr 1.2.3.4 tcp dport { 22, 123, 443 } drop
+ 	}
++
++	chain output2 {
++		type filter hook output priority filter; policy accept;
++		ip daddr 1.2.3.4 tcp dport { 22, 123, 443 } drop
++	}
+ }
+diff --git a/tests/shell/testcases/sets/0049set_define_0 b/tests/shell/testcases/sets/0049set_define_0
+index 1d512f7..756afdc 100755
+--- a/tests/shell/testcases/sets/0049set_define_0
++++ b/tests/shell/testcases/sets/0049set_define_0
+@@ -14,3 +14,15 @@ table inet filter {
+ "
+ 
+ $NFT -f - <<< "$EXPECTED"
++
++EXPECTED="define ip-block-4 = { 1.1.1.1 }
++
++     create set inet filter ip-block-4-test {
++            type ipv4_addr
++            flags interval
++            auto-merge
++            elements = \$ip-block-4
++     }
++"
++
++$NFT -f - <<< "$EXPECTED"
+diff --git a/tests/shell/testcases/sets/dumps/0049set_define_0.nft b/tests/shell/testcases/sets/dumps/0049set_define_0.nft
+index 998b387..d654420 100644
+--- a/tests/shell/testcases/sets/dumps/0049set_define_0.nft
++++ b/tests/shell/testcases/sets/dumps/0049set_define_0.nft
+@@ -1,4 +1,11 @@
+ table inet filter {
++	set ip-block-4-test {
++		type ipv4_addr
++		flags interval
++		auto-merge
++		elements = { 1.1.1.1 }
++	}
++
+ 	chain input {
+ 		type filter hook input priority filter; policy drop;
+ 		tcp dport { 22, 80, 443 } ct state new counter packets 0 bytes 0 accept

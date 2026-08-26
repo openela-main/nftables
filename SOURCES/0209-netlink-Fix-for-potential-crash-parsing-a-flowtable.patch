@@ -1,0 +1,40 @@
+From a5b99f520504938300319cc466b6d8e01fda316c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] netlink: Fix for potential crash parsing a flowtable
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d5ef04441eb1de3efc27aa70193fe3d7f0b5c408
+
+commit d5ef04441eb1de3efc27aa70193fe3d7f0b5c408
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jun 11 13:12:56 2025 +0200
+
+    netlink: Fix for potential crash parsing a flowtable
+
+    Kernel's flowtable message might not contain the
+    NFTA_FLOWTABLE_HOOK_DEVS attribute. In that case, nftnl_flowtable_get()
+    will return NULL for the respective nftnl attribute.
+
+    Fixes: db0697ce7f602 ("src: support for flowtable listing")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 05d5a97..1de4642 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -1812,7 +1812,7 @@ netlink_delinearize_flowtable(struct netlink_ctx *ctx,
+ 	if (nftnl_flowtable_is_set(nlo, NFTNL_FLOWTABLE_FLAGS))
+ 		flowtable->flags = nftnl_flowtable_get_u32(nlo, NFTNL_FLOWTABLE_FLAGS);
+ 	dev_array = nftnl_flowtable_get(nlo, NFTNL_FLOWTABLE_DEVICES);
+-	while (dev_array[len])
++	while (dev_array && dev_array[len])
+ 		len++;
+ 
+ 	if (len)

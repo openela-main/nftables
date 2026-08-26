@@ -1,0 +1,183 @@
+From 5f9d328d5e098afb7ae69b72084380ffb472940f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:30:58 +0200
+Subject: [PATCH] expression: expr_build_udata_recurse should recurse
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d199cca92f9eb296ea527f4938d5454ce0b4cc8f
+
+commit d199cca92f9eb296ea527f4938d5454ce0b4cc8f
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Feb 27 15:52:10 2025 +0100
+
+    expression: expr_build_udata_recurse should recurse
+
+    If we see EXPR_BINOP, recurse: ->left can be another EXPR_BINOP.
+
+    This is irrelevant for 'typeof' named sets, but for anonymous sets, the
+    key is derived from the concat expression that builds the lookup key for
+    the anonymous set.
+
+     tcp option mptcp subtype . ip daddr { mp-join. 10.0.0.1, ..
+
+     needs two binops back-to-back:
+
+      [ exthdr load tcpopt 1b @ 30 + 2 => reg 1 ]
+      [ bitwise reg 1 = ( reg 1 & 0x000000f0 ) ^ 0x00000000 ]
+      [ bitwise reg 1 = ( reg 1 >> 0x00000004 ) ]
+
+    This bug prevents concat_expr_build_udata() from creating the userdata key
+    at load time.
+
+    When listing the rules, we get an assertion:
+     nft: src/mergesort.c:23: concat_expr_msort_value: Assertion `ilen > 0' failed.
+
+    because the set has a key with 0-length integers.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/expression.c              |  2 +-
+ tests/py/any/tcpopt.t         |  1 +
+ tests/py/any/tcpopt.t.json    | 77 +++++++++++++++++++++++++++++++++++
+ tests/py/any/tcpopt.t.payload | 13 ++++++
+ 4 files changed, 92 insertions(+), 1 deletion(-)
+
+diff --git a/src/expression.c b/src/expression.c
+index 4fd0a91..781d689 100644
+--- a/src/expression.c
++++ b/src/expression.c
+@@ -954,7 +954,7 @@ static struct expr *expr_build_udata_recurse(struct expr *e)
+ {
+ 	switch (e->etype) {
+ 	case EXPR_BINOP:
+-		return e->left;
++		return expr_build_udata_recurse(e->left);
+ 	default:
+ 		break;
+ 	}
+diff --git a/tests/py/any/tcpopt.t b/tests/py/any/tcpopt.t
+index 79699e2..3d46c0e 100644
+--- a/tests/py/any/tcpopt.t
++++ b/tests/py/any/tcpopt.t
+@@ -54,6 +54,7 @@ tcp option mptcp exists;ok
+ tcp option mptcp subtype mp-capable;ok
+ tcp option mptcp subtype 1;ok;tcp option mptcp subtype mp-join
+ tcp option mptcp subtype { mp-capable, mp-join, remove-addr, mp-prio, mp-fail, mp-fastclose, mp-tcprst };ok
++tcp option mptcp subtype . tcp dport { mp-capable . 10, mp-join . 100, add-addr . 200, remove-addr . 300, mp-prio . 400, mp-fail . 500, mp-fastclose . 600, mp-tcprst . 700 };ok
+ 
+ reset tcp option mptcp;ok
+ reset tcp option 2;ok;reset tcp option maxseg
+diff --git a/tests/py/any/tcpopt.t.json b/tests/py/any/tcpopt.t.json
+index fb0662a..bc7b78a 100644
+--- a/tests/py/any/tcpopt.t.json
++++ b/tests/py/any/tcpopt.t.json
+@@ -591,6 +591,83 @@
+    }
+ ]
+ 
++# tcp option mptcp subtype . tcp dport { mp-capable . 10, mp-join . 100, add-addr . 200, remove-addr . 300, mp-prio . 400, mp-fail . 500, mp-fastclose . 600, mp-tcprst . 700 }
++[
++    {
++        "match": {
++            "left": {
++                "concat": [
++                    {
++                        "tcp option": {
++                            "field": "subtype",
++                            "name": "mptcp"
++                        }
++                    },
++                    {
++                        "payload": {
++                            "field": "dport",
++                            "protocol": "tcp"
++                        }
++                    }
++                ]
++            },
++            "op": "==",
++            "right": {
++                "set": [
++                    {
++                        "concat": [
++                            "mp-capable",
++                            10
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "remove-addr",
++                            300
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-fastclose",
++                            600
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-join",
++                            100
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-prio",
++                            400
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-tcprst",
++                            700
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "add-addr",
++                            200
++                        ]
++                    },
++                    {
++                        "concat": [
++                            "mp-fail",
++                            500
++                        ]
++                    }
++                ]
++            }
++        }
++    }
++]
++
+ # reset tcp option mptcp
+ [
+     {
+diff --git a/tests/py/any/tcpopt.t.payload b/tests/py/any/tcpopt.t.payload
+index af8c431..437e073 100644
+--- a/tests/py/any/tcpopt.t.payload
++++ b/tests/py/any/tcpopt.t.payload
+@@ -189,6 +189,19 @@ ip test-ip4 input
+   [ bitwise reg 1 = ( reg 1 & 0x000000f0 ) ^ 0x00000000 ]
+   [ lookup reg 1 set __set%d ]
+ 
++# tcp option mptcp subtype . tcp dport { mp-capable . 10, mp-join . 100, add-addr . 200, remove-addr . 300, mp-prio . 400, mp-fail . 500, mp-fastclose . 600, mp-tcprst . 700 }
++__set%d test-ip4 3
++__set%d test-ip4 0
++        element 00000000 00000a00  : 0 [end]    element 00000001 00006400  : 0 [end]    element 00000003 0000c800  : 0 [end]    element 00000004 00002c01  : 0 [end]    element 00000005 00009001  : 0 [end]    element 00000006 0000f401  : 0 [end]    element 00000007 00005802  : 0 [end]    element 00000008 0000bc02  : 0 [end]
++ip test-ip4 input
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ exthdr load tcpopt 1b @ 30 + 2 => reg 1 ]
++  [ bitwise reg 1 = ( reg 1 & 0x000000f0 ) ^ 0x00000000 ]
++  [ bitwise reg 1 = ( reg 1 >> 0x00000004 ) ]
++  [ payload load 2b @ transport header + 2 => reg 9 ]
++  [ lookup reg 1 set __set%d ]
++
+ # reset tcp option mptcp
+ ip test-ip4 input
+   [ exthdr reset tcpopt 30 ]

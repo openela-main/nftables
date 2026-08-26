@@ -1,0 +1,59 @@
+From e9372be1f7b089f58c49d3093f0973c2bf5bfc9a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:08 +0200
+Subject: [PATCH] evaluate: set on expr->len for catchall set elements
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b523008535f3de78ed5834a302ba07cda4b4c8fd
+
+commit b523008535f3de78ed5834a302ba07cda4b4c8fd
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jul 4 16:38:22 2024 +0200
+
+    evaluate: set on expr->len for catchall set elements
+
+    Catchall elements coming from the parser provide expr->len == 0.
+    However, the existing mergesort implementation requires expr->len to be
+    set up to the length of the set key to properly sort elements.
+
+    In particular, set element deletion leverages such list sorting to find
+    if elements exists in the set.
+
+    Fixes: 419d19688688 ("src: add set element catch-all support")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index c28f693..af811a7 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1802,6 +1802,16 @@ err_missing_flag:
+ 			  set_is_map(ctx->set->flags) ? "map" : "set", expr_name(key));
+ }
+ 
++static int expr_evaluate_set_elem_catchall(struct eval_ctx *ctx, struct expr **expr)
++{
++	struct expr *elem = *expr;
++
++	if (ctx->set)
++		elem->len = ctx->set->key->len;
++
++	return 0;
++}
++
+ static const struct expr *expr_set_elem(const struct expr *expr)
+ {
+ 	if (expr->etype == EXPR_MAPPING)
+@@ -2866,7 +2876,7 @@ static int expr_evaluate(struct eval_ctx *ctx, struct expr **expr)
+ 	case EXPR_XFRM:
+ 		return expr_evaluate_xfrm(ctx, expr);
+ 	case EXPR_SET_ELEM_CATCHALL:
+-		return 0;
++		return expr_evaluate_set_elem_catchall(ctx, expr);
+ 	case EXPR_FLAGCMP:
+ 		return expr_evaluate_flagcmp(ctx, expr);
+ 	default:

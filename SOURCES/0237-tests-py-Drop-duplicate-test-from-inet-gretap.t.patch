@@ -1,0 +1,67 @@
+From 519cf2518d490008198fb584ecf1fc55b47b6802 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: Drop duplicate test from inet/gretap.t
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit e159957099746a294ce767c16665d77b5ef2d464
+
+commit e159957099746a294ce767c16665d77b5ef2d464
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 14:23:30 2025 +0200
+
+    tests: py: Drop duplicate test from inet/gretap.t
+
+    The test was duplicate since day 1. The duplicate JSON equivalent was
+    added later (semi-automated), remove it as well.
+
+    Fixes: 39a68d9ffd25c ("tests: py: add gretap tests")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/gretap.t      |  1 -
+ tests/py/inet/gretap.t.json | 17 -----------------
+ 2 files changed, 18 deletions(-)
+
+diff --git a/tests/py/inet/gretap.t b/tests/py/inet/gretap.t
+index cd7ee21..f88896f 100644
+--- a/tests/py/inet/gretap.t
++++ b/tests/py/inet/gretap.t
+@@ -15,7 +15,6 @@ gretap icmp type echo-reply;ok
+ gretap ether saddr 62:87:4d:d6:19:05;ok
+ gretap vlan id 10;ok
+ gretap ip dscp 0x02;ok
+-gretap ip dscp 0x02;ok
+ gretap ip saddr . gretap ip daddr { 1.2.3.4 . 4.3.2.1 };ok
+ 
+ gretap ip saddr set 1.2.3.4;fail
+diff --git a/tests/py/inet/gretap.t.json b/tests/py/inet/gretap.t.json
+index 36fa978..6c16a08 100644
+--- a/tests/py/inet/gretap.t.json
++++ b/tests/py/inet/gretap.t.json
+@@ -139,23 +139,6 @@
+     }
+ ]
+ 
+-# gretap ip dscp 0x02
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "dscp",
+-                    "protocol": "ip",
+-                    "tunnel": "gretap"
+-                }
+-            },
+-            "op": "==",
+-            "right": 2
+-        }
+-    }
+-]
+-
+ # gretap ip saddr . gretap ip daddr { 1.2.3.4 . 4.3.2.1 }
+ [
+     {

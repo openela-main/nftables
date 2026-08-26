@@ -1,0 +1,273 @@
+From bae32e53f806f0f6dc8fb27a5ce182ac8871f2f5 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:22 +0200
+Subject: [PATCH] tests: py: Fix some JSON equivalents
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 0c17b910b3e19c4eacf5567f90b6545ed1fd8aac
+
+commit 0c17b910b3e19c4eacf5567f90b6545ed1fd8aac
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Mar 22 14:00:26 2024 +0100
+
+    tests: py: Fix some JSON equivalents
+
+    Make sure they match the standard syntax input as much as possible.
+
+    For some reason inet/tcp.t.json was using plain arrays in place of
+    binary OR expressions in many cases. These arrays are interpreted as
+    list expressions, which seems to be semantically identical but the goal
+    here is to present an accurate equivalent to the rule in standard
+    syntax.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/any/meta.t.json   |   2 +-
+ tests/py/any/tcpopt.t.json |   4 +-
+ tests/py/inet/tcp.t.json   | 124 +++++++++++++++++++++----------------
+ 3 files changed, 75 insertions(+), 55 deletions(-)
+
+diff --git a/tests/py/any/meta.t.json b/tests/py/any/meta.t.json
+index b315015..1c2f2b2 100644
+--- a/tests/py/any/meta.t.json
++++ b/tests/py/any/meta.t.json
+@@ -2623,7 +2623,7 @@
+                 }
+             },
+             "op": "==",
+-            "right": "17:00"
++            "right": "17:00:00"
+         }
+     },
+     {
+diff --git a/tests/py/any/tcpopt.t.json b/tests/py/any/tcpopt.t.json
+index 859d612..65fa1de 100644
+--- a/tests/py/any/tcpopt.t.json
++++ b/tests/py/any/tcpopt.t.json
+@@ -192,7 +192,7 @@
+             "left": {
+                 "tcp option": {
+                     "field": "left",
+-                    "name": "sack"
++                    "name": "sack0"
+                 }
+             },
+             "op": "==",
+@@ -272,7 +272,7 @@
+             "left": {
+                 "tcp option": {
+                     "field": "right",
+-                    "name": "sack"
++                    "name": "sack0"
+                 }
+             },
+             "op": "==",
+diff --git a/tests/py/inet/tcp.t.json b/tests/py/inet/tcp.t.json
+index 95a9e48..88c6c59 100644
+--- a/tests/py/inet/tcp.t.json
++++ b/tests/py/inet/tcp.t.json
+@@ -1339,13 +1339,13 @@
+             "op": "==",
+             "right": {
+                 "set": [
++                    "syn",
+                     {
+                         "|": [
+                             "syn",
+                             "ack"
+                         ]
+-                    },
+-                    "syn"
++                    }
+                 ]
+             }
+         }
+@@ -1370,10 +1370,10 @@
+             "op": "==",
+             "right": {
+                 "set": [
+-                    { "|": [ "fin", "psh", "ack" ] },
+                     "fin",
++                    "ack",
+                     { "|": [ "psh", "ack" ] },
+-                    "ack"
++                    { "|": [ "fin", "psh", "ack" ] }
+                 ]
+             }
+         }
+@@ -1411,17 +1411,21 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    [
+-                        "fin",
+-                        "syn"
+-                    ]
++                    {
++                        "|": [
++                            "fin",
++                            "syn"
++                        ]
++                    }
+                 ]
+             },
+             "op": "==",
+-            "right": [
+-                "fin",
+-                "syn"
+-            ]
++            "right": {
++                "|": [
++                    "fin",
++                    "syn"
++                ]
++            }
+         }
+     }
+ ]
+@@ -1438,10 +1442,12 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    [
+-                        "fin",
+-                        "syn"
+-                    ]
++                    {
++                        "|": [
++                            "fin",
++                            "syn"
++                        ]
++                    }
+                 ]
+             },
+             "op": "!=",
+@@ -1574,12 +1580,14 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    [
+-                        "fin",
+-                        "syn",
+-                        "rst",
+-                        "ack"
+-                    ]
++                    {
++                        "|": [
++                            "fin",
++                            "syn",
++                            "rst",
++                            "ack"
++                        ]
++                    }
+                 ]
+             },
+             "op": "==",
+@@ -1600,12 +1608,14 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    [
+-                        "fin",
+-                        "syn",
+-                        "rst",
+-                        "ack"
+-                    ]
++                    {
++                        "|": [
++                            "fin",
++                            "syn",
++                            "rst",
++                            "ack"
++                        ]
++                    }
+                 ]
+             },
+             "op": "==",
+@@ -1627,12 +1637,14 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    [
+-                        "fin",
+-                        "syn",
+-                        "rst",
+-                        "ack"
+-                    ]
++                    {
++                        "|": [
++                            "fin",
++                            "syn",
++                            "rst",
++                            "ack"
++                        ]
++                    }
+                 ]
+             },
+             "op": "!=",
+@@ -1653,19 +1665,23 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    [
+-                        "fin",
+-                        "syn",
+-                        "rst",
+-                        "ack"
+-                    ]
++                    {
++                        "|": [
++                            "fin",
++                            "syn",
++                            "rst",
++                            "ack"
++                        ]
++                    }
+                 ]
+             },
+             "op": "==",
+-            "right": [
+-                "syn",
+-                "ack"
+-            ]
++            "right": {
++                "|": [
++                    "syn",
++                    "ack"
++                ]
++            }
+         }
+     }
+ ]
+@@ -1682,17 +1698,21 @@
+                             "protocol": "tcp"
+                         }
+                     },
+-                    [
+-                        "syn",
+-                        "ack"
+-                    ]
++                    {
++                        "|": [
++                            "syn",
++                            "ack"
++                        ]
++                    }
+                 ]
+             },
+             "op": "==",
+-            "right": [
+-                "syn",
+-                "ack"
+-            ]
++            "right": {
++                "|": [
++                    "syn",
++                    "ack"
++                ]
++            }
+         }
+     }
+ ]

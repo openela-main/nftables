@@ -1,0 +1,67 @@
+From 4c116af60aac07ebd1335066844b08070ac140b4 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:24 +0200
+Subject: [PATCH] fib: Fix for existence check on Big Endian
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 98e51e687616a4b54efa3b723917c292e3acc380
+
+commit 98e51e687616a4b54efa3b723917c292e3acc380
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Sep 9 22:27:19 2025 +0200
+
+    fib: Fix for existence check on Big Endian
+
+    Adjust the expression size to 1B so cmp expression value is correct.
+    Without this, the rule 'fib saddr . iif check exists' generates
+    following byte code on BE:
+
+    |  [ fib saddr . iif oif present => reg 1 ]
+    |  [ cmp eq reg 1 0x00000001 ]
+
+    Though with NFTA_FIB_F_PRESENT flag set, nft_fib.ko writes to the first
+    byte of reg 1 only (using nft_reg_store8()). With this patch in place,
+    byte code is correct:
+
+    |  [ fib saddr . iif oif present => reg 1 ]
+    |  [ cmp eq reg 1 0x01000000 ]
+
+    Fixes: f686a17eafa0b ("fib: Support existence check")
+    Cc: Yi Chen <yiche@redhat.com>
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 1 +
+ src/fib.c      | 4 +++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 93f0bbf..fa3122a 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -2702,6 +2702,7 @@ static int expr_evaluate_fib(struct eval_ctx *ctx, struct expr **exprp)
+ 	if (expr->flags & EXPR_F_BOOLEAN) {
+ 		expr->fib.flags |= NFTA_FIB_F_PRESENT;
+ 		datatype_set(expr, &boolean_type);
++		expr->len = BITS_PER_BYTE;
+ 	}
+ 	return expr_evaluate_primary(ctx, exprp);
+ }
+diff --git a/src/fib.c b/src/fib.c
+index 5383613..4db7cd2 100644
+--- a/src/fib.c
++++ b/src/fib.c
+@@ -198,8 +198,10 @@ struct expr *fib_expr_alloc(const struct location *loc,
+ 		BUG("Unknown result %d\n", result);
+ 	}
+ 
+-	if (flags & NFTA_FIB_F_PRESENT)
++	if (flags & NFTA_FIB_F_PRESENT) {
+ 		type = &boolean_type;
++		len = BITS_PER_BYTE;
++	}
+ 
+ 	expr = expr_alloc(loc, EXPR_FIB, type,
+ 			  BYTEORDER_HOST_ENDIAN, len);

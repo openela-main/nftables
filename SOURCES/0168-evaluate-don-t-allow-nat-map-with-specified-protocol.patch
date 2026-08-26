@@ -1,0 +1,60 @@
+From 342c716dbdef596fb3bf29ffc2b98bed9caa23db Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] evaluate: don't allow nat map with specified protocol
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 43cf4a2973ee9e3ab20edce47c6a054485707592
+
+commit 43cf4a2973ee9e3ab20edce47c6a054485707592
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Mar 20 09:39:20 2025 +0100
+
+    evaluate: don't allow nat map with specified protocol
+
+    Included bogon asserts:
+    src/netlink_linearize.c:1305: netlink_gen_nat_stmt: Assertion `stmt->nat.proto == NULL' failed.
+
+    The comment right above the assertion says:
+      nat_stmt evaluation step doesn't allow
+      STMT_NAT_F_CONCAT && stmt->nat.proto.
+
+    ... except it does allow it.  Disable this.
+
+    Fixes: c68314dd4263 ("src: infer NAT mapping with concatenation from set")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                           | 4 ++++
+ tests/shell/testcases/bogons/nat_map_and_protocol_assert | 5 +++++
+ 2 files changed, 9 insertions(+)
+ create mode 100644 tests/shell/testcases/bogons/nat_map_and_protocol_assert
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 256ca10..81fad84 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -3897,6 +3897,10 @@ static int stmt_evaluate_nat_map(struct eval_ctx *ctx, struct stmt *stmt)
+ 	int addr_type;
+ 	int err;
+ 
++	if (stmt->nat.proto)
++		return stmt_binary_error(ctx, stmt, stmt->nat.proto,
++				  "nat map and protocol are mutually exclusive");
++
+ 	if (stmt->nat.family == NFPROTO_INET)
+ 		expr_family_infer(pctx, stmt->nat.addr, &stmt->nat.family);
+ 
+diff --git a/tests/shell/testcases/bogons/nat_map_and_protocol_assert b/tests/shell/testcases/bogons/nat_map_and_protocol_assert
+new file mode 100644
+index 0000000..67f2ae8
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nat_map_and_protocol_assert
+@@ -0,0 +1,5 @@
++table t {
++ chain y {
++  snat to ip saddr . tcp sport map { 1.1.1.1 . 1 : 1.1.1.2 . 1 } : 6
++ }
++}

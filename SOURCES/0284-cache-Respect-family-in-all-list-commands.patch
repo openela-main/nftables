@@ -1,0 +1,121 @@
+From 5eaeb15b4fc83fe6058ea853a3cc410349934104 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:05 +0200
+Subject: [PATCH] cache: Respect family in all list commands
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f4a5334f503dc9d99bce45020c105b6812dd15f0
+
+commit f4a5334f503dc9d99bce45020c105b6812dd15f0
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Sat Feb 14 14:58:03 2026 +0100
+
+    cache: Respect family in all list commands
+
+    Some list commands did not set filter->list.family even if one was given
+    on command line, fix this.
+
+    Fixes: b3ed8fd8c9f33 ("cache: missing family in cache filtering")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Tested-by: Eric Garver <eric@garver.life>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c                                 |  6 ++-
+ tests/shell/testcases/listing/cache_filters | 46 +++++++++++++++++++++
+ 2 files changed, 51 insertions(+), 1 deletion(-)
+ create mode 100755 tests/shell/testcases/listing/cache_filters
+
+diff --git a/src/cache.c b/src/cache.c
+index 04a7c94..2f3a0f6 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -252,10 +252,12 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 			flags |= NFT_CACHE_FULL;
+ 		break;
+ 	case CMD_OBJ_CHAINS:
++		filter->list.family = cmd->handle.family;
+ 		flags |= NFT_CACHE_TABLE | NFT_CACHE_CHAIN;
+ 		break;
+ 	case CMD_OBJ_SETS:
+ 	case CMD_OBJ_MAPS:
++		filter->list.family = cmd->handle.family;
+ 		flags |= NFT_CACHE_TABLE | NFT_CACHE_SET;
+ 		if (!nft_output_terse(&nft->output))
+ 			flags |= NFT_CACHE_SETELEM;
+@@ -263,12 +265,12 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 	case CMD_OBJ_FLOWTABLE:
+ 		if (cmd->handle.table.name &&
+ 		    cmd->handle.flowtable.name) {
+-			filter->list.family = cmd->handle.family;
+ 			filter->list.table = cmd->handle.table.name;
+ 			filter->list.ft = cmd->handle.flowtable.name;
+ 		}
+ 		/* fall through */
+ 	case CMD_OBJ_FLOWTABLES:
++		filter->list.family = cmd->handle.family;
+ 		flags |= NFT_CACHE_TABLE | NFT_CACHE_FLOWTABLE;
+ 		break;
+ 	case CMD_OBJ_COUNTER:
+@@ -303,6 +305,8 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 		obj_filter_setup(cmd, &flags, filter, NFT_OBJECT_SYNPROXY);
+ 		break;
+ 	case CMD_OBJ_RULESET:
++		filter->list.family = cmd->handle.family;
++		/* fall through */
+ 	default:
+ 		flags |= NFT_CACHE_FULL;
+ 		break;
+diff --git a/tests/shell/testcases/listing/cache_filters b/tests/shell/testcases/listing/cache_filters
+new file mode 100755
+index 0000000..37c8f84
+--- /dev/null
++++ b/tests/shell/testcases/listing/cache_filters
+@@ -0,0 +1,46 @@
++#!/bin/bash
++
++set -e
++
++fail() {
++	echo "$*"
++	exit 1
++}
++
++$NFT -f - <<EOF
++table ip ip_t {
++	flowtable ip_t_ft {
++		hook ingress priority 0
++	}
++	set ip_t_s {
++		type inet_service
++		elements = { 22, 80, 443 }
++	}
++	chain ip_t_c {
++		tcp dport 22 accept
++	}
++	chain ip_t_c2 {
++	}
++}
++EOF
++
++$NFT --debug=netlink list ruleset | \
++	grep -q 'payload load' || fail "broken list ruleset"
++$NFT --debug=netlink list ruleset ip6 | \
++	grep -q 'payload load' && fail "broken list ruleset family filter"
++
++$NFT --debug=netlink list chains | \
++	grep -q 'ip ip_t ip_t_c' || fail "broken list chains"
++$NFT --debug=netlink list chains ip6 | \
++	grep -q 'ip ip_t ip_t_c' && fail "broken list chains family filter"
++
++$NFT --debug=netlink list sets | \
++	grep -q 'family 2 ip_t_s ip_t' || fail "broken list sets"
++$NFT --debug=netlink list sets ip6 | \
++	grep -q 'family 2 ip_t_s ip_t' && fail "broken list sets family filter"
++
++$NFT --debug=netlink list flowtables | \
++	grep -q 'flow table ip_t ip_t_ft' || fail "broken list flowtables"
++$NFT --debug=netlink list flowtables ip6 | \
++	grep -q 'flow table ip_t ip_t_ft' && fail "broken list flowtables family filter"
++exit 0

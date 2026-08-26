@@ -1,0 +1,85 @@
+From d75d2148a093b038b993aa79f3e11bddf3a61ed0 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:06 +0200
+Subject: [PATCH] tests: py: don't use a fixed filename
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f2b5d6fc26b9aa94eddb065628858e79069b5012
+
+commit f2b5d6fc26b9aa94eddb065628858e79069b5012
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Mar 5 23:52:48 2026 +0100
+
+    tests: py: don't use a fixed filename
+
+    Using a predicatable filename in /tmp is not good practice.
+
+    This test runs with uid 0 and stray symlink could lead to unwanted
+    effects.  Use a temporary file and auto-delete it unless -k/--keep gets
+    passed to us.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index b398c50..581a4f2 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -30,13 +30,13 @@ os.environ['TZ'] = 'UTC-2'
+ from nftables import Nftables
+ 
+ TESTS_DIRECTORY = ["any", "arp", "bridge", "inet", "ip", "ip6", "netdev"]
+-LOGFILE = "/tmp/nftables-test.log"
+ log_file = None
+ table_list = []
+ chain_list = []
+ all_set = dict()
+ obj_list = []
+ signal_received = 0
++auto_delete = True
+ 
+ 
+ class Colors:
+@@ -1513,6 +1513,9 @@ def main():
+     parser.add_argument('-l', '--library', default=None,
+                         help='path to libntables.so.1, overrides --host')
+ 
++    parser.add_argument('-k', '--keep', default=False,
++                        help='keep log file around after tests')
++
+     parser.add_argument('-N', '--no-netns', action='store_true',
+                         dest='no_netns',
+                         help='Do not run in own network namespace')
+@@ -1560,6 +1563,11 @@ def main():
+               "You need to build the project." % args.library)
+         return 99
+ 
++    global auto_delete
++
++    if args.keep:
++        auto_delete = False
++
+     if args.enable_schema and not args.enable_json:
+         print_error("Option --schema requires option --json")
+         return 99
+@@ -1571,10 +1579,13 @@ def main():
+     tests = passed = warnings = errors = 0
+     global log_file
+     try:
+-        log_file = open(LOGFILE, 'w')
+-        print_info("Log will be available at %s" % LOGFILE)
++        log_file = tempfile.NamedTemporaryFile(prefix="nftables-test-py-", suffix=".log", mode='w', delete=auto_delete)
++        if auto_delete:
++            print_info("Log file %s will not be retained.  Pass -k to keep it.")
++        else:
++            print_info("Log will be available at %s" % log_file.name)
+     except IOError:
+-        print_error("Cannot open log file %s" % LOGFILE)
++        print_error("Cannot create a temporary log file")
+         return 99
+ 
+     file_list = []

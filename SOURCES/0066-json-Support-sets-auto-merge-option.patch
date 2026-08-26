@@ -1,0 +1,85 @@
+From 6242822b5f19721538fb9296a048ea84acee5092 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] json: Support sets' auto-merge option
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit a4034c66b03e4d526fbad78da9cd38da9f1f43a5
+
+commit a4034c66b03e4d526fbad78da9cd38da9f1f43a5
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jan 31 17:30:24 2024 +0100
+
+    json: Support sets' auto-merge option
+
+    If enabled, list the option as additional attribute with boolean value.
+
+    Fixes: e70354f53e9f6 ("libnftables: Implement JSON output support")
+    Closes: https://bugzilla.netfilter.org/show_bug.cgi?id=1734
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/libnftables-json.adoc | 8 ++++++--
+ src/json.c                | 2 ++
+ src/parser_json.c         | 1 +
+ 3 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/doc/libnftables-json.adoc b/doc/libnftables-json.adoc
+index c5e5f23..3bbb6cd 100644
+--- a/doc/libnftables-json.adoc
++++ b/doc/libnftables-json.adoc
+@@ -321,7 +321,8 @@ ____
+ 	"elem":* 'SET_ELEMENTS'*,
+ 	"timeout":* 'NUMBER'*,
+ 	"gc-interval":* 'NUMBER'*,
+-	"size":* 'NUMBER'
++	"size":* 'NUMBER'*,
++	"auto-merge":* 'BOOLEAN'
+ *}}*
+ 
+ *{ "map": {
+@@ -336,7 +337,8 @@ ____
+ 	"elem":* 'SET_ELEMENTS'*,
+ 	"timeout":* 'NUMBER'*,
+ 	"gc-interval":* 'NUMBER'*,
+-	"size":* 'NUMBER'
++	"size":* 'NUMBER'*,
++	"auto-merge":* 'BOOLEAN'
+ *}}*
+ 
+ 'SET_TYPE' := 'STRING' | *[* 'SET_TYPE_LIST' *]*
+@@ -375,6 +377,8 @@ that they translate a unique key to a value.
+ 	Garbage collector interval in seconds.
+ *size*::
+ 	Maximum number of elements supported.
++*auto-merge*::
++	Automatic merging of adjacent/overlapping set elements in interval sets.
+ 
+ ==== TYPE
+ The set type might be a string, such as *"ipv4_addr"* or an array
+diff --git a/src/json.c b/src/json.c
+index 6809cd5..b3e1e4e 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -194,6 +194,8 @@ static json_t *set_print_json(struct output_ctx *octx, const struct set *set)
+ 		tmp = json_pack("i", set->gc_int / 1000);
+ 		json_object_set_new(root, "gc-interval", tmp);
+ 	}
++	if (set->automerge)
++		json_object_set_new(root, "auto-merge", json_true());
+ 
+ 	if (!nft_output_terse(octx) && set->init && set->init->size > 0) {
+ 		json_t *array = json_array();
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 2acc248..9537c9d 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -3407,6 +3407,7 @@ static struct cmd *json_parse_cmd_add_set(struct json_ctx *ctx, json_t *root,
+ 	if (!json_unpack(root, "{s:i}", "gc-interval", &set->gc_int))
+ 		set->gc_int *= 1000;
+ 	json_unpack(root, "{s:i}", "size", &set->desc.size);
++	json_unpack(root, "{s:b}", "auto-merge", &set->automerge);
+ 
+ 	if (!json_unpack(root, "{s:o}", "stmt", &stmt_json))
+ 		json_parse_set_stmt_list(ctx, &set->stmt_list, stmt_json);

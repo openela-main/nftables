@@ -1,0 +1,56 @@
+From a15ffca5581d098e3f03cbbe48edae886d0d60df Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] parser_json: fix crash in json_parse_set_stmt_list
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 26d9cbefb10e6bc3765df7e9e7a4fc3b951a80f3
+
+commit 26d9cbefb10e6bc3765df7e9e7a4fc3b951a80f3
+Author: Sebastian Walz (sivizius) <sebastian.walz@secunet.com>
+Date:   Tue Aug 20 00:09:26 2024 +0200
+
+    parser_json: fix crash in json_parse_set_stmt_list
+
+    Due to missing `NULL`-check, there will be a segfault for invalid statements.
+
+    Fixes: 07958ec53830 ("json: add set statement list support")
+    Signed-off-by: Sebastian Walz (sivizius) <sebastian.walz@secunet.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c | 13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 047c6fa..523dbd2 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -2349,7 +2349,7 @@ static void json_parse_set_stmt_list(struct json_ctx *ctx,
+ 				     json_t *stmt_json)
+ {
+ 	struct list_head *head;
+-	struct stmt *tmp;
++	struct stmt *stmt;
+ 	json_t *value;
+ 	size_t index;
+ 
+@@ -2361,9 +2361,14 @@ static void json_parse_set_stmt_list(struct json_ctx *ctx,
+ 
+ 	head = stmt_list;
+ 	json_array_foreach(stmt_json, index, value) {
+-		tmp = json_parse_stmt(ctx, value);
+-		list_add(&tmp->list, head);
+-		head = &tmp->list;
++		stmt = json_parse_stmt(ctx, value);
++		if (!stmt) {
++			json_error(ctx, "Parsing set statements array at index %zd failed.", index);
++			stmt_list_free(stmt_list);
++			return;
++		}
++		list_add(&stmt->list, head);
++		head = &stmt->list;
+ 	}
+ }
+ 

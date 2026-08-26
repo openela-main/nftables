@@ -1,0 +1,168 @@
+From 538211af0641d444ab818a3ff0601ec52dc492c0 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:34 +0200
+Subject: [PATCH] optimize: invalidate merge in case of duplicated key in
+ set/map
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit ba6985a1faf98e6b1c87938695a2093cd9b58468
+Conflicts: Adjust to missing commit 3b92dc32e60e8
+           ("src: replace struct stmt_ops by type field in struct stmt")
+
+commit ba6985a1faf98e6b1c87938695a2093cd9b58468
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Apr 9 11:38:17 2025 +0200
+
+    optimize: invalidate merge in case of duplicated key in set/map
+
+    -o/--optimize results in EEXIST error when merging two rules that lead
+    to ambiguous set/map, for instance:
+
+     table ip x {
+            chain v4icmp {}
+            chain v4icmpc {}
+
+            chain y {
+                    ip protocol icmp jump v4icmp
+                    ip protocol icmp goto v4icmpc
+            }
+     }
+
+    which is not possible because duplicated keys are not possible in
+    set/map. This is how it shows when running a test:
+
+     Merging:
+     testcases/sets/dumps/sets_with_ifnames.nft:56:3-30:            ip protocol icmp jump v4icmp
+     testcases/sets/dumps/sets_with_ifnames.nft:57:3-31:            ip protocol icmp goto v4icmpc
+     into:
+           ip protocol vmap { icmp : jump v4icmp, icmp : goto v4icmpc }
+     internal:0:0-0: Error: Could not process rule: File exists
+
+    Add a new step to compare rules that are candidate to be merged to
+    detect colissions in set/map keys in order to skip them in the next
+    final merging step.
+
+    Add tests/shell unit to improve coverage.
+
+    Fixes: fb298877ece2 ("src: add ruleset optimization infrastructure")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c                                | 40 ++++++++++++++++++-
+ .../testcases/optimizations/nomerge_vmap      | 40 +++++++++++++++++++
+ 2 files changed, 79 insertions(+), 1 deletion(-)
+ create mode 100755 tests/shell/testcases/optimizations/nomerge_vmap
+
+diff --git a/src/optimize.c b/src/optimize.c
+index c5147d7..c386e61 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -136,6 +136,8 @@ static bool __expr_cmp(const struct expr *expr_a, const struct expr *expr_b)
+ 			return false;
+ 
+ 		return !strcmp(expr_a->identifier, expr_b->identifier);
++	case EXPR_VALUE:
++		return !mpz_cmp(expr_a->value, expr_b->value);
+ 	default:
+ 		return false;
+ 	}
+@@ -548,6 +550,8 @@ struct merge {
+ 	/* statements to be merged (index relative to statement matrix) */
+ 	uint32_t	stmt[MAX_STMTS];
+ 	uint32_t	num_stmts;
++	/* merge has been invalidated */
++	bool		skip;
+ };
+ 
+ static void merge_expr_stmts(const struct optimize_ctx *ctx,
+@@ -1377,8 +1381,42 @@ static int chain_optimize(struct nft_ctx *nft, struct list_head *rules)
+ 		}
+ 	}
+ 
+-	/* Step 4: Infer how to merge the candidate rules */
++	/* Step 4: Invalidate merge in case of duplicated keys in set/map. */
++	for (k = 0; k < num_merges; k++) {
++		uint32_t r1, r2;
++
++		i = merge[k].rule_from;
++
++		for (r1 = i; r1 < i + merge[k].num_rules; r1++) {
++			for (r2 = r1 + 1; r2 < i + merge[k].num_rules; r2++) {
++				bool match_same_value = true, match_seen = false;
++
++				for (m = 0; m < ctx->num_stmts; m++) {
++					if (!ctx->stmt_matrix[r1][m])
++						continue;
++
++					switch (ctx->stmt_matrix[r1][m]->ops->type) {
++					case STMT_EXPRESSION:
++						match_seen = true;
++						if (!__expr_cmp(ctx->stmt_matrix[r1][m]->expr->right,
++							        ctx->stmt_matrix[r2][m]->expr->right))
++							match_same_value = false;
++						break;
++					default:
++						break;
++					}
++				}
++				if (match_seen && match_same_value)
++					merge[k].skip = true;
++			}
++		}
++	}
++
++	/* Step 5: Infer how to merge the candidate rules */
+ 	for (k = 0; k < num_merges; k++) {
++		if (merge[k].skip)
++			continue;
++
+ 		i = merge[k].rule_from;
+ 
+ 		for (m = 0; m < ctx->num_stmts; m++) {
+diff --git a/tests/shell/testcases/optimizations/nomerge_vmap b/tests/shell/testcases/optimizations/nomerge_vmap
+new file mode 100755
+index 0000000..36bdf28
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/nomerge_vmap
+@@ -0,0 +1,40 @@
++#!/bin/bash
++
++RULESET='table ip x {
++        chain NAME_lan-wg8 {}
++        chain NAME_mullvadgb-wg8 {}
++        chain NAME_mullvadus-wg8 {}
++        chain NAME_wan-wg8 {}
++        chain NAME_wg0-wg8 {}
++        chain NAME_wg1-wg8 {}
++        chain NAME_wg7-wg8 {}
++
++        chain VZONE_wg8 {
++                iifname "wg8" counter return
++                iifname "eth1" counter jump NAME_lan-wg8
++                iifname "eth1" counter return
++                iifname "eth3" counter jump NAME_mullvadgb-wg8
++                iifname "eth3" counter return
++                iifname "eth2" counter jump NAME_mullvadus-wg8
++                iifname "eth2" counter return
++                iifname "eth0" counter jump NAME_wan-wg8
++                iifname "eth0" counter return
++                iifname "wg0" counter jump NAME_wg0-wg8
++                iifname "wg0" counter return
++                iifname "wg1" counter jump NAME_wg1-wg8
++                iifname "wg1" counter return
++                iifname "wg7" counter jump NAME_wg7-wg8
++                iifname "wg7" counter return
++                counter drop comment "zone_wg8 default-action drop"
++        }
++
++        chain v4icmp {}
++        chain v4icmpc {}
++
++        chain y {
++               ip protocol icmp jump v4icmp
++               ip protocol icmp goto v4icmpc
++        }
++}'
++
++$NFT -c -o -f - <<< "$RULESET"

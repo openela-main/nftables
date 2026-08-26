@@ -1,0 +1,48 @@
+From 27b765e07c47811952f1480b3d60a421dcc79254 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: Drop stale entry from ip/snat.t.payload
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit c3c60ac84a4f64a98f9c2c22d9032d177ae6a212
+
+commit c3c60ac84a4f64a98f9c2c22d9032d177ae6a212
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 16:06:46 2025 +0200
+
+    tests: py: Drop stale entry from ip/snat.t.payload
+
+    This payload actually belongs to ip/dnat.t.payload, fixed commit added
+    it to the wrong file.
+
+    Fixes: 8f3048954d40d ("evaluate: postpone transport protocol match check after nat expression evaluation")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/ip/snat.t.payload | 14 --------------
+ 1 file changed, 14 deletions(-)
+
+diff --git a/tests/py/ip/snat.t.payload b/tests/py/ip/snat.t.payload
+index 71a5e2f..9a59b71 100644
+--- a/tests/py/ip/snat.t.payload
++++ b/tests/py/ip/snat.t.payload
+@@ -138,17 +138,3 @@ ip
+   [ payload load 2b @ transport header + 2 => reg 9 ]
+   [ lookup reg 1 set __map%d dreg 1 ]
+   [ nat snat ip addr_min reg 1 proto_min reg 9 ]
+-
+-# ip daddr 192.168.0.1 dnat to tcp dport map { 443 : 10.141.10.4 . 8443, 80 : 10.141.10.4 . 8080 }
+-__map%d x b size 2
+-__map%d x 0
+-        element 0000bb01  : 040a8d0a 0000fb20 0 [end]   element 00005000  : 040a8d0a 0000901f 0 [end]
+-ip
+-  [ payload load 4b @ network header + 16 => reg 1 ]
+-  [ cmp eq reg 1 0x0100a8c0 ]
+-  [ meta load l4proto => reg 1 ]
+-  [ cmp eq reg 1 0x00000006 ]
+-  [ payload load 2b @ transport header + 2 => reg 1 ]
+-  [ lookup reg 1 set __map%d dreg 1 ]
+-  [ nat dnat ip addr_min reg 1 proto_min reg 9 ]
+-

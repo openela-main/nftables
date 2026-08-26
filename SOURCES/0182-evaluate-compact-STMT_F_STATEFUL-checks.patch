@@ -1,0 +1,86 @@
+From b315945d7479b6512b3e58d093c5699cb842a143 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:21 +0200
+Subject: [PATCH] evaluate: compact STMT_F_STATEFUL checks
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 36bd6d0088bca1087aeccfe14aaa786200d755bc
+
+commit 36bd6d0088bca1087aeccfe14aaa786200d755bc
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Mar 31 17:23:19 2025 +0200
+
+    evaluate: compact STMT_F_STATEFUL checks
+
+    We'll gain another F_STATEFUL check in a followup patch,
+    so lets condense the pattern into a helper to reduce copypaste.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 26 ++++++++++++++------------
+ 1 file changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 43b74cc..c6e1a3e 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -3210,6 +3210,17 @@ static int stmt_evaluate_payload(struct eval_ctx *ctx, struct stmt *stmt)
+ 	return expr_evaluate(ctx, &stmt->payload.val);
+ }
+ 
++static int stmt_evaluate_stateful(struct eval_ctx *ctx, struct stmt *stmt, const char *name)
++{
++	if (stmt_evaluate(ctx, stmt) < 0)
++		return -1;
++
++	if (!(stmt->flags & STMT_F_STATEFUL))
++		return stmt_error(ctx, stmt, "%s statement must be stateful", name);
++
++	return 0;
++}
++
+ static int stmt_evaluate_meter(struct eval_ctx *ctx, struct stmt *stmt)
+ {
+ 	struct expr *key, *set, *setref;
+@@ -3255,11 +3266,8 @@ static int stmt_evaluate_meter(struct eval_ctx *ctx, struct stmt *stmt)
+ 	setref->set->desc.size = stmt->meter.size;
+ 	stmt->meter.set = setref;
+ 
+-	if (stmt_evaluate(ctx, stmt->meter.stmt) < 0)
++	if (stmt_evaluate_stateful(ctx, stmt->meter.stmt, "meter") < 0)
+ 		return -1;
+-	if (!(stmt->meter.stmt->flags & STMT_F_STATEFUL))
+-		return stmt_binary_error(ctx, stmt->meter.stmt, stmt,
+-					 "meter statement must be stateful");
+ 
+ 	return 0;
+ }
+@@ -4372,11 +4380,8 @@ static int stmt_evaluate_set(struct eval_ctx *ctx, struct stmt *stmt)
+ 		return expr_error(ctx->msgs, stmt->set.key,
+ 				  "Key expression comments are not supported");
+ 	list_for_each_entry(this, &stmt->set.stmt_list, list) {
+-		if (stmt_evaluate(ctx, this) < 0)
++		if (stmt_evaluate_stateful(ctx, this, "set") < 0)
+ 			return -1;
+-		if (!(this->flags & STMT_F_STATEFUL))
+-			return stmt_error(ctx, this,
+-					  "statement must be stateful");
+ 	}
+ 
+ 	this_set = stmt->set.set->set;
+@@ -4432,11 +4437,8 @@ static int stmt_evaluate_map(struct eval_ctx *ctx, struct stmt *stmt)
+ 				  "Data expression timeouts are not supported");
+ 
+ 	list_for_each_entry(this, &stmt->map.stmt_list, list) {
+-		if (stmt_evaluate(ctx, this) < 0)
++		if (stmt_evaluate_stateful(ctx, this, "map") < 0)
+ 			return -1;
+-		if (!(this->flags & STMT_F_STATEFUL))
+-			return stmt_error(ctx, this,
+-					  "statement must be stateful");
+ 	}
+ 
+ 	return 0;

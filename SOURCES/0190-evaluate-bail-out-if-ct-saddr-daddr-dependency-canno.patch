@@ -1,0 +1,53 @@
+From 09a6c561980d1d09aaf14c7a0db1a5edcc2139fa Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:34 +0200
+Subject: [PATCH] evaluate: bail out if ct saddr/daddr dependency cannot be
+ inserted
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 7f60519e356833ca007b138c00b9f5de09f21b56
+
+commit 7f60519e356833ca007b138c00b9f5de09f21b56
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Apr 3 01:09:22 2025 +0200
+
+    evaluate: bail out if ct saddr/daddr dependency cannot be inserted
+
+    If we have an incomplete rule like "ct original saddr" in inet
+    family, this function generates an error because it can't determine the required protocol
+    dependency, hinting at missing ip/ip6 keyword.
+
+    We should not go on in this case to avoid a redundant followup error:
+
+    nft add rule inet f c ct original saddr 1.2.3.4
+    Error: cannot determine ip protocol version, use "ip saddr" or "ip6 saddr" instead
+    add rule inet f c ct original saddr 1.2.3.4
+                      ^^^^^^^^^^^^^^^^^
+    Error: Could not parse symbolic invalid expression
+    add rule inet f c ct original saddr 1.2.3.4
+
+    After this change only the first error is shown.
+
+    Fixes: 2b29ea5f3c3e ("src: ct: add eval part to inject dependencies for ct saddr/daddr")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 33902be..72dd4fe 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1163,7 +1163,8 @@ static int expr_evaluate_ct(struct eval_ctx *ctx, struct expr **expr)
+ 	switch (ct->ct.key) {
+ 	case NFT_CT_SRC:
+ 	case NFT_CT_DST:
+-		ct_gen_nh_dependency(ctx, ct);
++		if (ct_gen_nh_dependency(ctx, ct) < 0)
++			return -1;
+ 		break;
+ 	case NFT_CT_SRC_IP:
+ 	case NFT_CT_DST_IP:

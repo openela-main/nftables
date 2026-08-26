@@ -1,0 +1,45 @@
+From 70989b95e0a340781eadd99af05f5bccbb36b028 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:18 +0200
+Subject: [PATCH] tests/shell: fix mount command in "test-wrapper.sh"
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 65d94af52f11a2c5a44d5ae8aa3891ccb648c666
+
+commit 65d94af52f11a2c5a44d5ae8aa3891ccb648c666
+Author: Thomas Haller <thaller@redhat.com>
+Date:   Thu Nov 2 09:15:41 2023 +0100
+
+    tests/shell: fix mount command in "test-wrapper.sh"
+
+    With Fedora 39 (util-linux-core-2.39.2-1.fc39), the mount command starts
+    to fail. It was still working with Fedora 38 (util-linux-core-2.38.1-4.fc38).
+
+      $ unshare -f -p -m --mount-proc -U --map-root-user -n bash -c 'mount -t tmpfs --make-private /var/run && mount'
+      mount: /run: mount failed: Invalid argument.
+
+    Not sure why this starts to fail. But arguably the command line
+    arguments were wrong. Fix it, we need a pseudo name for the device.
+
+    Fixes: df6f1a3e0803 ("tests/shell: bind mount private /var/run/netns in test container")
+    Signed-off-by: Thomas Haller <thaller@redhat.com>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/helpers/test-wrapper.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/shell/helpers/test-wrapper.sh b/tests/shell/helpers/test-wrapper.sh
+index 13b918f..898dcce 100755
+--- a/tests/shell/helpers/test-wrapper.sh
++++ b/tests/shell/helpers/test-wrapper.sh
+@@ -48,7 +48,7 @@ if [ "$NFT_TEST_HAS_UNSHARED_MOUNT" = y ] ; then
+ 	# Note that this also hides everything that might reside in /var/run.
+ 	# That is desirable, as tests should not depend on content there (or if
+ 	# they do, we need to explicitly handle it as appropriate).
+-	if mount -t tmpfs --make-private "/var/run" ; then
++	if mount -t tmpfs --make-private tmpfs "/var/run" ; then
+ 		CLEANUP_UMOUNT_VAR_RUN=y
+ 	fi
+ 	mkdir -p /var/run/netns

@@ -1,0 +1,60 @@
+From 70a1f2f55bd3a415103c87dd9837e847f80dacb6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:21 +0200
+Subject: [PATCH] cache: don't crash when filter is NULL
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 3f0a47f9f00c9f368997c397b0848966029c39fb
+
+commit 3f0a47f9f00c9f368997c397b0848966029c39fb
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Apr 1 16:29:14 2025 +0200
+
+    cache: don't crash when filter is NULL
+
+    a delete request will cause a crash in obj_cache_dump, move the deref
+    into the filter block.
+
+    Fixes: dbff26bfba83 ("cache: consolidate reset command")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c                                                 | 6 ++++--
+ .../testcases/bogons/nft-f/delete_nonexistant_object_crash  | 1 +
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/delete_nonexistant_object_crash
+
+diff --git a/src/cache.c b/src/cache.c
+index 0f38fb2..a58c596 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -914,6 +914,7 @@ static struct nftnl_obj_list *obj_cache_dump(struct netlink_ctx *ctx,
+ 	int family = NFPROTO_UNSPEC;
+ 	const char *table = NULL;
+ 	const char *obj = NULL;
++	bool reset = false;
+ 	bool dump = true;
+ 
+ 	if (filter) {
+@@ -926,9 +927,10 @@ static struct nftnl_obj_list *obj_cache_dump(struct netlink_ctx *ctx,
+ 		}
+ 		if (filter->list.obj_type)
+ 			type = filter->list.obj_type;
++
++		reset = filter->reset.obj;
+ 	}
+-	obj_list = mnl_nft_obj_dump(ctx, family, table, obj, type, dump,
+-				    filter->reset.obj);
++	obj_list = mnl_nft_obj_dump(ctx, family, table, obj, type, dump, reset);
+ 	if (!obj_list) {
+                 if (errno == EINTR)
+ 			return NULL;
+diff --git a/tests/shell/testcases/bogons/nft-f/delete_nonexistant_object_crash b/tests/shell/testcases/bogons/nft-f/delete_nonexistant_object_crash
+new file mode 100644
+index 0000000..c369dec
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/delete_nonexistant_object_crash
+@@ -0,0 +1 @@
++delete quota a b

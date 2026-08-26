@@ -1,0 +1,65 @@
+From e0b42568ea971334ca2177f5275bfab4e8312e8c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: reject sets with no key
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 09c573053ff03ad0a2eeb12c2957881648062f50
+
+commit 09c573053ff03ad0a2eeb12c2957881648062f50
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Nov 30 21:29:52 2023 +0100
+
+    evaluate: reject sets with no key
+
+    nft --check -f tests/shell/testcases/bogons/nft-f/set_without_key
+    Segmentation fault (core dumped)
+
+    Fixes: 56c90a2dd2eb ("evaluate: expand sets and maps before evaluation")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                     | 3 +++
+ tests/shell/testcases/bogons/nft-f/map_without_key | 5 +++++
+ tests/shell/testcases/bogons/nft-f/set_without_key | 5 +++++
+ 3 files changed, 13 insertions(+)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/map_without_key
+ create mode 100644 tests/shell/testcases/bogons/nft-f/set_without_key
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 6f0fba6..2955ac5 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -4616,6 +4616,9 @@ static int elems_evaluate(struct eval_ctx *ctx, struct set *set)
+ {
+ 	ctx->set = set;
+ 	if (set->init != NULL) {
++		if (set->key == NULL)
++			return set_error(ctx, set, "set definition does not specify key");
++
+ 		__expr_set_context(&ctx->ectx, set->key->dtype,
+ 				   set->key->byteorder, set->key->len, 0);
+ 		if (expr_evaluate(ctx, &set->init) < 0)
+diff --git a/tests/shell/testcases/bogons/nft-f/map_without_key b/tests/shell/testcases/bogons/nft-f/map_without_key
+new file mode 100644
+index 0000000..78f16b2
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/map_without_key
+@@ -0,0 +1,5 @@
++table t {
++	map m {
++		elements = { 0x00000023 : 0x00001337 }
++	}
++}
+diff --git a/tests/shell/testcases/bogons/nft-f/set_without_key b/tests/shell/testcases/bogons/nft-f/set_without_key
+new file mode 100644
+index 0000000..f194afb
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/set_without_key
+@@ -0,0 +1,5 @@
++table ip t {
++	set s {
++		elements = { 0x00000023-0x00000142, 0x00001337 }
++	}
++}

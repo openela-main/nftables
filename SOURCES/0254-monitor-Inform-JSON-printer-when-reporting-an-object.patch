@@ -1,0 +1,178 @@
+From bcd85ab569ce349e3d96550607d6919efaae9d02 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:07 +0200
+Subject: [PATCH] monitor: Inform JSON printer when reporting an object delete
+ event
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6c04d24d16f1d15f216f2b3c8e64c9062cd77487
+Conflicts: Adjusted to missing commit 3a957f8f1ff1e
+           ("tunnel: add tunnel object and statement json support")
+
+commit 6c04d24d16f1d15f216f2b3c8e64c9062cd77487
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Aug 29 01:07:05 2025 +0200
+
+    monitor: Inform JSON printer when reporting an object delete event
+
+    Since kernel commit a1050dd07168 ("netfilter: nf_tables: Reintroduce
+    shortened deletion notifications"), type-specific data is no longer
+    dumped when notifying for a deleted object. JSON output was not aware of
+    this and tried to print bogus data.
+
+    Fixes: 9e88aae28e9f4 ("monitor: Use libnftables JSON output")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/json.h                   |  5 +++--
+ src/json.c                       | 15 ++++++++++-----
+ src/monitor.c                    |  2 +-
+ tests/monitor/testcases/object.t | 10 +++++-----
+ 4 files changed, 19 insertions(+), 13 deletions(-)
+
+diff --git a/include/json.h b/include/json.h
+index 0670b87..70f8f72 100644
+--- a/include/json.h
++++ b/include/json.h
+@@ -113,7 +113,7 @@ void monitor_print_set_json(struct netlink_mon_handler *monh,
+ void monitor_print_element_json(struct netlink_mon_handler *monh,
+ 				const char *cmd, struct set *s);
+ void monitor_print_obj_json(struct netlink_mon_handler *monh,
+-			    const char *cmd, struct obj *o);
++			    const char *cmd, struct obj *o, bool delete);
+ void monitor_print_flowtable_json(struct netlink_mon_handler *monh,
+ 				  const char *cmd, struct flowtable *ft);
+ void monitor_print_rule_json(struct netlink_mon_handler *monh,
+@@ -252,7 +252,8 @@ static inline void monitor_print_element_json(struct netlink_mon_handler *monh,
+ }
+ 
+ static inline void monitor_print_obj_json(struct netlink_mon_handler *monh,
+-					  const char *cmd, struct obj *o)
++					  const char *cmd, struct obj *o,
++					  bool delete)
+ {
+ 	/* empty */
+ }
+diff --git a/src/json.c b/src/json.c
+index d778801..340c2cc 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -364,7 +364,8 @@ static json_t *timeout_policy_json(uint8_t l4, const uint32_t *timeout)
+ 	return root ? : json_null();
+ }
+ 
+-static json_t *obj_print_json(const struct obj *obj)
++static json_t *obj_print_json(const struct obj *obj,
++			      bool delete)
+ {
+ 	const char *rate_unit = NULL, *burst_unit = NULL;
+ 	const char *type = obj_type_name(obj->type);
+@@ -377,6 +378,9 @@ static json_t *obj_print_json(const struct obj *obj)
+ 			"table", obj->handle.table.name,
+ 			"handle", obj->handle.handle.id);
+ 
++	if (delete)
++		goto out;
++
+ 	if (obj->comment) {
+ 		tmp = nft_json_pack("{s:s}", "comment", obj->comment);
+ 		json_object_update(root, tmp);
+@@ -480,6 +484,7 @@ static json_t *obj_print_json(const struct obj *obj)
+ 		break;
+ 	}
+ 
++out:
+ 	return nft_json_pack("{s:o}", type, root);
+ }
+ 
+@@ -1722,7 +1727,7 @@ static json_t *table_print_json_full(struct netlink_ctx *ctx,
+ 	json_array_append_new(root, tmp);
+ 
+ 	list_for_each_entry(obj, &table->obj_cache.list, cache.list) {
+-		tmp = obj_print_json(obj);
++		tmp = obj_print_json(obj, false);
+ 		json_array_append_new(root, tmp);
+ 	}
+ 	list_for_each_entry(set, &table->set_cache.list, cache.list) {
+@@ -1900,7 +1905,7 @@ static json_t *do_list_obj_json(struct netlink_ctx *ctx,
+ 			     strcmp(cmd->handle.obj.name, obj->handle.obj.name)))
+ 				continue;
+ 
+-			json_array_append_new(root, obj_print_json(obj));
++			json_array_append_new(root, obj_print_json(obj, false));
+ 		}
+ 	}
+ 
+@@ -2108,9 +2113,9 @@ void monitor_print_element_json(struct netlink_mon_handler *monh,
+ }
+ 
+ void monitor_print_obj_json(struct netlink_mon_handler *monh,
+-			    const char *cmd, struct obj *o)
++			    const char *cmd, struct obj *o, bool delete)
+ {
+-	monitor_print_json(monh, cmd, obj_print_json(o));
++	monitor_print_json(monh, cmd, obj_print_json(o, delete));
+ }
+ 
+ void monitor_print_flowtable_json(struct netlink_mon_handler *monh,
+diff --git a/src/monitor.c b/src/monitor.c
+index a446768..b9b0263 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -549,7 +549,7 @@ static int netlink_events_obj_cb(const struct nlmsghdr *nlh, int type,
+ 		nft_mon_print(monh, "\n");
+ 		break;
+ 	case NFTNL_OUTPUT_JSON:
+-		monitor_print_obj_json(monh, cmd, obj);
++		monitor_print_obj_json(monh, cmd, obj, type == NFT_MSG_DELOBJ);
+ 		if (!nft_output_echo(&monh->ctx->nft->output))
+ 			nft_mon_print(monh, "\n");
+ 		break;
+diff --git a/tests/monitor/testcases/object.t b/tests/monitor/testcases/object.t
+index 53a9f8c..b60dc98 100644
+--- a/tests/monitor/testcases/object.t
++++ b/tests/monitor/testcases/object.t
+@@ -9,7 +9,7 @@ J {"add": {"counter": {"family": "ip", "name": "c", "table": "t", "handle": 0, "
+ 
+ I delete counter ip t c
+ O -
+-J {"delete": {"counter": {"family": "ip", "name": "c", "table": "t", "handle": 0, "packets": 0, "bytes": 0}}}
++J {"delete": {"counter": {"family": "ip", "name": "c", "table": "t", "handle": 0}}}
+ 
+ # FIXME: input/output shouldn't be asynchronous here
+ I add quota ip t q 25 mbytes
+@@ -18,7 +18,7 @@ J {"add": {"quota": {"family": "ip", "name": "q", "table": "t", "handle": 0, "by
+ 
+ I delete quota ip t q
+ O -
+-J {"delete": {"quota": {"family": "ip", "name": "q", "table": "t", "handle": 0, "bytes": 26214400, "used": 0, "inv": false}}}
++J {"delete": {"quota": {"family": "ip", "name": "q", "table": "t", "handle": 0}}}
+ 
+ # FIXME: input/output shouldn't be asynchronous here
+ I add limit ip t l rate 1/second
+@@ -27,7 +27,7 @@ J {"add": {"limit": {"family": "ip", "name": "l", "table": "t", "handle": 0, "ra
+ 
+ I delete limit ip t l
+ O -
+-J {"delete": {"limit": {"family": "ip", "name": "l", "table": "t", "handle": 0, "rate": 1, "per": "second", "burst": 5}}}
++J {"delete": {"limit": {"family": "ip", "name": "l", "table": "t", "handle": 0}}}
+ 
+ I add ct helper ip t cth { type "sip" protocol tcp; l3proto ip; }
+ O -
+@@ -35,7 +35,7 @@ J {"add": {"ct helper": {"family": "ip", "name": "cth", "table": "t", "handle":
+ 
+ I delete ct helper ip t cth
+ O -
+-J {"delete": {"ct helper": {"family": "ip", "name": "cth", "table": "t", "handle": 0, "type": "sip", "protocol": "tcp", "l3proto": "ip"}}}
++J {"delete": {"ct helper": {"family": "ip", "name": "cth", "table": "t", "handle": 0}}}
+ 
+ I add ct timeout ip t ctt { protocol udp; l3proto ip; policy = { unreplied : 15s, replied : 12s }; }
+ O -
+@@ -43,4 +43,4 @@ J {"add": {"ct timeout": {"family": "ip", "name": "ctt", "table": "t", "handle":
+ 
+ I delete ct timeout ip t ctt
+ O -
+-J {"delete": {"ct timeout": {"family": "ip", "name": "ctt", "table": "t", "handle": 0, "protocol": "udp", "l3proto": "ip", "policy": {"unreplied": 15, "replied": 12}}}}
++J {"delete": {"ct timeout": {"family": "ip", "name": "ctt", "table": "t", "handle": 0}}}

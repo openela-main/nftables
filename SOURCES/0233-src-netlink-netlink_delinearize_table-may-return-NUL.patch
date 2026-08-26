@@ -1,0 +1,54 @@
+From cf5442be4ec760785687078c64fa41b6e5b364b2 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] src: netlink: netlink_delinearize_table() may return NULL
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit a69d552a005ba467d37e225032e35d01d9491241
+
+commit a69d552a005ba467d37e225032e35d01d9491241
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Aug 8 14:21:41 2025 +0200
+
+    src: netlink: netlink_delinearize_table() may return NULL
+
+    Catch the error condition in callers to avoid crashes.
+
+    Fixes: c156232a530b3 ("src: add comment support when adding tables")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/monitor.c | 4 ++++
+ src/netlink.c | 3 ++-
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/monitor.c b/src/monitor.c
+index 2fc16d6..6414feb 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -224,6 +224,10 @@ static int netlink_events_table_cb(const struct nlmsghdr *nlh, int type,
+ 
+ 	nlt = netlink_table_alloc(nlh);
+ 	t = netlink_delinearize_table(monh->ctx, nlt);
++	if (!t) {
++		nftnl_table_free(nlt);
++		return MNL_CB_ERROR;
++	}
+ 	cmd = netlink_msg2cmd(type, nlh->nlmsg_flags);
+ 
+ 	switch (monh->format) {
+diff --git a/src/netlink.c b/src/netlink.c
+index c1d3e45..19ea9f3 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -783,7 +783,8 @@ static int list_table_cb(struct nftnl_table *nlt, void *arg)
+ 	struct table *table;
+ 
+ 	table = netlink_delinearize_table(ctx, nlt);
+-	list_add_tail(&table->list, &ctx->list);
++	if (table)
++		list_add_tail(&table->list, &ctx->list);
+ 
+ 	return 0;
+ }

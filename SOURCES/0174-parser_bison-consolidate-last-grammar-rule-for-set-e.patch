@@ -1,0 +1,94 @@
+From d8f4e70fb7dbf83e0ded3a4c6f1faeb4db5b042e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:58 +0200
+Subject: [PATCH] parser_bison: consolidate last grammar rule for set elements
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 39599ad240d4abeeea2de95d865b1b759660e125
+Conflicts: Adjust to missing commit 3b92dc32e60e8
+           ("src: replace struct stmt_ops by type field in struct stmt")
+
+commit 39599ad240d4abeeea2de95d865b1b759660e125
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Mar 20 11:28:57 2025 +0100
+
+    parser_bison: consolidate last grammar rule for set elements
+
+    Define last_stmt_alloc and last_args to follow similar idiom that is
+    used for counters.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 39 ++++++++++++++++++---------------------
+ 1 file changed, 18 insertions(+), 21 deletions(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index a141ae4..d09c8fa 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -769,8 +769,8 @@ int nft_lex(void *, void *, void *);
+ %destructor { stmt_free($$); }	stmt match_stmt verdict_stmt set_elem_stmt
+ %type <stmt>			counter_stmt counter_stmt_alloc stateful_stmt last_stmt
+ %destructor { stmt_free($$); }	counter_stmt counter_stmt_alloc stateful_stmt last_stmt
+-%type <stmt>			limit_stmt_alloc quota_stmt_alloc
+-%destructor { stmt_free($$); }	limit_stmt_alloc quota_stmt_alloc
++%type <stmt>			limit_stmt_alloc quota_stmt_alloc last_stmt_alloc
++%destructor { stmt_free($$); }	limit_stmt_alloc quota_stmt_alloc last_stmt_alloc
+ %type <stmt>			objref_stmt objref_stmt_counter objref_stmt_limit objref_stmt_quota objref_stmt_ct objref_stmt_synproxy
+ %destructor { stmt_free($$); }	objref_stmt objref_stmt_counter objref_stmt_limit objref_stmt_quota objref_stmt_ct objref_stmt_synproxy
+ 
+@@ -3288,19 +3288,25 @@ counter_arg		:	PACKETS			NUM
+ 			}
+ 			;
+ 
+-last_stmt		:	LAST
++last_stmt_alloc		:	LAST
+ 			{
+ 				$$ = last_stmt_alloc(&@$);
+ 			}
+-			|	LAST USED	NEVER
+-			{
+-				$$ = last_stmt_alloc(&@$);
+-			}
+-			|	LAST USED	time_spec
++			;
++
++last_stmt		:	last_stmt_alloc
++			|	last_stmt_alloc 	last_args
++			;
++
++last_args		:	USED NEVER
++			|	USED time_spec
+ 			{
+-				$$ = last_stmt_alloc(&@$);
+-				$$->last.used = $3;
+-				$$->last.set = true;
++				struct last_stmt *last;
++
++				assert($<stmt>0->ops->type == STMT_LAST);
++				last = &$<stmt>0->last;
++				last->used = $2;
++				last->set = true;
+ 			}
+ 			;
+ 
+@@ -4592,16 +4598,7 @@ set_elem_stmt		:	counter_stmt	close_scope_counter
+ 				$$->connlimit.flags = NFT_CONNLIMIT_F_INV;
+ 			}
+ 			|	quota_stmt	close_scope_quota
+-			|	LAST USED	NEVER	close_scope_last
+-			{
+-				$$ = last_stmt_alloc(&@$);
+-			}
+-			|	LAST USED	time_spec	close_scope_last
+-			{
+-				$$ = last_stmt_alloc(&@$);
+-				$$->last.used = $3;
+-				$$->last.set = true;
+-			}
++			|	last_stmt	close_scope_last
+ 			;
+ 
+ set_elem_expr_option	:	TIMEOUT			time_spec

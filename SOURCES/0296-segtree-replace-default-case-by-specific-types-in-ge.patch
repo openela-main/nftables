@@ -1,0 +1,51 @@
+From 7ea5c5933662529f9c593dc2eb34bda3bbeaf3b3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:22 +0200
+Subject: [PATCH] segtree: replace default case by specific types in
+ get_set_intervals()
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 0188a0c971059150c7162444a3233d38abf0b843
+
+commit 0188a0c971059150c7162444a3233d38abf0b843
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Feb 5 03:41:25 2026 +0100
+
+    segtree: replace default case by specific types in get_set_intervals()
+
+    Use specific types, so default case can be left for catching bugs.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index 3f31176..2ad3db7 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -93,7 +93,10 @@ struct expr *get_set_intervals(const struct set *set, const struct expr *init)
+ 		case EXPR_SET_ELEM_CATCHALL:
+ 			compound_expr_add(new_init, expr_clone(i));
+ 			break;
+-		default:
++		case EXPR_PREFIX:
++		case EXPR_RANGE:
++		case EXPR_RANGE_VALUE:
++		case EXPR_MAPPING:
+ 			range_expr_value_low(low, i->key);
+ 			set_elem_expr_add(set, new_init, low, 0, i->byteorder);
+ 			range_expr_value_high(high, i->key);
+@@ -101,6 +104,9 @@ struct expr *get_set_intervals(const struct set *set, const struct expr *init)
+ 			set_elem_expr_add(set, new_init, high,
+ 					  EXPR_F_INTERVAL_END, i->byteorder);
+ 			break;
++		default:
++			BUG("unexpected expression %s", expr_name(i->key));
++			break;
+ 		}
+ 	}
+ 

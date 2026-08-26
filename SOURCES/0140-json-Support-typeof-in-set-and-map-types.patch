@@ -1,0 +1,137 @@
+From cebeb41f6844bccce4985023e57209a45ccfcbeb Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:26 +0200
+Subject: [PATCH] json: Support typeof in set and map types
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit bb6312484af93a83a9ec8716f3887a43566a775a
+Conflicts: Dropped changes to non-existent .json-nft dumps
+
+commit bb6312484af93a83a9ec8716f3887a43566a775a
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Sat Sep 28 00:55:34 2024 +0200
+
+    json: Support typeof in set and map types
+
+    Implement this as a special "type" property value which is an object
+    with sole property "typeof". The latter's value is the JSON
+    representation of the expression in set->key, so for concatenated
+    typeofs it is a concat expression.
+
+    All this is a bit clumsy right now but it works and it should be
+    possible to tear it down a bit for more user-friendliness in a
+    compatible way by either replacing the concat expression by the array it
+    contains or even the whole "typeof" object - the parser would just
+    assume any object (or objects in an array) in the "type" property value
+    are expressions to extract a type from.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/libnftables-json.adoc                     |  7 ++++---
+ src/json.c                                    | 13 ++++++++++++-
+ src/parser_json.c                             |  9 +++++++++
+ tests/monitor/testcases/map-expr.t            |  2 +-
+ tests/monitor/testcases/set-concat-interval.t |  2 +-
+ 5 files changed, 27 insertions(+), 6 deletions(-)
+
+diff --git a/doc/libnftables-json.adoc b/doc/libnftables-json.adoc
+index 1bdb5c5..b90a1fc 100644
+--- a/doc/libnftables-json.adoc
++++ b/doc/libnftables-json.adoc
+@@ -341,7 +341,7 @@ ____
+ 	"auto-merge":* 'BOOLEAN'
+ *}}*
+ 
+-'SET_TYPE' := 'STRING' | *[* 'SET_TYPE_LIST' *]*
++'SET_TYPE' := 'STRING' | *[* 'SET_TYPE_LIST' *]* | *{ "typeof":* 'EXPRESSION' *}*
+ 'SET_TYPE_LIST' := 'STRING' [*,* 'SET_TYPE_LIST' ]
+ 'SET_POLICY' := *"performance"* | *"memory"*
+ 'SET_FLAG_LIST' := 'SET_FLAG' [*,* 'SET_FLAG_LIST' ]
+@@ -381,8 +381,9 @@ that they translate a unique key to a value.
+ 	Automatic merging of adjacent/overlapping set elements in interval sets.
+ 
+ ==== TYPE
+-The set type might be a string, such as *"ipv4_addr"* or an array
+-consisting of strings (for concatenated types).
++The set type might be a string, such as *"ipv4_addr"*, an array
++consisting of strings (for concatenated types) or a *typeof* object containing
++an expression to extract the type from.
+ 
+ ==== ELEM
+ A single set element might be given as string, integer or boolean value for
+diff --git a/src/json.c b/src/json.c
+index 90d9795..d9226e2 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -87,6 +87,17 @@ static json_t *set_dtype_json(const struct expr *key)
+ 	return root;
+ }
+ 
++static json_t *set_key_dtype_json(const struct set *set,
++				  struct output_ctx *octx)
++{
++	bool use_typeof = set->key_typeof_valid;
++
++	if (!use_typeof)
++		return set_dtype_json(set->key);
++
++	return json_pack("{s:o}", "typeof", expr_print_json(set->key, octx));
++}
++
+ static json_t *stmt_print_json(const struct stmt *stmt, struct output_ctx *octx)
+ {
+ 	char buf[1024];
+@@ -149,7 +160,7 @@ static json_t *set_print_json(struct output_ctx *octx, const struct set *set)
+ 			"family", family2str(set->handle.family),
+ 			"name", set->handle.set.name,
+ 			"table", set->handle.table.name,
+-			"type", set_dtype_json(set->key),
++			"type", set_key_dtype_json(set, octx),
+ 			"handle", set->handle.handle.id);
+ 
+ 	if (set->comment)
+diff --git a/src/parser_json.c b/src/parser_json.c
+index fc40d68..ad589d7 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -1706,7 +1706,16 @@ static struct expr *json_parse_dtype_expr(struct json_ctx *ctx, json_t *root)
+ 			compound_expr_add(expr, i);
+ 		}
+ 		return expr;
++	} else if (json_is_object(root)) {
++		const char *key;
++		json_t *val;
++
++		if (!json_unpack_stmt(ctx, root, &key, &val) &&
++		    !strcmp(key, "typeof")) {
++			return json_parse_expr(ctx, val);
++		}
+ 	}
++
+ 	json_error(ctx, "Invalid set datatype.");
+ 	return NULL;
+ }
+diff --git a/tests/monitor/testcases/map-expr.t b/tests/monitor/testcases/map-expr.t
+index 8729c0b..d11ad0e 100644
+--- a/tests/monitor/testcases/map-expr.t
++++ b/tests/monitor/testcases/map-expr.t
+@@ -3,4 +3,4 @@ I add table ip t
+ I add map ip t m { typeof meta day . meta hour : verdict; flags interval; counter; }
+ O -
+ J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
+-J {"add": {"map": {"family": "ip", "name": "m", "table": "t", "type": ["day", "hour"], "handle": 0, "map": "verdict", "flags": ["interval"], "stmt": [{"counter": null}]}}}
++J {"add": {"map": {"family": "ip", "name": "m", "table": "t", "type": {"typeof": {"concat": [{"meta": {"key": "day"}}, {"meta": {"key": "hour"}}]}}, "handle": 0, "map": "verdict", "flags": ["interval"], "stmt": [{"counter": null}]}}}
+diff --git a/tests/monitor/testcases/set-concat-interval.t b/tests/monitor/testcases/set-concat-interval.t
+index 75f3828..3542b82 100644
+--- a/tests/monitor/testcases/set-concat-interval.t
++++ b/tests/monitor/testcases/set-concat-interval.t
+@@ -10,6 +10,6 @@ I add map ip t s { typeof udp length . @ih,32,32 : verdict; flags interval; elem
+ O add map ip t s { typeof udp length . @ih,32,32 : verdict; flags interval; }
+ O add element ip t s { 20-80 . 0x14 : accept }
+ O add element ip t s { 1-10 . 0xa : drop }
+-J {"add": {"map": {"family": "ip", "name": "s", "table": "t", "type": ["integer", "integer"], "handle": 0, "map": "verdict", "flags": ["interval"]}}}
++J {"add": {"map": {"family": "ip", "name": "s", "table": "t", "type": {"typeof": {"concat": [{"payload": {"protocol": "udp", "field": "length"}}, {"payload": {"base": "ih", "offset": 32, "len": 32}}]}}, "handle": 0, "map": "verdict", "flags": ["interval"]}}}
+ J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [[{"concat": [{"range": [20, 80]}, 20]}, {"accept": null}]]}}}}
+ J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [[{"concat": [{"range": [1, 10]}, 10]}, {"drop": null}]]}}}}

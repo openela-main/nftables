@@ -1,0 +1,119 @@
+From 500db255360239cfac48ad63692b123f1219a94e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:07 +0200
+Subject: [PATCH] tests: monitor: Fix for flag arrays in JSON output
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 428462077f415fe49619ec5d6cbf7477ee5359bc
+
+commit 428462077f415fe49619ec5d6cbf7477ee5359bc
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Sat Aug 23 23:57:28 2025 +0200
+
+    tests: monitor: Fix for flag arrays in JSON output
+
+    Missed to adjust the expected JSON output in this test suite, too.
+
+    Fixes: 5e492307c2c93 ("json: Do not reduce single-item arrays on output")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/testcases/map-expr.t            | 2 +-
+ tests/monitor/testcases/set-concat-interval.t | 2 +-
+ tests/monitor/testcases/set-interval.t        | 2 +-
+ tests/monitor/testcases/set-maps.t            | 2 +-
+ tests/monitor/testcases/set-mixed.t           | 2 +-
+ tests/monitor/testcases/set-multiple.t        | 4 ++--
+ tests/monitor/testcases/set-simple.t          | 2 +-
+ 7 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/tests/monitor/testcases/map-expr.t b/tests/monitor/testcases/map-expr.t
+index 9042004..d11ad0e 100644
+--- a/tests/monitor/testcases/map-expr.t
++++ b/tests/monitor/testcases/map-expr.t
+@@ -3,4 +3,4 @@ I add table ip t
+ I add map ip t m { typeof meta day . meta hour : verdict; flags interval; counter; }
+ O -
+ J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
+-J {"add": {"map": {"family": "ip", "name": "m", "table": "t", "type": {"typeof": {"concat": [{"meta": {"key": "day"}}, {"meta": {"key": "hour"}}]}}, "handle": 0, "map": "verdict", "flags": "interval", "stmt": [{"counter": null}]}}}
++J {"add": {"map": {"family": "ip", "name": "m", "table": "t", "type": {"typeof": {"concat": [{"meta": {"key": "day"}}, {"meta": {"key": "hour"}}]}}, "handle": 0, "map": "verdict", "flags": ["interval"], "stmt": [{"counter": null}]}}}
+diff --git a/tests/monitor/testcases/set-concat-interval.t b/tests/monitor/testcases/set-concat-interval.t
+index a42682f..3542b82 100644
+--- a/tests/monitor/testcases/set-concat-interval.t
++++ b/tests/monitor/testcases/set-concat-interval.t
+@@ -10,6 +10,6 @@ I add map ip t s { typeof udp length . @ih,32,32 : verdict; flags interval; elem
+ O add map ip t s { typeof udp length . @ih,32,32 : verdict; flags interval; }
+ O add element ip t s { 20-80 . 0x14 : accept }
+ O add element ip t s { 1-10 . 0xa : drop }
+-J {"add": {"map": {"family": "ip", "name": "s", "table": "t", "type": {"typeof": {"concat": [{"payload": {"protocol": "udp", "field": "length"}}, {"payload": {"base": "ih", "offset": 32, "len": 32}}]}}, "handle": 0, "map": "verdict", "flags": "interval"}}}
++J {"add": {"map": {"family": "ip", "name": "s", "table": "t", "type": {"typeof": {"concat": [{"payload": {"protocol": "udp", "field": "length"}}, {"payload": {"base": "ih", "offset": 32, "len": 32}}]}}, "handle": 0, "map": "verdict", "flags": ["interval"]}}}
+ J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [[{"concat": [{"range": [20, 80]}, 20]}, {"accept": null}]]}}}}
+ J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [[{"concat": [{"range": [1, 10]}, 10]}, {"drop": null}]]}}}}
+diff --git a/tests/monitor/testcases/set-interval.t b/tests/monitor/testcases/set-interval.t
+index 84cf98c..5053c59 100644
+--- a/tests/monitor/testcases/set-interval.t
++++ b/tests/monitor/testcases/set-interval.t
+@@ -10,7 +10,7 @@ I add set ip t s { type inet_service; flags interval; elements = { 20, 30-40 };
+ O add set ip t s { type inet_service; flags interval; }
+ O add element ip t s { 20 }
+ O add element ip t s { 30-40 }
+-J {"add": {"set": {"family": "ip", "name": "s", "table": "t", "type": "inet_service", "handle": 0, "flags": "interval"}}}
++J {"add": {"set": {"family": "ip", "name": "s", "table": "t", "type": "inet_service", "handle": 0, "flags": ["interval"]}}}
+ J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [20]}}}}
+ J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [{"range": [30, 40]}]}}}}
+ 
+diff --git a/tests/monitor/testcases/set-maps.t b/tests/monitor/testcases/set-maps.t
+index aaf332f..acda480 100644
+--- a/tests/monitor/testcases/set-maps.t
++++ b/tests/monitor/testcases/set-maps.t
+@@ -3,7 +3,7 @@ I add table ip t
+ I add map ip t portip { type inet_service: ipv4_addr; flags interval; }
+ O -
+ J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
+-J {"add": {"map": {"family": "ip", "name": "portip", "table": "t", "type": "inet_service", "handle": 0, "map": "ipv4_addr", "flags": "interval"}}}
++J {"add": {"map": {"family": "ip", "name": "portip", "table": "t", "type": "inet_service", "handle": 0, "map": "ipv4_addr", "flags": ["interval"]}}}
+ 
+ I add element ip t portip { 80-100: 10.0.0.1 }
+ O -
+diff --git a/tests/monitor/testcases/set-mixed.t b/tests/monitor/testcases/set-mixed.t
+index 1cf3d38..08c2011 100644
+--- a/tests/monitor/testcases/set-mixed.t
++++ b/tests/monitor/testcases/set-mixed.t
+@@ -4,7 +4,7 @@ I add set ip t portrange { type inet_service; flags interval; }
+ I add set ip t ports { type inet_service; }
+ O -
+ J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
+-J {"add": {"set": {"family": "ip", "name": "portrange", "table": "t", "type": "inet_service", "handle": 0, "flags": "interval"}}}
++J {"add": {"set": {"family": "ip", "name": "portrange", "table": "t", "type": "inet_service", "handle": 0, "flags": ["interval"]}}}
+ J {"add": {"set": {"family": "ip", "name": "ports", "table": "t", "type": "inet_service", "handle": 0}}}
+ 
+ # make sure concurrent adds work
+diff --git a/tests/monitor/testcases/set-multiple.t b/tests/monitor/testcases/set-multiple.t
+index 84de98e..bd7a624 100644
+--- a/tests/monitor/testcases/set-multiple.t
++++ b/tests/monitor/testcases/set-multiple.t
+@@ -4,8 +4,8 @@ I add set ip t portrange { type inet_service; flags interval; }
+ I add set ip t portrange2 { type inet_service; flags interval; }
+ O -
+ J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
+-J {"add": {"set": {"family": "ip", "name": "portrange", "table": "t", "type": "inet_service", "handle": 0, "flags": "interval"}}}
+-J {"add": {"set": {"family": "ip", "name": "portrange2", "table": "t", "type": "inet_service", "handle": 0, "flags": "interval"}}}
++J {"add": {"set": {"family": "ip", "name": "portrange", "table": "t", "type": "inet_service", "handle": 0, "flags": ["interval"]}}}
++J {"add": {"set": {"family": "ip", "name": "portrange2", "table": "t", "type": "inet_service", "handle": 0, "flags": ["interval"]}}}
+ 
+ # make sure concurrent adds work
+ I add element ip t portrange { 1024-65535 }
+diff --git a/tests/monitor/testcases/set-simple.t b/tests/monitor/testcases/set-simple.t
+index 4bef144..6853a0e 100644
+--- a/tests/monitor/testcases/set-simple.t
++++ b/tests/monitor/testcases/set-simple.t
+@@ -3,7 +3,7 @@ I add table ip t
+ I add set ip t portrange { type inet_service; flags interval; }
+ O -
+ J {"add": {"table": {"family": "ip", "name": "t", "handle": 0}}}
+-J {"add": {"set": {"family": "ip", "name": "portrange", "table": "t", "type": "inet_service", "handle": 0, "flags": "interval"}}}
++J {"add": {"set": {"family": "ip", "name": "portrange", "table": "t", "type": "inet_service", "handle": 0, "flags": ["interval"]}}}
+ 
+ # adding some ranges
+ I add element ip t portrange { 1-10 }

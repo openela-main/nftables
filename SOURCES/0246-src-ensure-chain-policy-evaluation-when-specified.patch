@@ -1,0 +1,154 @@
+From d850ec82b0c6f3ee5ff762d283c1cec1283503f7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:43 +0200
+Subject: [PATCH] src: ensure chain policy evaluation when specified
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 01277922fede9fef8aacf5cc871bfbd55bbd78ef
+
+commit 01277922fede9fef8aacf5cc871bfbd55bbd78ef
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sun Aug 17 21:01:30 2025 +0200
+
+    src: ensure chain policy evaluation when specified
+
+    Set on CHAIN_F_BASECHAIN when policy is specified in chain, otherwise
+    chain priority is not evaluated.
+
+    Toggling this flag requires needs three adjustments to work though:
+
+    1) chain_evaluate() needs skip evaluation of hook name and priority if
+       not specified to allow for updating the default chain policy, e.g.
+
+            chain ip x y { policy accept; }
+
+    2) update netlink bytecode generation for chain to skip NFTA_CHAIN_HOOK
+       so update path is exercised in the kernel.
+
+    3) error reporting needs to check if basechain priority and type is
+       set on, otherwise skip further hints.
+
+    Fixes: acdfae9c3126 ("src: allow to specify the default policy for base chains")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cmd.c                                     |  3 +++
+ src/evaluate.c                                | 27 ++++++++++---------
+ src/mnl.c                                     |  8 ++++--
+ src/parser_bison.y                            |  1 +
+ .../bogons/nft-f/basechain_bad_policy         |  2 ++
+ .../bogons/nft-f/unexisting_chain_set_policy  |  5 ++++
+ 6 files changed, 32 insertions(+), 14 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/basechain_bad_policy
+ create mode 100644 tests/shell/testcases/bogons/nft-f/unexisting_chain_set_policy
+
+diff --git a/src/cmd.c b/src/cmd.c
+index 6f6da35..76124dc 100644
+--- a/src/cmd.c
++++ b/src/cmd.c
+@@ -266,6 +266,9 @@ static int nft_cmd_chain_error(struct netlink_ctx *ctx, struct cmd *cmd,
+ 		if (!(chain->flags & CHAIN_F_BASECHAIN))
+ 			break;
+ 
++		if (!chain->priority.expr || !chain->type.str)
++			break;
++
+ 		mpz_export_data(&priority, chain->priority.expr->value,
+ 				BYTEORDER_HOST_ENDIAN, sizeof(int));
+ 		if (priority <= -200 && !strcmp(chain->type.str, "nat"))
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 73cd3c0..93f0bbf 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -5205,18 +5205,21 @@ static int chain_evaluate(struct eval_ctx *ctx, struct chain *chain)
+ 	}
+ 
+ 	if (chain->flags & CHAIN_F_BASECHAIN) {
+-		chain->hook.num = str2hooknum(chain->handle.family,
+-					      chain->hook.name);
+-		if (chain->hook.num == NF_INET_NUMHOOKS)
+-			return __stmt_binary_error(ctx, &chain->hook.loc, NULL,
+-						   "The %s family does not support this hook",
+-						   family2str(chain->handle.family));
+-
+-		if (!evaluate_priority(ctx, &chain->priority,
+-				       chain->handle.family, chain->hook.num))
+-			return __stmt_binary_error(ctx, &chain->priority.loc, NULL,
+-						   "invalid priority expression %s in this context.",
+-						   expr_name(chain->priority.expr));
++		if (chain->hook.name) {
++			chain->hook.num = str2hooknum(chain->handle.family,
++						      chain->hook.name);
++			if (chain->hook.num == NF_INET_NUMHOOKS)
++				return __stmt_binary_error(ctx, &chain->hook.loc, NULL,
++							   "The %s family does not support this hook",
++							   family2str(chain->handle.family));
++		}
++		if (chain->priority.expr) {
++			if (!evaluate_priority(ctx, &chain->priority,
++					       chain->handle.family, chain->hook.num))
++				return __stmt_binary_error(ctx, &chain->priority.loc, NULL,
++							   "invalid priority expression %s in this context.",
++							   expr_name(chain->priority.expr));
++		}
+ 		if (chain->policy) {
+ 			expr_set_context(&ctx->ectx, &policy_type,
+ 					 NFT_NAME_MAXLEN * BITS_PER_BYTE);
+diff --git a/src/mnl.c b/src/mnl.c
+index 199820d..78d02cc 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -875,7 +875,9 @@ int mnl_nft_chain_add(struct netlink_ctx *ctx, struct cmd *cmd,
+ 			mnl_attr_put_strz(nlh, NFTA_CHAIN_TYPE, cmd->chain->type.str);
+ 		}
+ 
+-		nest = mnl_attr_nest_start(nlh, NFTA_CHAIN_HOOK);
++		if (cmd->chain->type.str ||
++		    (cmd->chain && cmd->chain->dev_expr))
++			nest = mnl_attr_nest_start(nlh, NFTA_CHAIN_HOOK);
+ 
+ 		if (cmd->chain->type.str) {
+ 			mnl_attr_put_u32(nlh, NFTA_HOOK_HOOKNUM, htonl(cmd->chain->hook.num));
+@@ -887,7 +889,9 @@ int mnl_nft_chain_add(struct netlink_ctx *ctx, struct cmd *cmd,
+ 		if (cmd->chain && cmd->chain->dev_expr)
+ 			mnl_nft_chain_devs_build(nlh, cmd);
+ 
+-		mnl_attr_nest_end(nlh, nest);
++		if (cmd->chain->type.str ||
++		    (cmd->chain && cmd->chain->dev_expr))
++			mnl_attr_nest_end(nlh, nest);
+ 	}
+ 
+ 	nftnl_chain_free(nlc);
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 62cd895..a5b70d8 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -2797,6 +2797,7 @@ policy_spec		:	POLICY		policy_expr	close_scope_policy
+ 				}
+ 				$<chain>0->policy		= $2;
+ 				$<chain>0->policy->location	= @$;
++				$<chain>0->flags		|= CHAIN_F_BASECHAIN;
+ 			}
+ 			;
+ 
+diff --git a/tests/shell/testcases/bogons/nft-f/basechain_bad_policy b/tests/shell/testcases/bogons/nft-f/basechain_bad_policy
+new file mode 100644
+index 0000000..998e423
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/basechain_bad_policy
+@@ -0,0 +1,2 @@
++define MY_POLICY = deny
++table T { chain C { policy $MY_POLICY; };};
+diff --git a/tests/shell/testcases/bogons/nft-f/unexisting_chain_set_policy b/tests/shell/testcases/bogons/nft-f/unexisting_chain_set_policy
+new file mode 100644
+index 0000000..0889559
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/unexisting_chain_set_policy
+@@ -0,0 +1,5 @@
++table ip x {
++        chain y {
++                policy drop;
++        }
++}

@@ -1,0 +1,73 @@
+From 2f21c29c1e3490f9a0074713bcd1db74b7e78b89 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] tests/py: prepare for set debug change
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 7cec20e45a7549d82b7eac8eac6c8a31458fe291
+
+commit 7cec20e45a7549d82b7eac8eac6c8a31458fe291
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Apr 8 16:21:29 2025 +0200
+
+    tests/py: prepare for set debug change
+
+    Next patch will make initial set dump from kernel emit set debug
+    information, so the obtained netlink debug file won't match what is
+    recorded in tests/py.
+
+    Furthermore, as the python add rules for each of the family the test is
+    for, subsequent dump will include debug information of the other/previous
+    families.
+
+    Change the script to skip all unrelated information to only compare the
+    relevant set element information and the generated expressions.
+
+    This change still finds changes in [ expr ... ] and set elem debug output.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 90c7612..06f1701 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -717,17 +717,20 @@ def payload_check(payload_buffer, file, cmd):
+         return False
+ 
+     for lineno, want_line in enumerate(payload_buffer):
++        # skip irreleant parts, such as "ip test-ipv4 output"
++        if want_line.find("[") < 0 or want_line.find("]") < 0:
++             continue
++
+         line = file.readline()
++        while line.find("[") < 0 or line.find("]") < 0:
++            line = file.readline()
++            if line == "":
++                break
+ 
+         if want_line == line:
+             i += 1
+             continue
+ 
+-        if want_line.find('[') < 0 and line.find('[') < 0:
+-            continue
+-        if want_line.find(']') < 0 and line.find(']') < 0:
+-            continue
+-
+         if payload_check_set_elems(want_line, line):
+             continue
+ 
+@@ -875,6 +878,8 @@ def rule_add(rule, filename, lineno, force_all_family_option, filename_path):
+                     gotf.write("# %s\n" % rule[0])
+                     while True:
+                         line = payload_log.readline()
++                        if line.startswith("family "):
++                            continue
+                         if line == "":
+                             break
+                         gotf.write(line)

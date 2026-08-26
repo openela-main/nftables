@@ -1,0 +1,269 @@
+From 122194c2f1742891d8a22264f294f8882ea304d2 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] tcpopt: add symbol table for mptcp suboptions
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 9832c2c347eb09eb8790e2ea003855f92b2ac257
+
+commit 9832c2c347eb09eb8790e2ea003855f92b2ac257
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Feb 27 15:52:07 2025 +0100
+
+    tcpopt: add symbol table for mptcp suboptions
+
+    nft can be used t match on specific multipath tcp subtypes:
+
+      tcp option mptcp subtype 0
+
+    However, depending on which subtype to match, users need to look up the
+    type/value to use in rfc8684. Add support for mnemonics and
+    "nft describe tcp option mptcp subtype" to get the subtype list.
+
+    Because the number of unique 'enum datatypes' is limited by ABI contraints
+    this adds a new mptcp suboption type as integer alias.
+
+    After this patch, nft supports all of the following:
+     add element t s { mp-capable }
+     add rule t c tcp option mptcp subtype mp-capable
+     add rule t c tcp option mptcp subtype { mp-capable, mp-fail }
+
+    For the 3rd case, listing will break because unlike for named sets, nft
+    lacks the type information needed to pretty-print the integer values,
+    i.e. nft will print the 3rd rule as 'subtype { 0, 6 }'.
+
+    This is resolved in a followup patch.
+
+    Other problematic constructs are:
+      set s1 {
+        typeof tcp option mptcp subtype . ip saddr
+        elements = { mp-fail . 1.2.3.4 }
+      }
+
+    Followed by:
+      tcp option mptcp subtype . ip saddr @s1
+
+    nft will print this as:
+      tcp option mptcp unknown & 240) >> 4 . ip saddr @s1
+
+    All of these issues are not related to this patch, however, they also occur
+    with other bit-sized extheader fields.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/datatype.h                            |  5 +++-
+ src/tcpopt.c                                  | 30 ++++++++++++++++++-
+ tests/py/any/tcpopt.t                         |  4 +--
+ tests/py/any/tcpopt.t.json                    |  6 ++--
+ tests/py/any/tcpopt.t.payload                 |  2 +-
+ .../testcases/sets/dumps/typeof_sets_0.nft    |  9 ++++++
+ tests/shell/testcases/sets/typeof_sets_0      | 18 +++++++++++
+ 7 files changed, 66 insertions(+), 8 deletions(-)
+
+diff --git a/include/datatype.h b/include/datatype.h
+index 68e12d5..e394003 100644
+--- a/include/datatype.h
++++ b/include/datatype.h
+@@ -258,7 +258,6 @@ extern const struct datatype verdict_type;
+ extern const struct datatype nfproto_type;
+ extern const struct datatype bitmask_type;
+ extern const struct datatype integer_type;
+-extern const struct datatype xinteger_type;
+ extern const struct datatype string_type;
+ extern const struct datatype lladdr_type;
+ extern const struct datatype ipaddr_type;
+@@ -285,6 +284,10 @@ extern const struct datatype reject_icmp_code_type;
+ extern const struct datatype reject_icmpv6_code_type;
+ extern const struct datatype reject_icmpx_code_type;
+ 
++/* TYPE_INTEGER aliases: */
++extern const struct datatype xinteger_type;
++extern const struct datatype mptcpopt_subtype;
++
+ void inet_service_type_print(const struct expr *expr, struct output_ctx *octx);
+ 
+ extern const struct datatype *concat_type_alloc(uint32_t type);
+diff --git a/src/tcpopt.c b/src/tcpopt.c
+index 8111a50..094687a 100644
+--- a/src/tcpopt.c
++++ b/src/tcpopt.c
+@@ -108,6 +108,31 @@ static const struct exthdr_desc tcpopt_md5sig = {
+ 	},
+ };
+ 
++static const struct symbol_table mptcp_subtype_tbl = {
++	.base		= BASE_DECIMAL,
++	.symbols	= {
++		SYMBOL("mp-capable",	0),
++		SYMBOL("mp-join",	1),
++		SYMBOL("dss",		2),
++		SYMBOL("add-addr",	3),
++		SYMBOL("remove-addr",	4),
++		SYMBOL("mp-prio",	5),
++		SYMBOL("mp-fail",	6),
++		SYMBOL("mp-fastclose",	7),
++		SYMBOL("mp-tcprst",	8),
++		SYMBOL_LIST_END
++	},
++};
++
++/* alias of integer_type to parse mptcp subtypes */
++const struct datatype mptcpopt_subtype = {
++	.type		= TYPE_INTEGER,
++	.name		= "integer",
++	.desc		= "mptcp option subtype",
++	.size		= 4,
++	.basetype	= &integer_type,
++	.sym_tbl	= &mptcp_subtype_tbl,
++};
+ 
+ static const struct exthdr_desc tcpopt_mptcp = {
+ 	.name		= "mptcp",
+@@ -115,7 +140,10 @@ static const struct exthdr_desc tcpopt_mptcp = {
+ 	.templates	= {
+ 		[TCPOPT_MPTCP_KIND]	= PHT("kind",   0,   8),
+ 		[TCPOPT_MPTCP_LENGTH]	= PHT("length", 8,  8),
+-		[TCPOPT_MPTCP_SUBTYPE]  = PHT("subtype", 16, 4),
++		[TCPOPT_MPTCP_SUBTYPE]  = PROTO_HDR_TEMPLATE("subtype",
++							     &mptcpopt_subtype,
++							     BYTEORDER_BIG_ENDIAN,
++							     16, 4),
+ 	},
+ };
+ 
+diff --git a/tests/py/any/tcpopt.t b/tests/py/any/tcpopt.t
+index 177f01c..a2fcdb3 100644
+--- a/tests/py/any/tcpopt.t
++++ b/tests/py/any/tcpopt.t
+@@ -51,8 +51,8 @@ tcp option md5sig exists;ok
+ tcp option fastopen exists;ok
+ tcp option mptcp exists;ok
+ 
+-tcp option mptcp subtype 0;ok
+-tcp option mptcp subtype 1;ok
++tcp option mptcp subtype mp-capable;ok
++tcp option mptcp subtype 1;ok;tcp option mptcp subtype mp-join
+ tcp option mptcp subtype { 0, 2};ok
+ 
+ reset tcp option mptcp;ok
+diff --git a/tests/py/any/tcpopt.t.json b/tests/py/any/tcpopt.t.json
+index 4466f14..bf10c55 100644
+--- a/tests/py/any/tcpopt.t.json
++++ b/tests/py/any/tcpopt.t.json
+@@ -533,7 +533,7 @@
+     }
+ ]
+ 
+-# tcp option mptcp subtype 0
++# tcp option mptcp subtype mp-capable
+ [
+     {
+         "match": {
+@@ -544,7 +544,7 @@
+                 }
+             },
+             "op": "==",
+-            "right": 0
++            "right": "mp-capable"
+         }
+     }
+ ]
+@@ -560,7 +560,7 @@
+                 }
+             },
+             "op": "==",
+-            "right": 1
++            "right": "mp-join"
+         }
+     }
+ ]
+diff --git a/tests/py/any/tcpopt.t.payload b/tests/py/any/tcpopt.t.payload
+index 99b8985..e3cf500 100644
+--- a/tests/py/any/tcpopt.t.payload
++++ b/tests/py/any/tcpopt.t.payload
+@@ -168,7 +168,7 @@ inet
+   [ exthdr load tcpopt 1b @ 30 + 0 present => reg 1 ]
+   [ cmp eq reg 1 0x00000001 ]
+ 
+-# tcp option mptcp subtype 0
++# tcp option mptcp subtype mp-capable
+ inet
+   [ exthdr load tcpopt 1b @ 30 + 2 => reg 1 ]
+   [ bitwise reg 1 = ( reg 1 & 0x000000f0 ) ^ 0x00000000 ]
+diff --git a/tests/shell/testcases/sets/dumps/typeof_sets_0.nft b/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
+index 63fc5b1..ed45d84 100644
+--- a/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
++++ b/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
+@@ -60,6 +60,11 @@ table inet t {
+ 		elements = { "eth0" . 10.1.1.2 . exists }
+ 	}
+ 
++	set s13 {
++		typeof tcp option mptcp subtype
++		elements = { mp-join, dss }
++	}
++
+ 	chain c1 {
+ 		osf name @s1 accept
+ 	}
+@@ -103,4 +108,8 @@ table inet t {
+ 	chain c12 {
+ 		iifname . ip saddr . meta ipsec @s12 accept
+ 	}
++
++	chain c13 {
++		tcp option mptcp subtype @s13 accept
++	}
+ }
+diff --git a/tests/shell/testcases/sets/typeof_sets_0 b/tests/shell/testcases/sets/typeof_sets_0
+index baf7c29..06c2f63 100755
+--- a/tests/shell/testcases/sets/typeof_sets_0
++++ b/tests/shell/testcases/sets/typeof_sets_0
+@@ -99,6 +99,11 @@ INPUT="table inet t {$INPUT_OSF_SET
+ 		typeof meta iifname . ip saddr . meta ipsec
+ 		elements = { \"eth0\" . 10.1.1.2 . 1 }
+ 	}
++
++	set s13 {
++		typeof tcp option mptcp subtype
++		elements = { mp-join, dss }
++	}
+ $INPUT_OSF_CHAIN
+ 	chain c2 {
+ 		ether type vlan vlan id @s2 accept
+@@ -135,6 +140,10 @@ $INPUT_SCTP_CHAIN
+ 	chain c12 {
+ 		meta iifname . ip saddr . meta ipsec @s12 accept
+ 	}
++
++	chain c13 {
++		tcp option mptcp subtype @s13 accept
++	}
+ }"
+ 
+ EXPECTED="table inet t {$INPUT_OSF_SET
+@@ -193,6 +202,11 @@ EXPECTED="table inet t {$INPUT_OSF_SET
+ 		typeof iifname . ip saddr . meta ipsec
+ 		elements = { \"eth0\" . 10.1.1.2 . exists }
+ 	}
++
++	set s13 {
++		typeof tcp option mptcp subtype
++		elements = { mp-join, dss }
++	}
+ $INPUT_OSF_CHAIN
+ 	chain c2 {
+ 		vlan id @s2 accept
+@@ -229,6 +243,10 @@ $INPUT_SCTP_CHAIN
+ 	chain c12 {
+ 		iifname . ip saddr . meta ipsec @s12 accept
+ 	}
++
++	chain c13 {
++		tcp option mptcp subtype @s13 accept
++	}
+ }"
+ 
+ 

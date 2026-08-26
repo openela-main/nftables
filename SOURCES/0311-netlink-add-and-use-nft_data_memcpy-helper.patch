@@ -1,0 +1,125 @@
+From f8ecf0f681eccda215141f173e28b98416b0df4d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Wed, 29 Jul 2026 15:35:32 +0200
+Subject: [PATCH] netlink: add and use nft_data_memcpy helper
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 130060afa9f6f11e14ea5cf372545407179f16ac
+
+commit 130060afa9f6f11e14ea5cf372545407179f16ac
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Dec 8 15:34:29 2023 +0100
+
+    netlink: add and use nft_data_memcpy helper
+
+    There is a stack overflow somewhere in this code, we end
+    up memcpy'ing a way too large expr into a fixed-size on-stack
+    buffer.
+
+    This is hard to diagnose, most of this code gets inlined so
+    the crash happens later on return from alloc_nftnl_setelem.
+
+    Condense the mempy into a helper and add a BUG so we can catch
+    the overflow before it occurs.
+
+    ->value is too small (4, should be 16), but for normal
+    cases (well-formed data must fit into max reg space, i.e.
+    64 byte) the chain buffer that comes after value in the
+    structure provides a cushion.
+
+    In order to have the new BUG() not trigger on valid data,
+    bump value to the correct size, this is userspace so the additional
+    60 bytes of stack usage is no concern.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/netlink.h |  2 +-
+ src/netlink.c     | 25 +++++++++++++++----------
+ 2 files changed, 16 insertions(+), 11 deletions(-)
+
+diff --git a/include/netlink.h b/include/netlink.h
+index 60c1a0d..e9667a2 100644
+--- a/include/netlink.h
++++ b/include/netlink.h
+@@ -102,7 +102,7 @@ extern struct nftnl_rule *netlink_rule_alloc(const struct nlmsghdr *nlh);
+ 
+ struct nft_data_linearize {
+ 	uint32_t	len;
+-	uint32_t	value[4];
++	uint32_t	value[NFT_REG32_COUNT];
+ 	char		chain[NFT_CHAIN_MAXNAMELEN];
+ 	uint32_t	chain_id;
+ 	int		verdict;
+diff --git a/src/netlink.c b/src/netlink.c
+index 19ea9f3..0d5a12b 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -321,6 +321,16 @@ static int __netlink_gen_concat_key(uint32_t flags, const struct expr *i,
+ 	return ret;
+ }
+ 
++static void nft_data_memcpy(struct nft_data_linearize *nld,
++			    const void *src, unsigned int len)
++{
++	if (len > sizeof(nld->value))
++		BUG("nld buffer overflow: want to copy %u, max %u\n", len, (unsigned int)sizeof(nld->value));
++
++	memcpy(nld->value, src, len);
++	nld->len = len;
++}
++
+ static void netlink_gen_concat_key(const struct expr *expr,
+ 				    struct nft_data_linearize *nld)
+ {
+@@ -337,8 +347,7 @@ static void netlink_gen_concat_key(const struct expr *expr,
+ 	list_for_each_entry(i, &expr->expressions, list)
+ 		offset += __netlink_gen_concat_key(expr->flags, i, data + offset);
+ 
+-	memcpy(nld->value, data, len);
+-	nld->len = len;
++	nft_data_memcpy(nld, data, len);
+ }
+ 
+ static int __netlink_gen_concat_data(int end, const struct expr *i,
+@@ -388,8 +397,7 @@ static void __netlink_gen_concat_expand(const struct expr *expr,
+ 	list_for_each_entry(i, &expr->expressions, list)
+ 		offset += __netlink_gen_concat_data(true, i, data + offset);
+ 
+-	memcpy(nld->value, data, len);
+-	nld->len = len;
++	nft_data_memcpy(nld, data, len);
+ }
+ 
+ static void __netlink_gen_concat(const struct expr *expr,
+@@ -408,8 +416,7 @@ static void __netlink_gen_concat(const struct expr *expr,
+ 	list_for_each_entry(i, &expr->expressions, list)
+ 		offset += __netlink_gen_concat_data(expr->flags, i, data + offset);
+ 
+-	memcpy(nld->value, data, len);
+-	nld->len = len;
++	nft_data_memcpy(nld, data, len);
+ }
+ 
+ static void netlink_gen_concat_data(const struct expr *expr,
+@@ -481,8 +488,7 @@ static void netlink_gen_range(const struct expr *expr,
+ 	memset(data, 0, sizeof(data));
+ 	offset = netlink_export_pad(data, expr->left->value, expr->left);
+ 	netlink_export_pad(data + offset, expr->right->value, expr->right);
+-	memcpy(nld->value, data, len);
+-	nld->len = len;
++	nft_data_memcpy(nld, data, len);
+ }
+ 
+ static void netlink_gen_prefix(const struct expr *expr,
+@@ -499,8 +505,7 @@ static void netlink_gen_prefix(const struct expr *expr,
+ 	netlink_export_pad(data + offset, v, expr->prefix);
+ 	mpz_clear(v);
+ 
+-	memcpy(nld->value, data, len);
+-	nld->len = len;
++	nft_data_memcpy(nld, data, len);
+ }
+ 
+ static void netlink_gen_key(const struct expr *expr,

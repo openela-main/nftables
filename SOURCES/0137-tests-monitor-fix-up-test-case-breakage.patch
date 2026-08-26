@@ -1,0 +1,62 @@
+From 276b6a8b95059d2fa3c5b152ec13e4a268fc9c2d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:26 +0200
+Subject: [PATCH] tests: monitor: fix up test case breakage
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit c416416b03d804663c5f7a738a3e1449eeb28157
+
+commit c416416b03d804663c5f7a738a3e1449eeb28157
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Oct 29 21:12:19 2024 +0100
+
+    tests: monitor: fix up test case breakage
+
+    Monitor test fails:
+
+     echo: running tests from file set-simple.t
+     echo output differs!
+      -add element ip t portrange { 1024-65535 }
+       add element ip t portrange { 100-200 }
+      +add element ip t portrange { 1024-65535 }
+      +# new generation 510 by process 129009 (nft)
+
+    I also noticed -j mode did not work correctly, add missing json annotations
+    in set-concat-interval.t while at it.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/testcases/set-concat-interval.t | 3 +++
+ tests/monitor/testcases/set-simple.t          | 5 +++--
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/tests/monitor/testcases/set-concat-interval.t b/tests/monitor/testcases/set-concat-interval.t
+index 763dc31..75f3828 100644
+--- a/tests/monitor/testcases/set-concat-interval.t
++++ b/tests/monitor/testcases/set-concat-interval.t
+@@ -10,3 +10,6 @@ I add map ip t s { typeof udp length . @ih,32,32 : verdict; flags interval; elem
+ O add map ip t s { typeof udp length . @ih,32,32 : verdict; flags interval; }
+ O add element ip t s { 20-80 . 0x14 : accept }
+ O add element ip t s { 1-10 . 0xa : drop }
++J {"add": {"map": {"family": "ip", "name": "s", "table": "t", "type": ["integer", "integer"], "handle": 0, "map": "verdict", "flags": ["interval"]}}}
++J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [[{"concat": [{"range": [20, 80]}, 20]}, {"accept": null}]]}}}}
++J {"add": {"element": {"family": "ip", "table": "t", "name": "s", "elem": {"set": [[{"concat": [{"range": [1, 10]}, 10]}, {"drop": null}]]}}}}
+diff --git a/tests/monitor/testcases/set-simple.t b/tests/monitor/testcases/set-simple.t
+index 8ca4f32..6853a0e 100644
+--- a/tests/monitor/testcases/set-simple.t
++++ b/tests/monitor/testcases/set-simple.t
+@@ -37,9 +37,10 @@ J {"add": {"element": {"family": "ip", "table": "t", "name": "portrange", "elem"
+ # make sure half open before other element works
+ I add element ip t portrange { 1024-65535 }
+ I add element ip t portrange { 100-200 }
+-O -
+-J {"add": {"element": {"family": "ip", "table": "t", "name": "portrange", "elem": {"set": [{"range": [1024, 65535]}]}}}}
++O add element ip t portrange { 100-200 }
++O add element ip t portrange { 1024-65535 }
+ J {"add": {"element": {"family": "ip", "table": "t", "name": "portrange", "elem": {"set": [{"range": [100, 200]}]}}}}
++J {"add": {"element": {"family": "ip", "table": "t", "name": "portrange", "elem": {"set": [{"range": [1024, 65535]}]}}}}
+ 
+ # make sure deletion of elements works
+ I delete element ip t portrange { 0-10 }

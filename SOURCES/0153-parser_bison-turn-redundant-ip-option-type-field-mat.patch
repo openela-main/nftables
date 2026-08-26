@@ -1,0 +1,76 @@
+From 97bef0375709f9ec7ad2c9ac5ecb39d010dd0773 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] parser_bison: turn redundant ip option type field match into
+ boolean
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f9a48ce2f9c252bf74d98d10412b1f72585a45ec
+
+commit f9a48ce2f9c252bf74d98d10412b1f72585a45ec
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Fri Jan 31 11:14:22 2025 +0100
+
+    parser_bison: turn redundant ip option type field match into boolean
+
+    The ip option expression allows for non-sense matching like:
+
+            ip option lsrr type 1
+
+    because 'lsrr' already provides the type field, this never results in a
+    matching.
+
+    Turn this expression into:
+
+            ip option lsrr exists
+
+    And update documentation to hide this redundant type field.
+
+    Fixes: 226a0e072d5c ("exthdr: add support for matching IPv4 options")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/payload-expression.txt | 8 ++++----
+ src/parser_bison.y         | 3 +++
+ 2 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/doc/payload-expression.txt b/doc/payload-expression.txt
+index 8afeb71..d648785 100644
+--- a/doc/payload-expression.txt
++++ b/doc/payload-expression.txt
+@@ -845,16 +845,16 @@ TCP option matching also supports raw expression syntax to access arbitrary opti
+ |Keyword| Description | IP option fields
+ |lsrr|
+ Loose Source Route |
+-type, length, ptr, addr
++length, ptr, addr
+ |ra|
+ Router Alert |
+-type, length, value
++length, value
+ |rr|
+ Record Route |
+-type, length, ptr, addr
++length, ptr, addr
+ |ssrr|
+ Strict Source Route |
+-type, length, ptr, addr
++length, ptr, addr
+ |============================
+ 
+ .finding TCP options
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index fb91c3e..6435e8e 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -5636,6 +5636,9 @@ ip_hdr_expr		:	IP	ip_hdr_field	close_scope_ip
+ 					erec_queue(error(&@1, "unknown ip option type/field"), state->msgs);
+ 					YYERROR;
+ 				}
++
++				if ($4 == IPOPT_FIELD_TYPE)
++					$$->exthdr.flags = NFT_EXTHDR_F_PRESENT;
+ 			}
+ 			|	IP	OPTION	ip_option_type close_scope_ip
+ 			{

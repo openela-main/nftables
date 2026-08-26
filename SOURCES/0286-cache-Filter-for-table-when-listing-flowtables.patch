@@ -1,0 +1,52 @@
+From 2836fbfd0daceb4879fa3d502b03e3e4eac8eddf Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:05 +0200
+Subject: [PATCH] cache: Filter for table when listing flowtables
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit fa5d7fba4bcc9b7c5c9ec37bbe8d3df3f8298745
+
+commit fa5d7fba4bcc9b7c5c9ec37bbe8d3df3f8298745
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Feb 25 21:07:32 2026 +0100
+
+    cache: Filter for table when listing flowtables
+
+    Respect an optionally specified table name to filter listed flowtables
+    to by populating the filter accordingly.
+
+    Fixes: a1a6b0a5c3c4 ("cache: finer grain cache population for list commands")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Tested-by: Eric Garver <eric@garver.life>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c                                 | 1 +
+ tests/shell/testcases/listing/cache_filters | 3 +++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/src/cache.c b/src/cache.c
+index b009243..cac6421 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -272,6 +272,7 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 		/* fall through */
+ 	case CMD_OBJ_FLOWTABLES:
+ 		filter->list.family = cmd->handle.family;
++		filter->list.table = cmd->handle.table.name;
+ 		flags |= NFT_CACHE_TABLE | NFT_CACHE_FLOWTABLE;
+ 		break;
+ 	case CMD_OBJ_COUNTER:
+diff --git a/tests/shell/testcases/listing/cache_filters b/tests/shell/testcases/listing/cache_filters
+index 7a89330..e3d0e5e 100755
+--- a/tests/shell/testcases/listing/cache_filters
++++ b/tests/shell/testcases/listing/cache_filters
+@@ -47,4 +47,7 @@ $NFT --debug=netlink list flowtables | \
+ 	grep -q 'flow table ip_t ip_t_ft' || fail "broken list flowtables"
+ $NFT --debug=netlink list flowtables ip6 | \
+ 	grep -q 'flow table ip_t ip_t_ft' && fail "broken list flowtables family filter"
++$NFT --debug=netlink list flowtables ip ip_t2 | \
++	grep -q 'flow table ip_t ip_t_ft' && fail "broken list flowtables table filter"
++
+ exit 0

@@ -1,0 +1,49 @@
+From 9f69d896588779ce915492e72ea6582cf0168792 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] netlink: Do not allocate a bogus flowtable priority expr
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 10b9a85b3278e0933bf47226588fede8c9fcbcc8
+
+commit 10b9a85b3278e0933bf47226588fede8c9fcbcc8
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jun 11 14:15:38 2025 +0200
+
+    netlink: Do not allocate a bogus flowtable priority expr
+
+    Code accidentally treats missing NFTNL_FLOWTABLE_PRIO attribute as zero
+    prio value which may not be correct.
+
+    Fixes: db0697ce7f602 ("src: support for flowtable listing")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 1de4642..df7ce21 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -1827,14 +1827,16 @@ netlink_delinearize_flowtable(struct netlink_ctx *ctx,
+ 		      sizeof(char *), qsort_device_cmp);
+ 	}
+ 
+-	priority = nftnl_flowtable_get_u32(nlo, NFTNL_FLOWTABLE_PRIO);
+-	flowtable->priority.expr =
++	if (nftnl_flowtable_is_set(nlo, NFTNL_FLOWTABLE_PRIO)) {
++		priority = nftnl_flowtable_get_u32(nlo, NFTNL_FLOWTABLE_PRIO);
++		flowtable->priority.expr =
+ 				constant_expr_alloc(&netlink_location,
+ 						    &integer_type,
+ 						    BYTEORDER_HOST_ENDIAN,
+ 						    sizeof(int) *
+ 						    BITS_PER_BYTE,
+ 						    &priority);
++	}
+ 	flowtable->hook.num =
+ 		nftnl_flowtable_get_u32(nlo, NFTNL_FLOWTABLE_HOOKNUM);
+ 	flowtable->flags =

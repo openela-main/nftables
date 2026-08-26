@@ -1,0 +1,61 @@
+From 0a8f8baff7bdfe2001f63429de7d8317bf72f4fc Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] tests: shell: skip if kernel does not support flowtable
+ counter
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 279654904d5186430588b475501b2ca0d3ab6517
+
+commit 279654904d5186430588b475501b2ca0d3ab6517
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Nov 14 16:57:22 2023 +0100
+
+    tests: shell: skip if kernel does not support flowtable counter
+
+    Check if kernel provides flowtable counter supports which is available
+    since 53c2b2899af7 ("netfilter: flowtable: add counter support").
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/features/flowtable_counter.sh        | 16 ++++++++++++++++
+ .../testcases/flowtable/0012flowtable_variable_0 |  2 ++
+ 2 files changed, 18 insertions(+)
+ create mode 100755 tests/shell/features/flowtable_counter.sh
+
+diff --git a/tests/shell/features/flowtable_counter.sh b/tests/shell/features/flowtable_counter.sh
+new file mode 100755
+index 0000000..a4c4c62
+--- /dev/null
++++ b/tests/shell/features/flowtable_counter.sh
+@@ -0,0 +1,16 @@
++#!/bin/bash
++
++# 53c2b2899af7 ("netfilter: flowtable: add counter support")
++# v5.7-rc1~146^2~12^2~16
++
++EXPECTED="table ip filter2 {
++	flowtable main_ft2 {
++		hook ingress priority filter
++		devices = { lo }
++		counter
++	}
++}"
++
++$NFT -f - <<< $EXPECTED
++
++diff -u <($NFT list ruleset) - <<<"$EXPECTED"
+diff --git a/tests/shell/testcases/flowtable/0012flowtable_variable_0 b/tests/shell/testcases/flowtable/0012flowtable_variable_0
+index 080059d..9c03820 100755
+--- a/tests/shell/testcases/flowtable/0012flowtable_variable_0
++++ b/tests/shell/testcases/flowtable/0012flowtable_variable_0
+@@ -1,5 +1,7 @@
+ #!/bin/bash
+ 
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_flowtable_counter)
++
+ set -e
+ 
+ iface_cleanup() {

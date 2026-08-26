@@ -1,0 +1,39 @@
+From 74e1c61e5d4dab13bd7125593dd4659b07c954b6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] mnl: Call mnl_attr_nest_end() just once
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 8a1de0ec9709b58a80a86a20cfba107b11c85f6e
+
+commit 8a1de0ec9709b58a80a86a20cfba107b11c85f6e
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Jul 16 14:26:08 2025 +0200
+
+    mnl: Call mnl_attr_nest_end() just once
+
+    Calling the function after each added nested attribute is harmless but
+    pointless.
+
+    Fixes: a66b5ad9540dd ("src: allow for updating devices on existing netdev chain")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mnl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/mnl.c b/src/mnl.c
+index d9f58de..199820d 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -797,8 +797,8 @@ static void mnl_nft_chain_devs_build(struct nlmsghdr *nlh, struct cmd *cmd)
+ 		for (i = 0; i < num_devs; i++) {
+ 			cmd_add_loc(cmd, nlh, dev_array[i].location);
+ 			mnl_attr_put_strz(nlh, NFTA_DEVICE_NAME, dev_array[i].ifname);
+-			mnl_attr_nest_end(nlh, nest_dev);
+ 		}
++		mnl_attr_nest_end(nlh, nest_dev);
+ 	}
+ 	nft_dev_array_free(dev_array);
+ }

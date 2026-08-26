@@ -1,0 +1,42 @@
+From 85b608dfcb7718e1909862a3617501ca3dd733c2 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:13:20 +0200
+Subject: [PATCH] json: Print single synproxy flags as non-array
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 38f99ee84fe6bd029fbc3d1389f42ab82fa9789c
+
+commit 38f99ee84fe6bd029fbc3d1389f42ab82fa9789c
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu May 8 16:44:39 2025 +0200
+
+    json: Print single synproxy flags as non-array
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/json.c b/src/json.c
+index 1998766..2a94066 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -1667,10 +1667,14 @@ json_t *synproxy_stmt_json(const struct stmt *stmt, struct output_ctx *octx)
+ 	if (stmt->synproxy.flags & NF_SYNPROXY_OPT_SACK_PERM)
+ 		json_array_append_new(flags, json_string("sack-perm"));
+ 
+-	if (json_array_size(flags) > 0)
++	if (json_array_size(flags) > 1) {
+ 		json_object_set_new(root, "flags", flags);
+-	else
++	} else {
++		if (json_array_size(flags))
++			json_object_set(root, "flags",
++					json_array_get(flags, 0));
+ 		json_decref(flags);
++	}
+ 
+ 	if (!json_object_size(root)) {
+ 		json_decref(root);

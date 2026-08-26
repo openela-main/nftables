@@ -1,0 +1,169 @@
+From a0427ff37c71150c8afa7e57a3c96296c6dfc344 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:20 +0200
+Subject: [PATCH] json: make sure timeout list is initialised
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 0298bc012e020b2fca8ecc60b0091798d091e1fd
+
+commit 0298bc012e020b2fca8ecc60b0091798d091e1fd
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Mar 21 12:53:40 2025 +0100
+
+    json: make sure timeout list is initialised
+
+    On parser error, obj_free will iterate this list.
+    Included json bogon crashes due to null deref because
+    list head initialisation did not yet happen.
+
+    Fixes: c82a26ebf7e9 ("json: Add ct timeout support")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c                             |  2 +-
+ tests/shell/testcases/bogons/assert_failures  | 35 +++++++++---
+ .../bogons/nft-j-f/ct_timeout_null_crash      | 54 +++++++++++++++++++
+ 3 files changed, 84 insertions(+), 7 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-j-f/ct_timeout_null_crash
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index ad589d7..974d87b 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -3698,6 +3698,7 @@ static struct cmd *json_parse_cmd_add_object(struct json_ctx *ctx,
+ 		break;
+ 	case NFT_OBJECT_CT_TIMEOUT:
+ 		cmd_obj = CMD_OBJ_CT_TIMEOUT;
++		init_list_head(&obj->ct_timeout.timeout_list);
+ 		obj->type = NFT_OBJECT_CT_TIMEOUT;
+ 		if (!json_unpack(root, "{s:s}", "protocol", &tmp)) {
+ 			if (!strcmp(tmp, "tcp")) {
+@@ -3716,7 +3717,6 @@ static struct cmd *json_parse_cmd_add_object(struct json_ctx *ctx,
+ 		}
+ 		obj->ct_timeout.l3proto = l3proto;
+ 
+-		init_list_head(&obj->ct_timeout.timeout_list);
+ 		if (json_parse_ct_timeout_policy(ctx, root, obj))
+ 			goto err_free_obj;
+ 		break;
+diff --git a/tests/shell/testcases/bogons/assert_failures b/tests/shell/testcases/bogons/assert_failures
+index 3dee63b..74e162a 100755
+--- a/tests/shell/testcases/bogons/assert_failures
++++ b/tests/shell/testcases/bogons/assert_failures
+@@ -1,6 +1,8 @@
+ #!/bin/bash
+ 
+ dir=$(dirname $0)/nft-f/
++jsondir=$(dirname $0)/nft-j-f/
++
+ tmpfile=$(mktemp)
+ 
+ cleanup()
+@@ -10,18 +12,39 @@ cleanup()
+ 
+ trap cleanup EXIT
+ 
+-for f in $dir/*; do
+-	echo "Check $f"
+-	$NFT --check -f "$f" 2> "$tmpfile"
++die_on_error()
++{
++	local rv="$1"
++	local fname="$2"
+ 
+-	if [ $? -ne 1 ]; then
+-		echo "Bogus input file $f did not cause expected error code" 1>&2
++	if [ $rv -ne 1 ]; then
++		echo "Bogus input file $fname did not cause expected error code" 1>&2
+ 		exit 111
+ 	fi
+ 
+ 	if grep AddressSanitizer "$tmpfile"; then
+-		echo "Address sanitizer splat for $f" 1>&2
++		echo "Address sanitizer splat for $fname" 1>&2
+ 		cat "$tmpfile"
+ 		exit 111
+ 	fi
++}
++
++for f in $dir/*; do
++	echo "Check $f"
++	$NFT --check -f "$f" 2> "$tmpfile"
++
++	die_on_error $? "$f"
++done
++
++if [ "$NFT_TEST_HAVE_json" = "n" ];then
++	# Intentionally do not skip if we lack json input,
++	# we ran all the tests that we could.
++	exit 0
++fi
++
++for f in $jsondir/*; do
++	echo "Check json input $f"
++	$NFT --check -j -f "$f" 2> "$tmpfile"
++
++	die_on_error $?
+ done
+diff --git a/tests/shell/testcases/bogons/nft-j-f/ct_timeout_null_crash b/tests/shell/testcases/bogons/nft-j-f/ct_timeout_null_crash
+new file mode 100644
+index 0000000..c8c662e
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-j-f/ct_timeout_null_crash
+@@ -0,0 +1,54 @@
++{
++  "nftables": [
++    {
++      "metainfo": {
++        "version": "VERSION",
++        "release_name": "RELEASE_NAME",
++        "json_schema_version": 1
++      }
++    },
++    {
++      "table": {
++        "family": "ip",
++        "name": "filter",
++        "handle": 0
++      }
++    },
++    {
++      "chain": {
++        "family": "ip",
++        "table": "filter",
++        "name": "c",
++        "handle": 0
++      }
++    },
++    {
++      "ct timeout": {
++        "family": "ip",
++        "name": "cttime",
++        "table": "filter",
++        "handle": 0,
++        "protocol": "Xcp",
++        "l3proto": "ip",
++        "policy": {
++          "established": 123,
++          "close": 12
++        }
++      }
++    },
++    {
++      "rule": {
++        "family": "ip",
++        "table": "filter",
++        "chain": "c",
++        "handle": 0,
++        "expr": [
++          {
++            "ct timeout": "cttime"
++          }
++        ]
++      }
++    }
++  ]
++}
++

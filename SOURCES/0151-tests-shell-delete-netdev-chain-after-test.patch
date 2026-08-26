@@ -1,0 +1,47 @@
+From b7ee6c56581db65ea0937f79221cc37e360dbebd Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] tests: shell: delete netdev chain after test
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 877255e8cfa10280f61218c8b1b4b6b7afb0e328
+
+commit 877255e8cfa10280f61218c8b1b4b6b7afb0e328
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Jan 15 23:41:24 2025 +0100
+
+    tests: shell: delete netdev chain after test
+
+    This update is needed for kernel patch:
+
+      ("netfilter: nf_tables: Tolerate chains with no remaining hooks")
+
+    otherwise this hits DUMP FAILED in newer kernels.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/chains/netdev_chain_0 | 1 +
+ tests/shell/testcases/json/netdev           | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/tests/shell/testcases/chains/netdev_chain_0 b/tests/shell/testcases/chains/netdev_chain_0
+index a323e6e..f2eae6a 100755
+--- a/tests/shell/testcases/chains/netdev_chain_0
++++ b/tests/shell/testcases/chains/netdev_chain_0
+@@ -27,3 +27,4 @@ $NFT -f - <<< "$RULESET"
+ $NFT add chain netdev x y '{ devices = { d0 }; }'
+ $NFT add chain netdev x y '{ devices = { d1, d2, lo }; }'
+ $NFT delete chain netdev x y '{ devices = { lo }; }'
++$NFT delete chain netdev x y
+diff --git a/tests/shell/testcases/json/netdev b/tests/shell/testcases/json/netdev
+index 8c16cf4..23776c3 100755
+--- a/tests/shell/testcases/json/netdev
++++ b/tests/shell/testcases/json/netdev
+@@ -26,3 +26,5 @@ if [ "$NFT_TEST_HAVE_json" = n ]; then
+ 	echo "Test partially skipped due to missing JSON support."
+ 	exit 77
+ fi
++
++$NFT delete chain netdev test_table test_chain

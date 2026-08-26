@@ -1,0 +1,79 @@
+From d6035c820bb1eba9e133f0ce78baa767f1029b01 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] tests: py: Do not rely upon '[end]' marker
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit ae052a6565f9e9a62ba68d0cbdd1993015310100
+
+commit ae052a6565f9e9a62ba68d0cbdd1993015310100
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Oct 16 00:00:05 2025 +0200
+
+    tests: py: Do not rely upon '[end]' marker
+
+    Set element lines reliably start with whitespace followed by the word "element"
+    and are separated by the same pattern. Use it instead of '[end]' (or anything
+    enclosed in brackets).
+
+    While at it, recognize payload lines as starting with '  [ ' and avoid
+    searching for the closing bracket.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 6eddc8b..007b6a6 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -685,7 +685,7 @@ def output_clean(pre_output, chain):
+ def payload_check_elems_to_set(elems):
+     newset = set()
+ 
+-    for n, line in enumerate(elems.split('[end]')):
++    for n, line in enumerate(elems.split("element")):
+         e = line.strip()
+         if e in newset:
+             print_error("duplicate", e, n)
+@@ -697,17 +697,17 @@ def payload_check_elems_to_set(elems):
+ 
+ 
+ def payload_check_set_elems(want, got):
+-    if want.find('element') < 0 or want.find('[end]') < 0:
+-        return 0
+-
+-    if got.find('element') < 0 or got.find('[end]') < 0:
+-        return 0
++    if not want.strip().startswith("element") or \
++       not got.strip().startswith("element"):
++        return False
+ 
+     set_want = payload_check_elems_to_set(want)
+     set_got = payload_check_elems_to_set(got)
+ 
+     return set_want == set_got
+ 
++def payload_line_relevant(line):
++    return line.startswith('  [ ') or line.strip().startswith("element")
+ 
+ def payload_check(payload_buffer, file, cmd):
+     file.seek(0, 0)
+@@ -718,11 +718,11 @@ def payload_check(payload_buffer, file, cmd):
+ 
+     for lineno, want_line in enumerate(payload_buffer):
+         # skip irreleant parts, such as "ip test-ipv4 output"
+-        if want_line.find("[") < 0 or want_line.find("]") < 0:
+-             continue
++        if not payload_line_relevant(want_line):
++            continue
+ 
+         line = file.readline()
+-        while line.find("[") < 0 or line.find("]") < 0 or (line.startswith("family ") and line.find(" [nf_tables]") > 0):
++        while not payload_line_relevant(line):
+             line = file.readline()
+             if line == "":
+                 break

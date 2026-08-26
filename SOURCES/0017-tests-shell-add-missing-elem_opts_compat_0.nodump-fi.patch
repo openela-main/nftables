@@ -1,0 +1,31 @@
+From 4bd9e30ecae19385b0e38fc1d5a82db87a351fb1 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:18 +0200
+Subject: [PATCH] tests/shell: add missing "elem_opts_compat_0.nodump" file
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f65b2d12236174d477c55e96c4027cd51185ba5e
+
+commit f65b2d12236174d477c55e96c4027cd51185ba5e
+Author: Thomas Haller <thaller@redhat.com>
+Date:   Mon Oct 23 14:40:25 2023 +0200
+
+    tests/shell: add missing "elem_opts_compat_0.nodump" file
+
+    This is an inconsistency. The test should have either a .nft or a
+    .nodump file. "./tools/check-tree.sh" enforces that and will in the
+    future run by `make check`.
+
+    Fixes: 22fab8681a50 ("parser_bison: Fix for broken compatibility with older dumps")
+    Signed-off-by: Thomas Haller <thaller@redhat.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/sets/dumps/elem_opts_compat_0.nodump | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 tests/shell/testcases/sets/dumps/elem_opts_compat_0.nodump
+
+diff --git a/tests/shell/testcases/sets/dumps/elem_opts_compat_0.nodump b/tests/shell/testcases/sets/dumps/elem_opts_compat_0.nodump
+new file mode 100644
+index 0000000..e69de29

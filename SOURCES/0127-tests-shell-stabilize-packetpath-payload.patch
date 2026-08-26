@@ -1,0 +1,135 @@
+From 0b2841cac29c03344d9e83c2c43903f275417c8e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:25 +0200
+Subject: [PATCH] tests: shell: stabilize packetpath/payload
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit a1365628eaa73199aab32bda06c9ddd446613849
+
+commit a1365628eaa73199aab32bda06c9ddd446613849
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Sep 9 12:47:35 2024 +0200
+
+    tests: shell: stabilize packetpath/payload
+
+    - Add sleep calls after setting up container topology.
+    - Extend TCP connect timeout to 4 seconds. Test has no listener, this is
+      just sending SYN packets that are rejected but it works to test the
+      payload mangling ruleset.
+    - fix incorrect logic to check for 0 matching packets through grep.
+
+    Fixes: 84da729e067a ("tests: shell: add test to cover payload transport match and mangle")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/packetpath/payload | 64 +++++++++++++-----------
+ 1 file changed, 34 insertions(+), 30 deletions(-)
+
+diff --git a/tests/shell/testcases/packetpath/payload b/tests/shell/testcases/packetpath/payload
+index 4c5c42d..1fb86aa 100755
+--- a/tests/shell/testcases/packetpath/payload
++++ b/tests/shell/testcases/packetpath/payload
+@@ -42,6 +42,8 @@ run_test()
+ 	ip -net "$ns1" addr add $ns1_addr/$cidr dev veth0
+ 	ip -net "$ns2" addr add $ns2_addr/$cidr dev veth0
+ 
++	sleep 3
++
+ RULESET="table netdev payload_netdev {
+        counter ingress {}
+        counter egress {}
+@@ -90,33 +92,33 @@ table inet payload_inet {
+ 
+ 	ip netns exec "$ns1" $NFT -f - <<< "$RULESET" || exit 1
+ 
+-	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8887,connect-timeout=2 < /dev/null > /dev/null
+-	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8888,connect-timeout=2 < /dev/null > /dev/null
++	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8887,connect-timeout=4 < /dev/null > /dev/null
++	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8888,connect-timeout=4 < /dev/null > /dev/null
+ 
+-	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8880,connect-timeout=2 < /dev/null > /dev/null
+-	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8881,connect-timeout=2 < /dev/null > /dev/null
++	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8880,connect-timeout=4 < /dev/null > /dev/null
++	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8881,connect-timeout=4 < /dev/null > /dev/null
+ 
+-	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7777,connect-timeout=2 < /dev/null > /dev/null
+-	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7778,connect-timeout=2 < /dev/null > /dev/null
++	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7777,connect-timeout=4 < /dev/null > /dev/null
++	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7778,connect-timeout=4 < /dev/null > /dev/null
+ 
+-	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7770,connect-timeout=2 < /dev/null > /dev/null
+-	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7771,connect-timeout=2 < /dev/null > /dev/null
++	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7770,connect-timeout=4 < /dev/null > /dev/null
++	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7771,connect-timeout=4 < /dev/null > /dev/null
+ 
+ 	ip netns exec "$ns1" $NFT list ruleset
+ 
+-	ip netns exec "$ns1" $NFT list counter netdev payload_netdev ingress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_ingress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_ingress_match | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter netdev payload_netdev egress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_egress | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_egress_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev ingress | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_ingress | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_ingress_match | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev egress | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_egress | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter netdev payload_netdev mangle_egress_match | grep -q "packets 0" && exit 1
+ 
+-	ip netns exec "$ns1" $NFT list counter inet payload_inet input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_input_match | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter inet payload_inet output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_output_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet input | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_input | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_input_match | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet output | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_output | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter inet payload_inet mangle_output_match | grep -q "packets 0" && exit 1
+ 
+ 	#
+ 	# ... next stage
+@@ -135,6 +137,8 @@ table inet payload_inet {
+ 	ip -net "$ns1" addr add $ns1_addr/$cidr dev br0
+ 	ip -net "$ns1" link set up dev br0
+ 
++	sleep 3
++
+ RULESET="table bridge payload_bridge {
+        counter input {}
+        counter output {}
+@@ -160,20 +164,20 @@ RULESET="table bridge payload_bridge {
+ 
+ 	ip netns exec "$ns1" $NFT -f - <<< "$RULESET" || exit 1
+ 
+-	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8880,connect-timeout=2 < /dev/null > /dev/null
+-	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8881,connect-timeout=2 < /dev/null > /dev/null
++	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8880,connect-timeout=4 < /dev/null > /dev/null
++	ip netns exec "$ns1" socat -u STDIN TCP:$nsx2_addr:8881,connect-timeout=4 < /dev/null > /dev/null
+ 
+-	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7770,connect-timeout=2 < /dev/null > /dev/null
+-	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7771,connect-timeout=2 < /dev/null > /dev/null
++	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7770,connect-timeout=4 < /dev/null > /dev/null
++	ip netns exec "$ns2" socat -u STDIN TCP:$nsx1_addr:7771,connect-timeout=4 < /dev/null > /dev/null
+ 
+ 	ip netns exec "$ns1" $NFT list ruleset
+ 
+-	ip netns exec "$ns1" $NFT list counter bridge payload_bridge input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_input | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_input_match | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter bridge payload_bridge output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_output | grep -v "packets 0" > /dev/null || exit 1
+-	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_output_match | grep -v "packets 0" > /dev/null || exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge input | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_input | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_input_match | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge output | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_output | grep -q "packets 0" && exit 1
++	ip netns exec "$ns1" $NFT list counter bridge payload_bridge mangle_output_match | grep -q "packets 0" && exit 1
+ }
+ 
+ run_test "4" "10.141.10.2" "10.141.10.3" "24"

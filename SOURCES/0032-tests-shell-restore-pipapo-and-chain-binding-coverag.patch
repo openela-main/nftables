@@ -1,0 +1,56 @@
+From dd1a258c4dd517dd4b89a8913fd4e1ae47dc0c34 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] tests: shell: restore pipapo and chain binding coverage in
+ standalone 30s-stress
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 110f73023497720d4161263c03d8d7cc062af7ab
+
+commit 110f73023497720d4161263c03d8d7cc062af7ab
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Nov 14 20:16:08 2023 +0100
+
+    tests: shell: restore pipapo and chain binding coverage in standalone 30s-stress
+
+    Do not disable pipapo and chain binding coverage for standalone runs by
+    default. Instead, turn them on by default and allow users to disable them
+    through:
+
+     # export NFT_TEST_HAVE_chain_binding=n; bash tests/shell/testcases/transactions/30s-stress 3600
+     ...
+     running standalone with:
+     NFT_TEST_HAVE_chain_binding=n
+     NFT_TEST_HAVE_pipapo=y
+
+    given feature detection is not available in this case, thus, user has to
+    provide an explicit hint on what this kernel supports.
+
+    Fixes: c5b5b1044fdd ("tests/shell: add feature probing via "features/*.nft" files")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/transactions/30s-stress | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/tests/shell/testcases/transactions/30s-stress b/tests/shell/testcases/transactions/30s-stress
+index 4c3c6a2..544eef1 100755
+--- a/tests/shell/testcases/transactions/30s-stress
++++ b/tests/shell/testcases/transactions/30s-stress
+@@ -6,6 +6,15 @@ runtime=30
+ 
+ # allow stand-alone execution as well, e.g. '$0 3600'
+ if [ x"$1" != "x" ] ;then
++	if [ -z "${NFT_TEST_HAVE_chain_binding+x}" ]; then
++		NFT_TEST_HAVE_chain_binding=y
++	fi
++	if [ -z "${NFT_TEST_HAVE_pipapo+x}" ]; then
++		NFT_TEST_HAVE_pipapo=y
++	fi
++	echo "running standalone with:"
++	echo "NFT_TEST_HAVE_chain_binding="$NFT_TEST_HAVE_chain_binding
++	echo "NFT_TEST_HAVE_pipapo="$NFT_TEST_HAVE_pipapo
+ 	if [ $1 -ge 0 ]; then
+ 		runtime="$1"
+ 	else

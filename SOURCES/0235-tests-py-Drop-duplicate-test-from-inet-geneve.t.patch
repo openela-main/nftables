@@ -1,0 +1,79 @@
+From b28144bf4ec73a21ef8f2cd90979cf6af6902abb Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: Drop duplicate test from inet/geneve.t
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit a3b279794c2e26f9921445163e9bde0df5bda651
+
+commit a3b279794c2e26f9921445163e9bde0df5bda651
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 14:19:31 2025 +0200
+
+    tests: py: Drop duplicate test from inet/geneve.t
+
+    The test was duplicate since day 1. The duplicate JSON equivalent was
+    added later (semi-automated), remove it as well.
+
+    Fixes: 2b9143bc7ab81 ("tests: py: add geneve tests")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/geneve.t      |  1 -
+ tests/py/inet/geneve.t.json | 29 -----------------------------
+ 2 files changed, 30 deletions(-)
+
+diff --git a/tests/py/inet/geneve.t b/tests/py/inet/geneve.t
+index 101f6df..ad46272 100644
+--- a/tests/py/inet/geneve.t
++++ b/tests/py/inet/geneve.t
+@@ -17,7 +17,6 @@ udp dport 6081 geneve icmp type echo-reply;ok
+ udp dport 6081 geneve ether saddr 62:87:4d:d6:19:05;ok
+ udp dport 6081 geneve vlan id 10;ok
+ udp dport 6081 geneve ip dscp 0x02;ok
+-udp dport 6081 geneve ip dscp 0x02;ok
+ udp dport 6081 geneve ip saddr . geneve ip daddr { 1.2.3.4 . 4.3.2.1 };ok
+ 
+ udp dport 6081 geneve ip saddr set 1.2.3.4;fail
+diff --git a/tests/py/inet/geneve.t.json b/tests/py/inet/geneve.t.json
+index a299fcd..1589918 100644
+--- a/tests/py/inet/geneve.t.json
++++ b/tests/py/inet/geneve.t.json
+@@ -264,35 +264,6 @@
+     }
+ ]
+ 
+-# udp dport 6081 geneve ip dscp 0x02
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "dport",
+-                    "protocol": "udp"
+-                }
+-            },
+-            "op": "==",
+-            "right": 6081
+-        }
+-    },
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "dscp",
+-                    "protocol": "ip",
+-                    "tunnel": "geneve"
+-                }
+-            },
+-            "op": "==",
+-            "right": 2
+-        }
+-    }
+-]
+-
+ # udp dport 6081 geneve ip saddr . geneve ip daddr { 1.2.3.4 . 4.3.2.1 }
+ [
+     {

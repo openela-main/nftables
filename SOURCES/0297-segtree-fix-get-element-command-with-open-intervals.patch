@@ -1,0 +1,67 @@
+From 95c0f26b24f3a09ca1bd09cbd395670329721de8 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:22 +0200
+Subject: [PATCH] segtree: fix get element command with open intervals
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 4eafc1a2a9ef5a827b1b4e58cb3b2832d2eb1650
+
+commit 4eafc1a2a9ef5a827b1b4e58cb3b2832d2eb1650
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jul 2 11:57:00 2026 +0200
+
+    segtree: fix get element command with open intervals
+
+    Skip the closing end element in case this is an open interval.
+    Otherwise, a bogus end element max(type) + 1 is provided, eg. in
+    inet_service, this results as a 0x10000 with end interval flag
+    which is interpreted by the kernel as a matching closing element.
+
+    Fixes: a43cc8d53096 ("src: support for get element command")
+    Reported-by: Melbin K Mathew <mlbnkm1@gmail.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index 2ad3db7..c659dbf 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -70,12 +70,13 @@ static void set_elem_expr_add(const struct set *set, struct expr *init,
+ struct expr *get_set_intervals(const struct set *set, const struct expr *init)
+ {
+ 	enum byteorder byteorder = get_key_byteorder(set->key);
++	mpz_t low, high, mask;
+ 	struct expr *new_init;
+-	mpz_t low, high;
+ 	struct expr *i;
+ 
+ 	mpz_init2(low, set->key->len);
+ 	mpz_init2(high, set->key->len);
++	mpz_init2(mask, set->key->len);
+ 
+ 	new_init = list_expr_alloc(&internal_location);
+ 
+@@ -100,6 +101,11 @@ struct expr *get_set_intervals(const struct set *set, const struct expr *init)
+ 			range_expr_value_low(low, i->key);
+ 			set_elem_expr_add(set, new_init, low, 0, i->byteorder);
+ 			range_expr_value_high(high, i->key);
++			mpz_bitmask(mask, i->len);
++			if (set_is_non_concat_range(set) &&
++			    !mpz_cmp(mask, high))
++				break;
++
+ 			mpz_add_ui(high, high, 1);
+ 			set_elem_expr_add(set, new_init, high,
+ 					  EXPR_F_INTERVAL_END, i->byteorder);
+@@ -110,6 +116,7 @@ struct expr *get_set_intervals(const struct set *set, const struct expr *init)
+ 		}
+ 	}
+ 
++	mpz_clear(mask);
+ 	mpz_clear(low);
+ 	mpz_clear(high);
+ 

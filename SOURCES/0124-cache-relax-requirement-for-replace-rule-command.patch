@@ -1,0 +1,85 @@
+From 2e6514f3b31f6c7e66d94a3fa77dcc707c09175c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] cache: relax requirement for replace rule command
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 4984da8cc427974ea63796fa60a791b714a71440
+Conflicts: Dropped changes to non-existent .json-nft dump
+
+commit 4984da8cc427974ea63796fa60a791b714a71440
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Aug 29 12:42:14 2024 +0200
+
+    cache: relax requirement for replace rule command
+
+    No need for full cache, this command relies on the rule handle which is
+    not validated from userspace. Cache requirements are similar to those
+    of add/create/delete rule commands.
+
+    This speeds up incremental updates with large rulesets.
+
+    Extend tests/coverage for rule replacement.
+
+    Fixes: 01e5c6f0ed03 ("src: add cache level flags")
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c                                           |  4 ++--
+ tests/shell/testcases/rule_management/0004replace_0   |  8 ++++++--
+ .../testcases/rule_management/dumps/0004replace_0.nft | 11 ++++++++++-
+ 3 files changed, 18 insertions(+), 5 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 450be45..12286b3 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -500,8 +500,8 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 		case CMD_CREATE:
+ 			flags = evaluate_cache_add(cmd, flags);
+ 			break;
+-		case CMD_REPLACE:
+-			flags = NFT_CACHE_FULL;
++		case CMD_REPLACE:	/* only for rule */
++			flags = NFT_CACHE_TABLE | NFT_CACHE_SET;
+ 			break;
+ 		case CMD_DELETE:
+ 		case CMD_DESTROY:
+diff --git a/tests/shell/testcases/rule_management/0004replace_0 b/tests/shell/testcases/rule_management/0004replace_0
+index c3329af..18dc4a9 100755
+--- a/tests/shell/testcases/rule_management/0004replace_0
++++ b/tests/shell/testcases/rule_management/0004replace_0
+@@ -6,5 +6,9 @@
+ set -e
+ $NFT add table t
+ $NFT add chain t c
+-$NFT add rule t c accept	# should have handle 2
+-$NFT replace rule t c handle 2 drop
++$NFT 'add set t s1 { type ipv4_addr; }'
++$NFT 'add set t s2 { type ipv4_addr; flags interval; }'
++$NFT add rule t c accept        # should have handle 4
++$NFT replace rule t c handle 4 drop
++$NFT replace rule t c handle 4 ip saddr { 1.1.1.1, 2.2.2.2 }
++$NFT replace rule t c handle 4 ip saddr @s2 ip daddr { 3.3.3.3, 4.4.4.4 }
+diff --git a/tests/shell/testcases/rule_management/dumps/0004replace_0.nft b/tests/shell/testcases/rule_management/dumps/0004replace_0.nft
+index e20952e..803c0de 100644
+--- a/tests/shell/testcases/rule_management/dumps/0004replace_0.nft
++++ b/tests/shell/testcases/rule_management/dumps/0004replace_0.nft
+@@ -1,5 +1,14 @@
+ table ip t {
++	set s1 {
++		type ipv4_addr
++	}
++
++	set s2 {
++		type ipv4_addr
++		flags interval
++	}
++
+ 	chain c {
+-		drop
++		ip saddr @s2 ip daddr { 3.3.3.3, 4.4.4.4 }
+ 	}
+ }

@@ -1,0 +1,53 @@
+From 6fcecea15042c33d2150d7944f08866bfbbefbc0 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Jul 2026 17:18:39 +0200
+Subject: [PATCH] tests: monitor: Run in own netns
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 4cbb233400e17664d817e4b638c2d8bb88b372ed
+
+commit 4cbb233400e17664d817e4b638c2d8bb88b372ed
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Oct 2 18:17:07 2024 +0200
+
+    tests: monitor: Run in own netns
+
+    Have the script call itself prefixed by unshare. This won't prevent
+    clashing test case contents, but at least leave the host netns alone.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index 1cceb0c..7a00513 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -117,6 +117,14 @@ echo_run_test() {
+ 	return $rc
+ }
+ 
++netns=true
++for arg in "$@"; do
++	[[ "$arg" == "--no-netns" ]] && netns=false
++done
++if $netns; then
++	exec unshare -n $0 --no-netns "$@"
++fi
++
+ testcases=""
+ while [ -n "$1" ]; do
+ 	case "$1" in
+@@ -128,6 +136,9 @@ while [ -n "$1" ]; do
+ 		test_json=true
+ 		shift
+ 		;;
++	--no-netns)
++		shift
++		;;
+ 	-H|--host)
+ 		nft=nft
+ 		shift

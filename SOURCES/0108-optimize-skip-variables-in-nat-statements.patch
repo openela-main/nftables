@@ -1,0 +1,111 @@
+From 0df57d34d73abae0b0a5e9530cc66aac0eda250b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:08 +0200
+Subject: [PATCH] optimize: skip variables in nat statements
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit bc1f910f502701f1a1d28c7bd723e4be3bac1d8c
+
+commit bc1f910f502701f1a1d28c7bd723e4be3bac1d8c
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jul 18 18:06:22 2024 +0200
+
+    optimize: skip variables in nat statements
+
+    Do not hit assert():
+
+      nft: optimize.c:486: rule_build_stmt_matrix_stmts: Assertion `k >= 0' failed.
+
+    variables are not supported by -o/--optimize at this stage.
+
+    Fixes: 9be404a153bc ("optimize: ignore existing nat mapping")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c                                |  6 ++-
+ tests/shell/testcases/optimizations/variables | 52 ++++++++++++++++---
+ 2 files changed, 49 insertions(+), 9 deletions(-)
+
+diff --git a/src/optimize.c b/src/optimize.c
+index 62dd908..9f0965c 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -408,9 +408,11 @@ static int rule_collect_stmts(struct optimize_ctx *ctx, struct rule *rule)
+ 			break;
+ 		case STMT_NAT:
+ 			if ((stmt->nat.addr &&
+-			     stmt->nat.addr->etype == EXPR_MAP) ||
++			     (stmt->nat.addr->etype == EXPR_MAP ||
++			      stmt->nat.addr->etype == EXPR_VARIABLE)) ||
+ 			    (stmt->nat.proto &&
+-			     stmt->nat.proto->etype == EXPR_MAP)) {
++			     (stmt->nat.proto->etype == EXPR_MAP ||
++			      stmt->nat.proto->etype == EXPR_VARIABLE))) {
+ 				clone->ops = &unsupported_stmt_ops;
+ 				break;
+ 			}
+diff --git a/tests/shell/testcases/optimizations/variables b/tests/shell/testcases/optimizations/variables
+index fa98606..4cb322d 100755
+--- a/tests/shell/testcases/optimizations/variables
++++ b/tests/shell/testcases/optimizations/variables
+@@ -2,14 +2,52 @@
+ 
+ set -e
+ 
+-RULESET="define addrv4_vpnnet = 10.1.0.0/16
++RULESET='define addrv4_vpnnet = 10.1.0.0/16
++define wan = "eth0"
++define lan = "eth1"
++define vpn = "tun0"
++define server = "10.10.10.1"
+ 
+-table ip nat {
+-    chain postrouting {
+-        type nat hook postrouting priority 0; policy accept;
++table inet filter {
++	chain input {
++		type filter hook input priority 0; policy drop;
++	}
++	chain forward {
++		type filter hook forward priority 1; policy drop;
+ 
+-        ip saddr \$addrv4_vpnnet counter masquerade fully-random comment \"masquerade ipv4\"
+-    }
+-}"
++		iifname $lan oifname $lan accept;
++
++		iifname $lan oifname $wan ct state new accept
++		iifname $lan oifname $wan ct state {established, related} accept
++
++		iifname $wan oifname $lan ct state {established, related} accept
++
++		iifname $vpn oifname $wan accept
++		iifname $wan oifname $vpn accept
++		iifname $lan oifname $vpn accept
++		iifname $vpn oifname $lan accept
++
++		iifname $lan oifname $server accept
++		iifname $server oifname $lan accept
++		iifname $server oifname $wan accept
++		iifname $wan oifname $server accept
++	}
++	chain output {
++		type filter hook output priority 0; policy drop;
++	}
++}
++
++table nat {
++	chain prerouting {
++		type nat hook prerouting priority -100; policy accept;
++		iifname $wan tcp dport 10000 dnat to $server:10000;
++	}
++	chain postrouting {
++		type nat hook postrouting priority 100; policy accept;
++		ip saddr $addrv4_vpnnet counter masquerade fully-random comment "masquerade ipv4"
++		oifname $vpn masquerade
++		oifname $wan masquerade
++	}
++}'
+ 
+ $NFT -c -o -f - <<< $RULESET

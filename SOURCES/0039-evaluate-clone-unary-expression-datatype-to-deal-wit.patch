@@ -1,0 +1,83 @@
+From bf752ee621e61026a40f050ac9d8a1eda351b81c Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: clone unary expression datatype to deal with
+ dynamic datatype
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit faa6908fad6053ae9549c45b88d0402cc69cf1ed
+
+commit faa6908fad6053ae9549c45b88d0402cc69cf1ed
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Nov 22 20:35:07 2023 +0100
+
+    evaluate: clone unary expression datatype to deal with dynamic datatype
+
+    When allocating a unary expression, clone the datatype to deal with
+    dynamic datatypes.
+
+    Fixes: 6b01bb9ff798 ("datatype: concat expression only releases dynamically allocated datatype")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                  |  2 +-
+ tests/shell/testcases/maps/dumps/vmap_unary.nft | 11 +++++++++++
+ tests/shell/testcases/maps/vmap_unary           | 17 +++++++++++++++++
+ 3 files changed, 29 insertions(+), 1 deletion(-)
+ create mode 100644 tests/shell/testcases/maps/dumps/vmap_unary.nft
+ create mode 100755 tests/shell/testcases/maps/vmap_unary
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index d204d3e..6f0fba6 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1245,7 +1245,7 @@ static int expr_evaluate_unary(struct eval_ctx *ctx, struct expr **expr)
+ 		BUG("invalid unary operation %u\n", unary->op);
+ 	}
+ 
+-	unary->dtype	 = arg->dtype;
++	unary->dtype	 = datatype_clone(arg->dtype);
+ 	unary->byteorder = byteorder;
+ 	unary->len	 = arg->len;
+ 	return 0;
+diff --git a/tests/shell/testcases/maps/dumps/vmap_unary.nft b/tests/shell/testcases/maps/dumps/vmap_unary.nft
+new file mode 100644
+index 0000000..46c538b
+--- /dev/null
++++ b/tests/shell/testcases/maps/dumps/vmap_unary.nft
+@@ -0,0 +1,11 @@
++table ip filter {
++	map ipsec_in {
++		typeof ipsec in reqid . iif : verdict
++		flags interval
++	}
++
++	chain INPUT {
++		type filter hook input priority filter; policy drop;
++		ipsec in reqid . iif vmap @ipsec_in
++	}
++}
+diff --git a/tests/shell/testcases/maps/vmap_unary b/tests/shell/testcases/maps/vmap_unary
+new file mode 100755
+index 0000000..4038d1c
+--- /dev/null
++++ b/tests/shell/testcases/maps/vmap_unary
+@@ -0,0 +1,17 @@
++#!/bin/bash
++
++set -e
++
++RULESET="table ip filter {
++	map ipsec_in {
++		typeof ipsec in reqid . iif : verdict
++		flags interval
++	}
++
++	chain INPUT {
++		type filter hook input priority 0; policy drop
++		ipsec in reqid . iif vmap @ipsec_in
++	}
++}"
++
++$NFT -f - <<< $RULESET

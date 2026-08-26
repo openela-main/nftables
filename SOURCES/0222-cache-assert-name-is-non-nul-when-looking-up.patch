@@ -1,0 +1,75 @@
+From 0f797a36d51e6f1c0b5b058824a7f8097aed04ef Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] cache: assert name is non-nul when looking up
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f15bc7d368b7c1d897fd830f91e7db6929175b27
+
+commit f15bc7d368b7c1d897fd830f91e7db6929175b27
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sun Jun 15 11:33:49 2025 +0200
+
+    cache: assert name is non-nul when looking up
+
+    {table,chain,set,obj,flowtable}_cache_find() should not be called when
+    handles are used
+
+    Fixes: 5ec5c706d993 ("cache: add hashtable cache for table")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 3c624df..b82d0fd 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -563,8 +563,7 @@ struct table *table_cache_find(const struct cache *cache,
+ 	struct table *table;
+ 	uint32_t hash;
+ 
+-	if (!name)
+-		return NULL;
++	assert(name);
+ 
+ 	hash = djb_hash(name) % NFT_CACHE_HSIZE;
+ 	list_for_each_entry(table, &cache->ht[hash], cache.hlist) {
+@@ -684,6 +683,8 @@ struct chain *chain_cache_find(const struct table *table, const char *name)
+ 	struct chain *chain;
+ 	uint32_t hash;
+ 
++	assert(name);
++
+ 	hash = djb_hash(name) % NFT_CACHE_HSIZE;
+ 	list_for_each_entry(chain, &table->chain_cache.ht[hash], cache.hlist) {
+ 		if (!strcmp(chain->handle.chain.name, name))
+@@ -852,6 +853,8 @@ struct set *set_cache_find(const struct table *table, const char *name)
+ 	struct set *set;
+ 	uint32_t hash;
+ 
++	assert(name);
++
+ 	hash = djb_hash(name) % NFT_CACHE_HSIZE;
+ 	list_for_each_entry(set, &table->set_cache.ht[hash], cache.hlist) {
+ 		if (!strcmp(set->handle.set.name, name))
+@@ -967,6 +970,8 @@ struct obj *obj_cache_find(const struct table *table, const char *name,
+ 	struct obj *obj;
+ 	uint32_t hash;
+ 
++	assert(name);
++
+ 	hash = djb_hash(name) % NFT_CACHE_HSIZE;
+ 	list_for_each_entry(obj, &table->obj_cache.ht[hash], cache.hlist) {
+ 		if (!strcmp(obj->handle.obj.name, name) &&
+@@ -1071,6 +1076,8 @@ struct flowtable *ft_cache_find(const struct table *table, const char *name)
+ 	struct flowtable *ft;
+ 	uint32_t hash;
+ 
++	assert(name);
++
+ 	hash = djb_hash(name) % NFT_CACHE_HSIZE;
+ 	list_for_each_entry(ft, &table->ft_cache.ht[hash], cache.hlist) {
+ 		if (!strcmp(ft->handle.flowtable.name, name))

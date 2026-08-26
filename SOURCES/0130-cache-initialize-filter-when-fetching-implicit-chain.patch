@@ -1,0 +1,55 @@
+From 88488893e6f99f3feb97e3475b0d8cadd4ead948 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:25 +0200
+Subject: [PATCH] cache: initialize filter when fetching implicit chains
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit e3d2a5e852ceea587bfff5878e6e5c569f15116a
+
+commit e3d2a5e852ceea587bfff5878e6e5c569f15116a
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Sep 17 19:18:09 2024 +0200
+
+    cache: initialize filter when fetching implicit chains
+
+    ASAN reports:
+
+      src/cache.c:734:25: runtime error: load of value 189, which is not a valid value for type '_Bool'
+
+    because filter->reset.rule remains uninitialized.
+
+    Initialize filter and replace existing construct to initialize table and
+    chain which leaves remaining fields uninitialized.
+
+    Fixes: dbff26bfba83 ("cache: consolidate reset command")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 41c5a6f..0f38fb2 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -1130,15 +1130,14 @@ err_ctx_list:
+ static int implicit_chain_cache(struct netlink_ctx *ctx, struct table *table,
+ 				const char *chain_name)
+ {
+-	struct nft_cache_filter filter;
++	struct nft_cache_filter filter = {};
+ 	struct chain *chain;
+ 	int ret = 0;
+ 
+ 	list_for_each_entry(chain, &table->chain_bindings, cache.list) {
+-		filter.list = (typeof(filter.list)) {
+-			.table = table->handle.table.name,
+-			.chain = chain->handle.chain.name,
+-		};
++		filter.list.table = table->handle.table.name;
++		filter.list.chain = chain->handle.chain.name;
++
+ 		ret = rule_init_cache(ctx, table, &filter);
+ 	}
+ 

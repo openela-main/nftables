@@ -1,0 +1,56 @@
+From e47e6b806a16a681d4185bb6a35dcc4c7696bb7a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:24 +0200
+Subject: [PATCH] optimize: Fix verdict expression comparison
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 695ee5a8b174f86e2e64786530147e56d8d27f19
+
+commit 695ee5a8b174f86e2e64786530147e56d8d27f19
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Oct 22 14:03:37 2025 +0200
+
+    optimize: Fix verdict expression comparison
+
+    In verdict expression, 'chain' points at a constant expression of
+    verdict_type, not a symbol expression. Therefore 'chain->identifier'
+    points eight bytes (on 64bit systems) into the mpz_t 'value' holding the
+    chain name. This matches the '_mp_d' data pointer, so works by accident.
+
+    Fix this by copying what verdict_jump_chain_print() does and export
+    chain names before comparing.
+
+    Fixes: fb298877ece27 ("src: add ruleset optimization infrastructure")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/optimize.c b/src/optimize.c
+index c386e61..a0cb307 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -337,13 +337,18 @@ static bool __stmt_type_eq(const struct stmt *stmt_a, const struct stmt *stmt_b,
+ 
+ static bool expr_verdict_eq(const struct expr *expr_a, const struct expr *expr_b)
+ {
++	char chain_a[NFT_CHAIN_MAXNAMELEN];
++	char chain_b[NFT_CHAIN_MAXNAMELEN];
++
+ 	if (expr_a->verdict != expr_b->verdict)
+ 		return false;
+ 	if (expr_a->chain && expr_b->chain) {
+-		if (expr_a->chain->etype != expr_b->chain->etype)
++		if (expr_a->chain->etype != EXPR_VALUE ||
++		    expr_a->chain->etype != expr_b->chain->etype)
+ 			return false;
+-		if (expr_a->chain->etype == EXPR_VALUE &&
+-		    strcmp(expr_a->chain->identifier, expr_b->chain->identifier))
++		expr_chain_export(expr_a->chain, chain_a);
++		expr_chain_export(expr_b->chain, chain_b);
++		if (strcmp(chain_a, chain_b))
+ 			return false;
+ 	} else if (expr_a->chain || expr_b->chain) {
+ 		return false;

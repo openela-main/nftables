@@ -1,0 +1,94 @@
+From 1e8d5235abba36fde530b3613cbea195c4f927f7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:43 +0200
+Subject: [PATCH] mergesort: Avoid accidental set element reordering
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit bf52af188b306acf5a30134d6a670f41f16a9459
+Conflicts: Dropped changes to non-existent .json-nft dump
+
+commit bf52af188b306acf5a30134d6a670f41f16a9459
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Fri Mar 22 13:31:10 2024 +0100
+
+    mergesort: Avoid accidental set element reordering
+
+    In corner cases, expr_msort_cmp() may return 0 for two non-identical
+    elements. An example are ORed tcp flags: 'syn' and 'syn | ack' are
+    considered the same value since expr_msort_value() reduces the latter to
+    its LHS.
+
+    Keeping the above in mind and looking at how list_expr_sort() works: The
+    list in 'head' is cut in half, the first half put into the temporary
+    list 'list' and finally 'list' is merged back into 'head' considering
+    each element's position. Shall expr_msort_cmp() return 0 for two
+    elements, the one from 'list' ends up after the one in 'head', thus
+    reverting their previous ordering.
+
+    The practical implication is that output never matches input for the
+    sample set '{ syn, syn | ack }' as the sorting after delinearization in
+    netlink_list_setelems() keeps swapping the elements. Out of coincidence,
+    the commit this fixes itself illustrates the use-case this breaks,
+    namely tracking a ruleset in git: Each ruleset reload will trigger an
+    update to the stored dump.
+
+    This change breaks interval set element deletion because __set_delete()
+    implicitly relies upon this reordering of duplicate entries by inserting
+    a clone of the one to delete into the start (via list_move()) and after
+    sorting assumes the clone will end up right behind the original. Fix
+    this by calling list_move_tail() instead.
+
+    Fixes: 14ee0a979b622 ("src: sort set elements in netlink_get_setelems()")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c                                     | 2 +-
+ src/mergesort.c                                     | 2 +-
+ tests/shell/testcases/sets/dumps/0055tcpflags_0.nft | 8 ++++----
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/intervals.c b/src/intervals.c
+index 85de019..d5406ef 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -461,7 +461,7 @@ static int __set_delete(struct list_head *msgs, struct expr *i,	struct set *set,
+ 			unsigned int debug_mask)
+ {
+ 	i->flags |= EXPR_F_REMOVE;
+-	list_move(&i->list, &existing_set->init->expressions);
++	list_move_tail(&i->list, &existing_set->init->expressions);
+ 	list_expr_sort(&existing_set->init->expressions);
+ 
+ 	return setelem_delete(msgs, set, init, existing_set->init, debug_mask);
+diff --git a/src/mergesort.c b/src/mergesort.c
+index 4d0e280..5e676be 100644
+--- a/src/mergesort.c
++++ b/src/mergesort.c
+@@ -78,7 +78,7 @@ void list_splice_sorted(struct list_head *list, struct list_head *head)
+ 	while (l != list) {
+ 		if (h == head ||
+ 		    expr_msort_cmp(list_entry(l, typeof(struct expr), list),
+-				   list_entry(h, typeof(struct expr), list)) < 0) {
++				   list_entry(h, typeof(struct expr), list)) <= 0) {
+ 			l = l->next;
+ 			list_add_tail(l->prev, h);
+ 			continue;
+diff --git a/tests/shell/testcases/sets/dumps/0055tcpflags_0.nft b/tests/shell/testcases/sets/dumps/0055tcpflags_0.nft
+index ffed542..22bf5c4 100644
+--- a/tests/shell/testcases/sets/dumps/0055tcpflags_0.nft
++++ b/tests/shell/testcases/sets/dumps/0055tcpflags_0.nft
+@@ -2,9 +2,9 @@ table ip test {
+ 	set tcp_good_flags {
+ 		type tcp_flag
+ 		flags constant
+-		elements = { fin | psh | ack | urg, fin | psh | ack, fin | ack | urg, fin | ack, syn | psh | ack | urg,
+-			     syn | psh | ack, syn | ack | urg, syn | ack, syn, rst | psh | ack | urg,
+-			     rst | psh | ack, rst | ack | urg, rst | ack, rst, psh | ack | urg,
+-			     psh | ack, ack | urg, ack }
++		elements = { fin | ack, fin | ack | urg, fin | psh | ack, fin | psh | ack | urg, syn,
++			     syn | ack, syn | ack | urg, syn | psh | ack, syn | psh | ack | urg, rst,
++			     rst | ack, rst | ack | urg, rst | psh | ack, rst | psh | ack | urg, psh | ack,
++			     psh | ack | urg, ack, ack | urg }
+ 	}
+ }

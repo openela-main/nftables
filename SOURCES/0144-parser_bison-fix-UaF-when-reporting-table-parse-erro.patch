@@ -1,0 +1,46 @@
+From 82f4adf7dc43f9d63de11ff5e5765871b09b545f Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:44 +0200
+Subject: [PATCH] parser_bison: fix UaF when reporting table parse error
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 3ba0e5af6b5da9dfff5273bc1f0f15a60a9fe33b
+Conflicts: Changes in removed code due to previous backports
+
+commit 3ba0e5af6b5da9dfff5273bc1f0f15a60a9fe33b
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Jan 7 23:55:06 2025 +0100
+
+    parser_bison: fix UaF when reporting table parse error
+
+    It passed already-freed memory to erec function.  Found with afl++ and asan.
+
+    Fixes: 4955ae1a81b7 ("Add support for table's persist flag")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 9bfd464..fb91c3e 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -1939,12 +1939,14 @@ table_flags		:	table_flag
+ table_flag		:	STRING
+ 			{
+ 				$$ = parse_table_flag($1);
+-				xfree($1);
+ 				if ($$ == 0) {
+ 					erec_queue(error(&@1, "unknown table option %s", $1),
+ 						   state->msgs);
++					free_const($1);
+ 					YYERROR;
+ 				}
++
++				free_const($1);
+ 			}
+ 			;
+ 

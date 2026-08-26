@@ -1,0 +1,128 @@
+From 62be3f747b22309adff113b95d6cadc2d7a0a470 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: fix bogus assertion failure with boolean datatype
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 567937b5560fbcc7f6b74fb43c52e1cab2ac425a
+
+commit 567937b5560fbcc7f6b74fb43c52e1cab2ac425a
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Dec 8 19:38:33 2023 +0100
+
+    evaluate: fix bogus assertion failure with boolean datatype
+
+    The assertion is too strict, as found by afl++:
+
+    typeof iifname . ip saddr . meta ipsec
+    elements = { "eth0" . 10.1.1.2 . 1 }
+
+    meta ipsec is boolean (1 bit), but datasize of 1 is set at 8 bit.
+
+    Fixes: 22b750aa6dc9 ("src: allow use of base integer types as set keys in concatenations")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                  |  7 ++++---
+ .../testcases/sets/dumps/typeof_sets_0.nft      |  9 +++++++++
+ tests/shell/testcases/sets/typeof_sets_0        | 17 +++++++++++++++++
+ 3 files changed, 30 insertions(+), 3 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index cfdc6c0..fa3512b 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -4618,14 +4618,15 @@ static int set_expr_evaluate_concat(struct eval_ctx *ctx, struct expr **expr)
+ 						 "expressions",
+ 						 i->dtype->name);
+ 
+-		if (i->dtype->size)
+-			assert(i->len == i->dtype->size);
+-
+ 		flags &= i->flags;
+ 
+ 		ntype = concat_subtype_add(ntype, i->dtype->type);
+ 
+ 		dsize_bytes = div_round_up(i->len, BITS_PER_BYTE);
++
++		if (i->dtype->size)
++			assert(dsize_bytes == div_round_up(i->dtype->size, BITS_PER_BYTE));
++
+ 		(*expr)->field_len[(*expr)->field_count++] = dsize_bytes;
+ 		size += netlink_padded_len(i->len);
+ 	}
+diff --git a/tests/shell/testcases/sets/dumps/typeof_sets_0.nft b/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
+index 6f5b83a..63fc5b1 100644
+--- a/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
++++ b/tests/shell/testcases/sets/dumps/typeof_sets_0.nft
+@@ -55,6 +55,11 @@ table inet t {
+ 		elements = { 3567 . 1.2.3.4 }
+ 	}
+ 
++	set s12 {
++		typeof iifname . ip saddr . meta ipsec
++		elements = { "eth0" . 10.1.1.2 . exists }
++	}
++
+ 	chain c1 {
+ 		osf name @s1 accept
+ 	}
+@@ -94,4 +99,8 @@ table inet t {
+ 	chain c11 {
+ 		vlan id . ip saddr @s11 accept
+ 	}
++
++	chain c12 {
++		iifname . ip saddr . meta ipsec @s12 accept
++	}
+ }
+diff --git a/tests/shell/testcases/sets/typeof_sets_0 b/tests/shell/testcases/sets/typeof_sets_0
+index 35c572c..943c9c2 100755
+--- a/tests/shell/testcases/sets/typeof_sets_0
++++ b/tests/shell/testcases/sets/typeof_sets_0
+@@ -92,6 +92,10 @@ INPUT="table inet t {$INPUT_OSF_SET
+ 		typeof vlan id . ip saddr
+ 		elements = { 3567 . 1.2.3.4 }
+ 	}
++	set s12 {
++		typeof meta iifname . ip saddr . meta ipsec
++		elements = { \"eth0\" . 10.1.1.2 . 1 }
++	}
+ $INPUT_OSF_CHAIN
+ 	chain c2 {
+ 		ether type vlan vlan id @s2 accept
+@@ -124,6 +128,10 @@ $INPUT_SCTP_CHAIN
+ 	chain c11 {
+ 		ether type vlan vlan id . ip saddr @s11 accept
+ 	}
++
++	chain c12 {
++		meta iifname . ip saddr . meta ipsec @s12 accept
++	}
+ }"
+ 
+ EXPECTED="table inet t {$INPUT_OSF_SET
+@@ -177,6 +185,11 @@ EXPECTED="table inet t {$INPUT_OSF_SET
+ 		typeof vlan id . ip saddr
+ 		elements = { 3567 . 1.2.3.4 }
+ 	}
++
++	set s12 {
++		typeof iifname . ip saddr . meta ipsec
++		elements = { \"eth0\" . 10.1.1.2 . exists }
++	}
+ $INPUT_OSF_CHAIN
+ 	chain c2 {
+ 		vlan id @s2 accept
+@@ -209,6 +222,10 @@ $INPUT_SCTP_CHAIN
+ 	chain c11 {
+ 		vlan id . ip saddr @s11 accept
+ 	}
++
++	chain c12 {
++		iifname . ip saddr . meta ipsec @s12 accept
++	}
+ }"
+ 
+ 

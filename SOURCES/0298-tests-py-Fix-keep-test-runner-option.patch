@@ -1,0 +1,72 @@
+From dc52f8c9121550340c2dded5c89deb000cddaf7a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:22 +0200
+Subject: [PATCH] tests: py: Fix --keep test runner option
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 68086402c28a4934d61fb9fdb796bc811fb045ee
+
+commit 68086402c28a4934d61fb9fdb796bc811fb045ee
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jul 16 00:57:56 2026 +0200
+
+    tests: py: Fix --keep test runner option
+
+    The boolean flag expected a value, although not used. Set
+    'action=store_true' to really make it a flag.
+
+    While at it, simplify the code by eliminating the inverse-value
+    auto_delete helper variable.
+
+    Fixes: f2b5d6fc26b9a ("tests: py: don't use a fixed filename")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 12 +++---------
+ 1 file changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 8ae65b4..b1bccea 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -36,7 +36,6 @@ chain_list = []
+ all_set = dict()
+ obj_list = []
+ signal_received = 0
+-auto_delete = True
+ 
+ 
+ class Colors:
+@@ -1513,7 +1512,7 @@ def main():
+     parser.add_argument('-l', '--library', default=None,
+                         help='path to libntables.so.1, overrides --host')
+ 
+-    parser.add_argument('-k', '--keep', default=False,
++    parser.add_argument('-k', '--keep', action='store_true',
+                         help='keep log file around after tests')
+ 
+     parser.add_argument('-N', '--no-netns', action='store_true',
+@@ -1563,11 +1562,6 @@ def main():
+               "You need to build the project." % args.library)
+         return 99
+ 
+-    global auto_delete
+-
+-    if args.keep:
+-        auto_delete = False
+-
+     if args.enable_schema and not args.enable_json:
+         print_error("Option --schema requires option --json")
+         return 99
+@@ -1579,8 +1573,8 @@ def main():
+     tests = passed = warnings = errors = 0
+     global log_file
+     try:
+-        log_file = tempfile.NamedTemporaryFile(prefix="nftables-test-py-", suffix=".log", mode='w', delete=auto_delete)
+-        if auto_delete:
++        log_file = tempfile.NamedTemporaryFile(prefix="nftables-test-py-", suffix=".log", mode='w', delete = not args.keep)
++        if not args.keep:
+             print_info("Log file %s will not be retained.  Pass -k to keep it." % log_file.name)
+         else:
+             print_info("Log will be available at %s" % log_file.name)

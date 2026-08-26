@@ -1,0 +1,58 @@
+From e2a23be07644c26335d2842aa77b76067eb968ba Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] tests: py: Fix for using wrong payload path
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit aad26d166278aacbd42ce0d1f258c6fd30a05c7c
+
+commit aad26d166278aacbd42ce0d1f258c6fd30a05c7c
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Oct 2 13:22:56 2025 +0200
+
+    tests: py: Fix for using wrong payload path
+
+    If one family has a per-family payload record, following families used
+    it by accident for a .got file when they actually should use the generic
+    name.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 5ce9a64..6eddc8b 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -815,9 +815,10 @@ def rule_add(rule, filename, lineno, force_all_family_option, filename_path):
+     for table in table_list:
+         if rule[1].strip() == "ok":
+             table_payload_expected = None
++            table_payload_path = payload_path
+             try:
+                 payload_log = open("%s.payload.%s" % (filename_path, table.family))
+-                payload_path = payload_log.name
++                table_payload_path = payload_log.name
+                 table_payload_expected = payload_find_expected(payload_log, rule[0])
+             except:
+                 if not payload_log:
+@@ -866,14 +867,14 @@ def rule_add(rule, filename, lineno, force_all_family_option, filename_path):
+                 error += 1
+ 
+                 try:
+-                    gotf = open("%s.got" % payload_path)
++                    gotf = open("%s.got" % table_payload_path)
+                     gotf_payload_expected = payload_find_expected(gotf, rule[0])
+                     gotf.close()
+                 except:
+                     gotf_payload_expected = None
+                 payload_log.seek(0, 0)
+                 if not payload_check(gotf_payload_expected, payload_log, cmd):
+-                    gotf = open("%s.got" % payload_path, 'a')
++                    gotf = open("%s.got" % table_payload_path, 'a')
+                     payload_log.seek(0, 0)
+                     gotf.write("# %s\n" % rule[0])
+                     while True:

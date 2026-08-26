@@ -1,0 +1,38 @@
+From 94f803c8e0c50068cc6dc9e24e0baf5c5ffe7e29 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] evaluate: remove variable shadowing
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 7a41d031b68d2e3b0e1cd64d4266244bbecc2c96
+
+commit 7a41d031b68d2e3b0e1cd64d4266244bbecc2c96
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Jan 13 17:28:19 2025 +0100
+
+    evaluate: remove variable shadowing
+
+    unsigned int i is already declared in resolve_ll_protocol_conflict(),
+    remove it.
+
+    Fixes: 3a734d608131 ("evaluate: don't assert on net/transport header conflict")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 32d4c75..33f5724 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -826,8 +826,6 @@ static int resolve_ll_protocol_conflict(struct eval_ctx *ctx,
+ 				return -1;
+ 		}
+ 	} else {
+-		unsigned int i;
+-
+ 		/* payload desc stored in the L2 header stack? No conflict. */
+ 		for (i = 0; i < pctx->stacked_ll_count; i++) {
+ 			if (pctx->stacked_ll[i] == payload->payload.desc)

@@ -1,0 +1,110 @@
+From 800e92dac205e2f7684414528e3605abb93861f7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] tests: shell: split merge nat optimization in two tests
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 0f89958eefd5318f594a653b78b47cefec9e87e9
+
+commit 0f89958eefd5318f594a653b78b47cefec9e87e9
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Nov 7 13:03:56 2023 +0100
+
+    tests: shell: split merge nat optimization in two tests
+
+    One without pipapo support and another with not to harm existing
+    coverage.
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ .../optimizations/dumps/merge_nat.nft          |  8 --------
+ .../optimizations/dumps/merge_nat_concat.nft   |  8 ++++++++
+ tests/shell/testcases/optimizations/merge_nat  | 13 -------------
+ .../testcases/optimizations/merge_nat_concat   | 18 ++++++++++++++++++
+ 4 files changed, 26 insertions(+), 21 deletions(-)
+ create mode 100644 tests/shell/testcases/optimizations/dumps/merge_nat_concat.nft
+ create mode 100755 tests/shell/testcases/optimizations/merge_nat_concat
+
+diff --git a/tests/shell/testcases/optimizations/dumps/merge_nat.nft b/tests/shell/testcases/optimizations/dumps/merge_nat.nft
+index 48d18a6..61feb27 100644
+--- a/tests/shell/testcases/optimizations/dumps/merge_nat.nft
++++ b/tests/shell/testcases/optimizations/dumps/merge_nat.nft
+@@ -11,14 +11,6 @@ table ip test2 {
+ 		ip saddr { 10.141.11.0/24, 10.141.13.0/24 } masquerade
+ 	}
+ }
+-table ip test3 {
+-	chain y {
+-		oif "lo" accept
+-		snat to ip saddr . tcp sport map { 1.1.1.1 . 1024-65535 : 3.3.3.3, 2.2.2.2 . 1024-65535 : 4.4.4.4 }
+-		oifname "enp2s0" snat ip to ip saddr map { 10.1.1.0/24 : 72.2.3.66-72.2.3.78 }
+-		tcp dport { 8888, 9999 } redirect
+-	}
+-}
+ table ip test4 {
+ 	chain y {
+ 		oif "lo" accept
+diff --git a/tests/shell/testcases/optimizations/dumps/merge_nat_concat.nft b/tests/shell/testcases/optimizations/dumps/merge_nat_concat.nft
+new file mode 100644
+index 0000000..0faddfd
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/dumps/merge_nat_concat.nft
+@@ -0,0 +1,8 @@
++table ip test3 {
++	chain y {
++		oif "lo" accept
++		snat to ip saddr . tcp sport map { 1.1.1.1 . 1024-65535 : 3.3.3.3, 2.2.2.2 . 1024-65535 : 4.4.4.4 }
++		oifname "enp2s0" snat ip to ip saddr map { 10.1.1.0/24 : 72.2.3.66-72.2.3.78 }
++		tcp dport { 8888, 9999 } redirect
++	}
++}
+diff --git a/tests/shell/testcases/optimizations/merge_nat b/tests/shell/testcases/optimizations/merge_nat
+index 3a57d94..bfe9787 100755
+--- a/tests/shell/testcases/optimizations/merge_nat
++++ b/tests/shell/testcases/optimizations/merge_nat
+@@ -24,19 +24,6 @@ RULESET="table ip test2 {
+ 
+ $NFT -o -f - <<< $RULESET
+ 
+-RULESET="table ip test3 {
+-        chain y {
+-                oif lo accept
+-                ip saddr 1.1.1.1 tcp sport 1024-65535 snat to 3.3.3.3
+-                ip saddr 2.2.2.2 tcp sport 1024-65535 snat to 4.4.4.4
+-                oifname enp2s0 snat ip to ip saddr map { 10.1.1.0/24 : 72.2.3.66-72.2.3.78 }
+-                tcp dport 8888 redirect
+-                tcp dport 9999 redirect
+-        }
+-}"
+-
+-$NFT -o -f - <<< $RULESET
+-
+ RULESET="table ip test4 {
+         chain y {
+                 oif lo accept
+diff --git a/tests/shell/testcases/optimizations/merge_nat_concat b/tests/shell/testcases/optimizations/merge_nat_concat
+new file mode 100755
+index 0000000..2e0a91a
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/merge_nat_concat
+@@ -0,0 +1,18 @@
++#!/bin/bash
++
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_pipapo)
++
++set -e
++
++RULESET="table ip test3 {
++        chain y {
++                oif lo accept
++                ip saddr 1.1.1.1 tcp sport 1024-65535 snat to 3.3.3.3
++                ip saddr 2.2.2.2 tcp sport 1024-65535 snat to 4.4.4.4
++                oifname enp2s0 snat ip to ip saddr map { 10.1.1.0/24 : 72.2.3.66-72.2.3.78 }
++                tcp dport 8888 redirect
++                tcp dport 9999 redirect
++        }
++}"
++
++$NFT -o -f - <<< $RULESET

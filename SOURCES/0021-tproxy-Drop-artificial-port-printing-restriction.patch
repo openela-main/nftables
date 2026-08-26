@@ -1,0 +1,119 @@
+From 2927e76b0fb5b64e1a57467151fb76c3d513fa3a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:18 +0200
+Subject: [PATCH] tproxy: Drop artificial port printing restriction
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit e4c9f9f7e0d1f83be18f6c4a418da503e9021b24
+
+commit e4c9f9f7e0d1f83be18f6c4a418da503e9021b24
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Nov 2 14:48:10 2023 +0100
+
+    tproxy: Drop artificial port printing restriction
+
+    It does not make much sense to omit printing the port expression if it's
+    not a value expression: On one hand, input allows for more advanced
+    uses. On the other, if it is in-kernel, best nft can do is to try and
+    print it no matter what. Just ignoring ruleset elements can't be
+    correct.
+
+    Fixes: 2be1d52644cf7 ("src: Add tproxy support")
+    Closes: https://bugzilla.netfilter.org/show_bug.cgi?id=1721
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/statement.c                |  2 +-
+ tests/py/inet/tproxy.t         |  2 ++
+ tests/py/inet/tproxy.t.json    | 35 ++++++++++++++++++++++++++++++++++
+ tests/py/inet/tproxy.t.payload | 12 ++++++++++++
+ 4 files changed, 50 insertions(+), 1 deletion(-)
+
+diff --git a/src/statement.c b/src/statement.c
+index 4756116..f5176e6 100644
+--- a/src/statement.c
++++ b/src/statement.c
+@@ -989,7 +989,7 @@ static void tproxy_stmt_print(const struct stmt *stmt, struct output_ctx *octx)
+ 			expr_print(stmt->tproxy.addr, octx);
+ 		}
+ 	}
+-	if (stmt->tproxy.port && stmt->tproxy.port->etype == EXPR_VALUE) {
++	if (stmt->tproxy.port) {
+ 		if (!stmt->tproxy.addr)
+ 			nft_print(octx, " ");
+ 		nft_print(octx, ":");
+diff --git a/tests/py/inet/tproxy.t b/tests/py/inet/tproxy.t
+index d23bbcb..9901df7 100644
+--- a/tests/py/inet/tproxy.t
++++ b/tests/py/inet/tproxy.t
+@@ -19,3 +19,5 @@ meta l4proto 17 tproxy ip to :50080;ok
+ meta l4proto 17 tproxy ip6 to :50080;ok
+ meta l4proto 17 tproxy to :50080;ok
+ ip daddr 0.0.0.0/0 meta l4proto 6 tproxy ip to :2000;ok
++
++meta l4proto 6 tproxy ip to 127.0.0.1:symhash mod 2 map { 0 : 23, 1 : 42 };ok
+diff --git a/tests/py/inet/tproxy.t.json b/tests/py/inet/tproxy.t.json
+index 7b3b11c..71b6fd2 100644
+--- a/tests/py/inet/tproxy.t.json
++++ b/tests/py/inet/tproxy.t.json
+@@ -183,3 +183,38 @@
+         }
+     }
+ ]
++
++# meta l4proto 6 tproxy ip to 127.0.0.1:symhash mod 2 map { 0 : 23, 1 : 42 }
++[
++    {
++        "match": {
++            "left": {
++                "meta": {
++                    "key": "l4proto"
++                }
++            },
++            "op": "==",
++            "right": 6
++        }
++    },
++    {
++        "tproxy": {
++            "addr": "127.0.0.1",
++            "family": "ip",
++            "port": {
++                "map": {
++                    "data": {
++                        "set": [
++                            [ 0, 23 ],
++                            [ 1, 42 ]
++                        ]
++                    },
++                    "key": {
++                        "symhash": { "mod": 2 }
++                    }
++                }
++            }
++        }
++    }
++]
++
+diff --git a/tests/py/inet/tproxy.t.payload b/tests/py/inet/tproxy.t.payload
+index 24bf8f6..2f41904 100644
+--- a/tests/py/inet/tproxy.t.payload
++++ b/tests/py/inet/tproxy.t.payload
+@@ -61,3 +61,15 @@ inet x y
+   [ immediate reg 1 0x0000d007 ]
+   [ tproxy ip port reg 1 ]
+ 
++# meta l4proto 6 tproxy ip to 127.0.0.1:symhash mod 2 map { 0 : 23, 1 : 42 }
++__map%d x b size 2
++__map%d x 0
++	element 00000000  : 00001700 0 [end]	element 00000001  : 00002a00 0 [end]
++inet x y
++  [ meta load l4proto => reg 1 ]
++  [ cmp eq reg 1 0x00000006 ]
++  [ immediate reg 1 0x0100007f ]
++  [ hash reg 2 = symhash() % mod 2 ]
++  [ lookup reg 2 set __map%d dreg 2 ]
++  [ tproxy ip addr reg 1 port reg 2 ]
++

@@ -1,0 +1,62 @@
+From e35c6c91c248711f136d6c36137cda2d7d368d41 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:05 +0200
+Subject: [PATCH] cache: Filter for table when listing sets or maps
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b7225cda2a4388f38293fba281fc001dff70a16e
+
+commit b7225cda2a4388f38293fba281fc001dff70a16e
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Sat Feb 14 15:02:04 2026 +0100
+
+    cache: Filter for table when listing sets or maps
+
+    Respect an optionally specified table name to filter listed sets or maps
+    to by populating the filter accordingly.
+
+    Fixes: a1a6b0a5c3c4 ("cache: finer grain cache population for list commands")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Tested-by: Eric Garver <eric@garver.life>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c                                 | 1 +
+ tests/shell/testcases/listing/cache_filters | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/src/cache.c b/src/cache.c
+index 2f3a0f6..b009243 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -258,6 +258,7 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 	case CMD_OBJ_SETS:
+ 	case CMD_OBJ_MAPS:
+ 		filter->list.family = cmd->handle.family;
++		filter->list.table = cmd->handle.table.name;
+ 		flags |= NFT_CACHE_TABLE | NFT_CACHE_SET;
+ 		if (!nft_output_terse(&nft->output))
+ 			flags |= NFT_CACHE_SETELEM;
+diff --git a/tests/shell/testcases/listing/cache_filters b/tests/shell/testcases/listing/cache_filters
+index 37c8f84..7a89330 100755
+--- a/tests/shell/testcases/listing/cache_filters
++++ b/tests/shell/testcases/listing/cache_filters
+@@ -22,6 +22,8 @@ table ip ip_t {
+ 	chain ip_t_c2 {
+ 	}
+ }
++table ip ip_t2 {
++}
+ EOF
+ 
+ $NFT --debug=netlink list ruleset | \
+@@ -38,6 +40,8 @@ $NFT --debug=netlink list sets | \
+ 	grep -q 'family 2 ip_t_s ip_t' || fail "broken list sets"
+ $NFT --debug=netlink list sets ip6 | \
+ 	grep -q 'family 2 ip_t_s ip_t' && fail "broken list sets family filter"
++$NFT --debug=netlink list sets ip ip_t2 | \
++	grep -q 'family 2 ip_t_s ip_t' && fail "broken list sets table filter"
+ 
+ $NFT --debug=netlink list flowtables | \
+ 	grep -q 'flow table ip_t ip_t_ft' || fail "broken list flowtables"

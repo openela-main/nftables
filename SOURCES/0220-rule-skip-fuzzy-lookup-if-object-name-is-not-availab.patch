@@ -1,0 +1,73 @@
+From 05104a35a526faed1e5504ba68b24095e6a6aab0 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] rule: skip fuzzy lookup if object name is not available
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit de8396358f869d6d7640eae6d6287c2f7fb0d3dc
+
+commit de8396358f869d6d7640eae6d6287c2f7fb0d3dc
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sun Jun 15 11:33:42 2025 +0200
+
+    rule: skip fuzzy lookup if object name is not available
+
+    Skip fuzzy lookup for suggestions when handles are used.
+
+    Note that 4cf97abfee61 ("rule: Avoid segfault with anonymous chains")
+    already skips it for chain.
+
+    Fixes: 285bb67a11ad ("src: introduce simple hints on incorrect set")
+    Fixes: 9f7817a4e022 ("src: introduce simple hints on incorrect chain")
+    Fixes: d7476ddd5f7d ("src: introduce simple hints on incorrect table")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/rule.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/rule.c b/src/rule.c
+index 9a54a99..bfcf4a2 100644
+--- a/src/rule.c
++++ b/src/rule.c
+@@ -211,6 +211,9 @@ struct set *set_lookup_fuzzy(const char *set_name,
+ 	struct table *table;
+ 	struct set *set;
+ 
++	if (!set_name)
++		return NULL;
++
+ 	string_misspell_init(&st);
+ 
+ 	list_for_each_entry(table, &cache->table_cache.list, cache.list) {
+@@ -1216,6 +1219,9 @@ struct table *table_lookup_fuzzy(const struct handle *h,
+ 	struct string_misspell_state st;
+ 	struct table *table;
+ 
++	if (!h->table.name)
++		return NULL;
++
+ 	string_misspell_init(&st);
+ 
+ 	list_for_each_entry(table, &cache->table_cache.list, cache.list) {
+@@ -1695,6 +1701,9 @@ struct obj *obj_lookup_fuzzy(const char *obj_name,
+ 	struct table *table;
+ 	struct obj *obj;
+ 
++	if (!obj_name)
++		return NULL;
++
+ 	string_misspell_init(&st);
+ 
+ 	list_for_each_entry(table, &cache->table_cache.list, cache.list) {
+@@ -2172,6 +2181,9 @@ struct flowtable *flowtable_lookup_fuzzy(const char *ft_name,
+ 	struct table *table;
+ 	struct flowtable *ft;
+ 
++	if (!ft_name)
++		return NULL;
++
+ 	string_misspell_init(&st);
+ 
+ 	list_for_each_entry(table, &cache->table_cache.list, cache.list) {

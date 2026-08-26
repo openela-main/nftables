@@ -1,0 +1,89 @@
+From d3737f3a3f7bd6822768b1922d8c5dbf8dd7bd48 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:07 +0200
+Subject: [PATCH] mnl: continue on ENOBUFS errors when processing batch
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 47e9aaf0227daf16f43a7442e1dceae8851817a5
+
+commit 47e9aaf0227daf16f43a7442e1dceae8851817a5
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Aug 26 10:09:13 2025 +0200
+
+    mnl: continue on ENOBUFS errors when processing batch
+
+    A user reports that:
+
+      nft -f ruleset.nft
+
+    fails with:
+
+      netlink: Error: Could not process rule: No buffer space available
+
+    This was triggered by:
+
+    table ip6 fule {
+      set domestic_ip6 {
+        type ipv6_addr
+        flags dynamic,interval
+        elements = $domestic_ip6
+      }
+      chain prerouting {
+        type filter hook prerouting priority 0;
+        ip6 daddr @domestic_ip6 counter
+      }
+    }
+
+    where $domestic_ip6 contains a large number of IPv6 addresses.
+
+    This set declaration is not supported currently, because dynamic sets
+    with intervals are not supported, then every IPv6 address that is added
+    triggers an error, overruning the userspace socket buffer with lots of
+    NLMSG_ERROR messages (or too big NLMSG_ERROR message to fit into the
+    socket buffer).
+
+    In the particular context of batch processing, ENOBUFS is just an
+    indication that too many errors have occurred. The kernel cannot store
+    any more NLMSG_ERROR messages into the userspace socket buffer.
+
+    However, there are still NLMSG_ERROR messages in the socket buffer to be
+    processed that can provide a hint on what is going on.
+
+    Instead of breaking on ENOBUFS in batches, continue error processing.
+
+    After this patch, the ruleset above displays:
+
+    ruleset.nft:2367:7-18: Error: Could not process rule: Operation not supported
+      set domestic_ip6 {
+          ^^^^^^^^^^^^
+    ruleset.nft:2367:7-18: Error: Could not process rule: No such file or directory
+      set domestic_ip6 {
+          ^^^^^^^^^^^^
+
+    Fixes: a72315d2bad4 ("src: add rule batching support")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mnl.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/mnl.c b/src/mnl.c
+index 061b74f..ec423e2 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -445,8 +445,13 @@ int mnl_batch_talk(struct netlink_ctx *ctx, struct list_head *err_list,
+ 			break;
+ 
+ 		ret = mnl_socket_recvfrom(nl, rcv_buf, sizeof(rcv_buf));
+-		if (ret == -1)
++		if (ret == -1) {
++			/* Too many errors, not all errors are displayed. */
++			if (errno == ENOBUFS)
++				continue;
++
+ 			return -1;
++		}
+ 
+ 		/* Continue on error, make sure we get all acknowledgments */
+ 		ret = mnl_cb_run2(rcv_buf, ret, 0, portid,

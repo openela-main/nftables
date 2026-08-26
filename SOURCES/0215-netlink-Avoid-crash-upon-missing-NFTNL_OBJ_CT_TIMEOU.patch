@@ -1,0 +1,44 @@
+From 610961b78d6a88b1587bd6933009215940d05481 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] netlink: Avoid crash upon missing NFTNL_OBJ_CT_TIMEOUT_ARRAY
+ attribute
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 2a38f458f12bc032dac1b3ba63f95ca5a3c03fbd
+
+commit 2a38f458f12bc032dac1b3ba63f95ca5a3c03fbd
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Jun 12 20:17:22 2025 +0200
+
+    netlink: Avoid crash upon missing NFTNL_OBJ_CT_TIMEOUT_ARRAY attribute
+
+    If missing, the memcpy call ends up reading from address zero.
+
+    Fixes: c7c94802679cd ("src: add ct timeout support")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/netlink.c b/src/netlink.c
+index df7ce21..8fe6881 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -1734,9 +1734,10 @@ struct obj *netlink_delinearize_obj(struct netlink_ctx *ctx,
+ 		init_list_head(&obj->ct_timeout.timeout_list);
+ 		obj->ct_timeout.l3proto = nftnl_obj_get_u16(nlo, NFTNL_OBJ_CT_TIMEOUT_L3PROTO);
+ 		obj->ct_timeout.l4proto = nftnl_obj_get_u8(nlo, NFTNL_OBJ_CT_TIMEOUT_L4PROTO);
+-		memcpy(obj->ct_timeout.timeout,
+-		       nftnl_obj_get(nlo, NFTNL_OBJ_CT_TIMEOUT_ARRAY),
+-		       NFTNL_CTTIMEOUT_ARRAY_MAX * sizeof(uint32_t));
++		if (nftnl_obj_is_set(nlo, NFTNL_OBJ_CT_TIMEOUT_ARRAY))
++			memcpy(obj->ct_timeout.timeout,
++			       nftnl_obj_get(nlo, NFTNL_OBJ_CT_TIMEOUT_ARRAY),
++			       NFTNL_CTTIMEOUT_ARRAY_MAX * sizeof(uint32_t));
+ 		break;
+ 	case NFT_OBJECT_LIMIT:
+ 		obj->limit.rate =

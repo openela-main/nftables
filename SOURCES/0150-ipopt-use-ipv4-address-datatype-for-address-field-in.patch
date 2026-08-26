@@ -1,0 +1,67 @@
+From ce85f29a3a4297546e29f6558b174814db3d91e6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] ipopt: use ipv4 address datatype for address field in ip
+ options
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 5faccb0681acb3b0175c4190eeaecf62f0bd12d4
+
+commit 5faccb0681acb3b0175c4190eeaecf62f0bd12d4
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Jan 30 19:39:20 2025 +0100
+
+    ipopt: use ipv4 address datatype for address field in ip options
+
+    So user does not have to play integer arithmetics to match on IPv4
+    address.
+
+    Before:
+
+     # nft describe ip option lsrr addr
+     exthdr expression, datatype integer (integer), 32 bits
+
+    After:
+
+     # nft describe ip option lsrr addr
+     exthdr expression, datatype ipv4_addr (IPv4 address) (basetype integer), 32 bits
+
+    Fixes: 226a0e072d5c ("exthdr: add support for matching IPv4 options")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/ipopt.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/ipopt.c b/src/ipopt.c
+index 37f779d..c03a804 100644
+--- a/src/ipopt.c
++++ b/src/ipopt.c
+@@ -24,7 +24,7 @@ static const struct exthdr_desc ipopt_lsrr = {
+ 		[IPOPT_FIELD_TYPE]		= PHT("type",    0,  8),
+ 		[IPOPT_FIELD_LENGTH]		= PHT("length",  8,  8),
+ 		[IPOPT_FIELD_PTR]		= PHT("ptr",    16,  8),
+-		[IPOPT_FIELD_ADDR_0]		= PHT("addr",   24, 32),
++		[IPOPT_FIELD_ADDR_0]		= PROTO_HDR_TEMPLATE("addr", &ipaddr_type, BYTEORDER_BIG_ENDIAN, 24, 32),
+ 	},
+ };
+ 
+@@ -35,7 +35,7 @@ static const struct exthdr_desc ipopt_rr = {
+ 		[IPOPT_FIELD_TYPE]		= PHT("type",   0,   8),
+ 		[IPOPT_FIELD_LENGTH]		= PHT("length",  8,  8),
+ 		[IPOPT_FIELD_PTR]		= PHT("ptr",    16,  8),
+-		[IPOPT_FIELD_ADDR_0]		= PHT("addr",   24, 32),
++		[IPOPT_FIELD_ADDR_0]		= PROTO_HDR_TEMPLATE("addr", &ipaddr_type, BYTEORDER_BIG_ENDIAN, 24, 32),
+ 	},
+ };
+ 
+@@ -46,7 +46,7 @@ static const struct exthdr_desc ipopt_ssrr = {
+ 		[IPOPT_FIELD_TYPE]		= PHT("type",   0,   8),
+ 		[IPOPT_FIELD_LENGTH]		= PHT("length",  8,  8),
+ 		[IPOPT_FIELD_PTR]		= PHT("ptr",    16,  8),
+-		[IPOPT_FIELD_ADDR_0]		= PHT("addr",   24, 32),
++		[IPOPT_FIELD_ADDR_0]		= PROTO_HDR_TEMPLATE("addr", &ipaddr_type, BYTEORDER_BIG_ENDIAN, 24, 32),
+ 	},
+ };
+ 

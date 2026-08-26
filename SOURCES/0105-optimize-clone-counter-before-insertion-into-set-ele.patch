@@ -1,0 +1,143 @@
+From 6804a55496761b1366ffa5e554f9658cfd55548a Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:08 +0200
+Subject: [PATCH] optimize: clone counter before insertion into set element
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit ac77f3805c71f14c51730a9c5cb726ee67f14159
+
+commit ac77f3805c71f14c51730a9c5cb726ee67f14159
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Fri Jul 5 14:03:33 2024 +0200
+
+    optimize: clone counter before insertion into set element
+
+    The counter statement that is zapped from the rule needs to be cloned
+    before inserting it into each set element.
+
+    Fixes: 686ab8b6996e ("optimize: do not remove counter in verdict maps")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c                                | 24 +++++++++++++------
+ .../optimizations/dumps/merge_counter.nft     |  8 +++++++
+ .../testcases/optimizations/merge_counter     | 20 ++++++++++++++++
+ 3 files changed, 45 insertions(+), 7 deletions(-)
+ create mode 100644 tests/shell/testcases/optimizations/dumps/merge_counter.nft
+ create mode 100755 tests/shell/testcases/optimizations/merge_counter
+
+diff --git a/src/optimize.c b/src/optimize.c
+index 1dd0858..62dd908 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -692,29 +692,36 @@ static void build_verdict_map(struct expr *expr, struct stmt *verdict,
+ 			      struct expr *set, struct stmt *counter)
+ {
+ 	struct expr *item, *elem, *mapping;
++	struct stmt *counter_elem;
+ 
+ 	switch (expr->etype) {
+ 	case EXPR_LIST:
+ 		list_for_each_entry(item, &expr->expressions, list) {
+ 			elem = set_elem_expr_alloc(&internal_location, expr_get(item));
+-			if (counter)
+-				list_add_tail(&counter->list, &elem->stmt_list);
++			if (counter) {
++				counter_elem = counter_stmt_alloc(&counter->location);
++				list_add_tail(&counter_elem->list, &elem->stmt_list);
++			}
+ 
+ 			mapping = mapping_expr_alloc(&internal_location, elem,
+ 						     expr_get(verdict->expr));
+ 			compound_expr_add(set, mapping);
+ 		}
++		stmt_free(counter);
+ 		break;
+ 	case EXPR_SET:
+ 		list_for_each_entry(item, &expr->expressions, list) {
+ 			elem = set_elem_expr_alloc(&internal_location, expr_get(item->key));
+-			if (counter)
+-				list_add_tail(&counter->list, &elem->stmt_list);
++			if (counter) {
++				counter_elem = counter_stmt_alloc(&counter->location);
++				list_add_tail(&counter_elem->list, &elem->stmt_list);
++			}
+ 
+ 			mapping = mapping_expr_alloc(&internal_location, elem,
+ 						     expr_get(verdict->expr));
+ 			compound_expr_add(set, mapping);
+ 		}
++		stmt_free(counter);
+ 		break;
+ 	case EXPR_PREFIX:
+ 	case EXPR_RANGE:
+@@ -819,8 +826,8 @@ static void __merge_concat_stmts_vmap(const struct optimize_ctx *ctx,
+ 				      struct expr *set, struct stmt *verdict)
+ {
+ 	struct expr *concat, *next, *elem, *mapping;
++	struct stmt *counter, *counter_elem;
+ 	LIST_HEAD(concat_list);
+-	struct stmt *counter;
+ 
+ 	counter = zap_counter(ctx, i);
+ 	__merge_concat(ctx, i, merge, &concat_list);
+@@ -828,13 +835,16 @@ static void __merge_concat_stmts_vmap(const struct optimize_ctx *ctx,
+ 	list_for_each_entry_safe(concat, next, &concat_list, list) {
+ 		list_del(&concat->list);
+ 		elem = set_elem_expr_alloc(&internal_location, concat);
+-		if (counter)
+-			list_add_tail(&counter->list, &elem->stmt_list);
++		if (counter) {
++			counter_elem = counter_stmt_alloc(&counter->location);
++			list_add_tail(&counter_elem->list, &elem->stmt_list);
++		}
+ 
+ 		mapping = mapping_expr_alloc(&internal_location, elem,
+ 					     expr_get(verdict->expr));
+ 		compound_expr_add(set, mapping);
+ 	}
++	stmt_free(counter);
+ }
+ 
+ static void merge_concat_stmts_vmap(const struct optimize_ctx *ctx,
+diff --git a/tests/shell/testcases/optimizations/dumps/merge_counter.nft b/tests/shell/testcases/optimizations/dumps/merge_counter.nft
+new file mode 100644
+index 0000000..72eed5d
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/dumps/merge_counter.nft
+@@ -0,0 +1,8 @@
++table ip x {
++	chain y {
++		type filter hook input priority filter; policy drop;
++		ct state vmap { invalid counter packets 0 bytes 0 : drop, established counter packets 0 bytes 0 : accept, related counter packets 0 bytes 0 : accept }
++		tcp dport { 80, 123 } counter packets 0 bytes 0 accept
++		ip saddr . ip daddr vmap { 1.1.1.1 . 2.2.2.2 counter packets 0 bytes 0 : accept, 1.1.1.2 . 3.3.3.3 counter packets 0 bytes 0 : drop }
++	}
++}
+diff --git a/tests/shell/testcases/optimizations/merge_counter b/tests/shell/testcases/optimizations/merge_counter
+new file mode 100755
+index 0000000..3b8bbad
+--- /dev/null
++++ b/tests/shell/testcases/optimizations/merge_counter
+@@ -0,0 +1,20 @@
++#!/bin/bash
++
++# NFT_TEST_REQUIRES(NFT_TEST_HAVE_set_expr)
++
++set -e
++
++RULESET="table ip x {
++        chain y {
++                type filter hook input priority 0; policy drop;
++
++                ct state invalid counter drop
++                ct state established,related counter accept
++                tcp dport 80 counter accept
++                tcp dport 123 counter accept
++                ip saddr 1.1.1.1 ip daddr 2.2.2.2 counter accept
++                ip saddr 1.1.1.2 ip daddr 3.3.3.3 counter drop
++        }
++}"
++
++$NFT -o -f - <<< $RULESET

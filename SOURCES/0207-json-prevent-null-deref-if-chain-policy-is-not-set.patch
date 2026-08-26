@@ -1,0 +1,99 @@
+From bfec7fce47d8647cbc3d0cbd4d2b6de9a8d7f46d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] json: prevent null deref if chain->policy is not set
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 69b90023c7220fe283ee38686c758e3494e853d9
+
+commit 69b90023c7220fe283ee38686c758e3494e853d9
+Author: Florian Westphal <fw@strlen.de>
+Date:   Mon Jun 2 14:22:33 2025 +0200
+
+    json: prevent null deref if chain->policy is not set
+
+    The two commits mentioned below resolved null dererence crashes when the
+    policy resp. priority keyword was missing in the chain/flowtable
+    specification.
+
+    Same issue exists in the json output path, so apply similar fix there
+    and extend the existing test cases.
+
+    Fixes: 5b37479b42b3 ("nftables: don't crash in 'list ruleset' if policy is not set")
+    Fixes: b40bebbcee36 ("rule: do not crash if to-be-printed flowtable lacks priority")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Acked-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/json.c                                    | 19 ++++++++++++++-----
+ .../nft-j-f/flowtable-no-priority-crash       |  6 ++++++
+ .../shell/testcases/nft-f/0021list_ruleset_0  |  7 ++++++-
+ 3 files changed, 26 insertions(+), 6 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-j-f/flowtable-no-priority-crash
+
+diff --git a/src/json.c b/src/json.c
+index 01c5dbc..bbea9aa 100644
+--- a/src/json.c
++++ b/src/json.c
+@@ -299,8 +299,14 @@ static json_t *chain_print_json(const struct chain *chain)
+ 	if (chain->flags & CHAIN_F_BASECHAIN) {
+ 		mpz_export_data(&priority, chain->priority.expr->value,
+ 				BYTEORDER_HOST_ENDIAN, sizeof(int));
+-		mpz_export_data(&policy, chain->policy->value,
+-				BYTEORDER_HOST_ENDIAN, sizeof(int));
++
++		if (chain->policy) {
++			mpz_export_data(&policy, chain->policy->value,
++					BYTEORDER_HOST_ENDIAN, sizeof(int));
++		} else {
++			policy = NF_ACCEPT;
++		}
++
+ 		tmp = json_pack("{s:s, s:s, s:i, s:s}",
+ 				"type", chain->type.str,
+ 				"hook", hooknum2str(chain->handle.family,
+@@ -475,10 +481,13 @@ static json_t *obj_print_json(const struct obj *obj)
+ static json_t *flowtable_print_json(const struct flowtable *ftable)
+ {
+ 	json_t *root, *devs = NULL;
+-	int i, priority;
++	int i, priority = 0;
++
++	if (ftable->priority.expr) {
++		mpz_export_data(&priority, ftable->priority.expr->value,
++				BYTEORDER_HOST_ENDIAN, sizeof(int));
++	}
+ 
+-	mpz_export_data(&priority, ftable->priority.expr->value,
+-			BYTEORDER_HOST_ENDIAN, sizeof(int));
+ 	root = json_pack("{s:s, s:s, s:s, s:I, s:s, s:i}",
+ 			"family", family2str(ftable->handle.family),
+ 			"name", ftable->handle.flowtable.name,
+diff --git a/tests/shell/testcases/bogons/nft-j-f/flowtable-no-priority-crash b/tests/shell/testcases/bogons/nft-j-f/flowtable-no-priority-crash
+new file mode 100644
+index 0000000..f348da9
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-j-f/flowtable-no-priority-crash
+@@ -0,0 +1,6 @@
++table ip filter {
++	flowtable ft1 {
++		devices = { lo }
++	}
++}
++list ruleset
+diff --git a/tests/shell/testcases/nft-f/0021list_ruleset_0 b/tests/shell/testcases/nft-f/0021list_ruleset_0
+index 37729b4..f3c3749 100755
+--- a/tests/shell/testcases/nft-f/0021list_ruleset_0
++++ b/tests/shell/testcases/nft-f/0021list_ruleset_0
+@@ -12,4 +12,9 @@ RULESET="table filter {
+ list  ruleset
+ "
+ 
+-exec $NFT -f - <<< "$RULESET"
++$NFT -f - <<< "$RULESET"
++
++if [ "$NFT_TEST_HAVE_json" != n ]; then
++	$NFT flush ruleset
++	$NFT -j -f - <<< "$RULESET"
++fi

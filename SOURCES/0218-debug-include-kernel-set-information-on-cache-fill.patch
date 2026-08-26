@@ -1,0 +1,102 @@
+From 7469c33958c928ef36863b39f0ab45d36152fc56 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] debug: include kernel set information on cache fill
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6063a4644746d12bebb39f3ca93e76de6392f5ec
+
+commit 6063a4644746d12bebb39f3ca93e76de6392f5ec
+Author: Florian Westphal <fw@strlen.de>
+Date:   Tue Apr 8 16:21:30 2025 +0200
+
+    debug: include kernel set information on cache fill
+
+    Honor --debug=netlink flag also when doing initial set dump
+    from the kernel.
+
+    With recent libnftnl update this will include the chosen
+    set backend name that is used by the kernel.
+
+    Because set names are scoped by table and protocol family,
+    also include the family protocol number.
+
+    Dumping this information breaks tests/py as the recorded
+    debug output no longer matches, this is fixed in previous
+    change.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mnl.c     | 15 +++++++++++++--
+ src/netlink.c |  3 +++
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/src/mnl.c b/src/mnl.c
+index 0f54d00..d9f58de 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -1376,9 +1376,15 @@ int mnl_nft_set_del(struct netlink_ctx *ctx, struct cmd *cmd)
+ 	return 0;
+ }
+ 
++struct set_cb_args {
++	struct netlink_ctx *ctx;
++	struct nftnl_set_list *list;
++};
++
+ static int set_cb(const struct nlmsghdr *nlh, void *data)
+ {
+-	struct nftnl_set_list *nls_list = data;
++	struct set_cb_args *args = data;
++	struct nftnl_set_list *nls_list = args->list;
+ 	struct nftnl_set *s;
+ 
+ 	if (check_genid(nlh) < 0)
+@@ -1391,6 +1397,8 @@ static int set_cb(const struct nlmsghdr *nlh, void *data)
+ 	if (nftnl_set_nlmsg_parse(nlh, s) < 0)
+ 		goto err_free;
+ 
++	netlink_dump_set(s, args->ctx);
++
+ 	nftnl_set_list_add_tail(s, nls_list);
+ 	return MNL_CB_OK;
+ 
+@@ -1409,6 +1417,7 @@ mnl_nft_set_dump(struct netlink_ctx *ctx, int family,
+ 	struct nlmsghdr *nlh;
+ 	struct nftnl_set *s;
+ 	int ret;
++	struct set_cb_args args;
+ 
+ 	s = nftnl_set_alloc();
+ 	if (s == NULL)
+@@ -1430,7 +1439,9 @@ mnl_nft_set_dump(struct netlink_ctx *ctx, int family,
+ 	if (nls_list == NULL)
+ 		memory_allocation_error();
+ 
+-	ret = nft_mnl_talk(ctx, nlh, nlh->nlmsg_len, set_cb, nls_list);
++	args.list = nls_list;
++	args.ctx  = ctx;
++	ret = nft_mnl_talk(ctx, nlh, nlh->nlmsg_len, set_cb, &args);
+ 	if (ret < 0 && errno != ENOENT)
+ 		goto err;
+ 
+diff --git a/src/netlink.c b/src/netlink.c
+index 8fe6881..c1d3e45 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -843,10 +843,13 @@ static const struct datatype *dtype_map_from_kernel(enum nft_data_types type)
+ void netlink_dump_set(const struct nftnl_set *nls, struct netlink_ctx *ctx)
+ {
+ 	FILE *fp = ctx->nft->output.output_fp;
++	uint32_t family;
+ 
+ 	if (!(ctx->nft->debug_mask & NFT_DEBUG_NETLINK) || !fp)
+ 		return;
+ 
++	family = nftnl_set_get_u32(nls, NFTNL_SET_FAMILY);
++	fprintf(fp, "family %d ", family);
+ 	nftnl_set_fprintf(fp, nls, 0, 0);
+ 	fprintf(fp, "\n");
+ }

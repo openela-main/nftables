@@ -1,0 +1,39 @@
+From ca095ad73827371dde4fa2a0858cb0f4f2063b35 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] evaluate: validate set expression type before accessing flags
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 2022e8bb5cf0e0fa81ab0a5087bd1ab6e20280ee
+
+commit 2022e8bb5cf0e0fa81ab0a5087bd1ab6e20280ee
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Jul 9 00:21:49 2025 +0200
+
+    evaluate: validate set expression type before accessing flags
+
+    Validate set->init is of EXPR_SET expression type before accessing
+    set_flags.
+
+    Fixes: 81e36530fcac ("src: replace interval segment tree overlap and automerge")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 72dd4fe..73cd3c0 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -4846,7 +4846,8 @@ static int set_evaluate(struct eval_ctx *ctx, struct set *set)
+ 		set->flags |= NFT_SET_EXPR;
+ 
+ 	if (set_is_anonymous(set->flags)) {
+-		if (set_is_interval(set->init->set_flags) &&
++		if (set->init->etype == EXPR_SET &&
++		    set_is_interval(set->init->set_flags) &&
+ 		    !(set->init->set_flags & NFT_SET_CONCAT) &&
+ 		    interval_set_eval(ctx, set, set->init) < 0)
+ 			return -1;

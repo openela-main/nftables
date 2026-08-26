@@ -1,0 +1,120 @@
+From 7032e78b5b236612e63f62512bf857c20ded93b3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:34 +0200
+Subject: [PATCH] parser_json: bail out on malformed statement in set
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit cc7a7d025a60dced5f5e894aa1688014c9deef3d
+
+commit cc7a7d025a60dced5f5e894aa1688014c9deef3d
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Apr 1 09:57:59 2025 +0200
+
+    parser_json: bail out on malformed statement in set
+
+    Propagate error to caller so it bails out on malformed set statements.
+
+    Fixes: 07958ec53830 ("json: add set statement list support")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c | 39 +++++++++++++++++++++++++++------------
+ 1 file changed, 27 insertions(+), 12 deletions(-)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 6468c3d..ca33c6c 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -2365,9 +2365,9 @@ static struct stmt *json_parse_reject_stmt(struct json_ctx *ctx,
+ 	return stmt;
+ }
+ 
+-static void json_parse_set_stmt_list(struct json_ctx *ctx,
+-				     struct list_head *stmt_list,
+-				     json_t *stmt_json)
++static int json_parse_set_stmt_list(struct json_ctx *ctx,
++				    struct list_head *stmt_list,
++				    json_t *stmt_json)
+ {
+ 	struct list_head *head;
+ 	struct stmt *stmt;
+@@ -2375,10 +2375,12 @@ static void json_parse_set_stmt_list(struct json_ctx *ctx,
+ 	size_t index;
+ 
+ 	if (!stmt_json)
+-		return;
++		return 0;
+ 
+-	if (!json_is_array(stmt_json))
++	if (!json_is_array(stmt_json)) {
+ 		json_error(ctx, "Unexpected object type in stmt");
++		return -1;
++	}
+ 
+ 	head = stmt_list;
+ 	json_array_foreach(stmt_json, index, value) {
+@@ -2386,16 +2388,19 @@ static void json_parse_set_stmt_list(struct json_ctx *ctx,
+ 		if (!stmt) {
+ 			json_error(ctx, "Parsing set statements array at index %zd failed.", index);
+ 			stmt_list_free(stmt_list);
+-			return;
++			return -1;
+ 		}
+ 		if (!(stmt->flags & STMT_F_STATEFUL)) {
+ 			stmt_free(stmt);
+ 			json_error(ctx, "Unsupported set statements array at index %zd failed.", index);
+ 			stmt_list_free(stmt_list);
++			return -1;
+ 		}
+ 		list_add(&stmt->list, head);
+ 		head = &stmt->list;
+ 	}
++
++	return 0;
+ }
+ 
+ static struct stmt *json_parse_set_stmt(struct json_ctx *ctx,
+@@ -2440,8 +2445,11 @@ static struct stmt *json_parse_set_stmt(struct json_ctx *ctx,
+ 	stmt->set.key = expr;
+ 	stmt->set.set = expr2;
+ 
+-	if (!json_unpack(value, "{s:o}", "stmt", &stmt_json))
+-		json_parse_set_stmt_list(ctx, &stmt->set.stmt_list, stmt_json);
++	if (!json_unpack(value, "{s:o}", "stmt", &stmt_json) &&
++	    json_parse_set_stmt_list(ctx, &stmt->set.stmt_list, stmt_json) < 0) {
++		stmt_free(stmt);
++		return NULL;
++	}
+ 
+ 	return stmt;
+ }
+@@ -2497,8 +2505,11 @@ static struct stmt *json_parse_map_stmt(struct json_ctx *ctx,
+ 	stmt->map.data = expr_data;
+ 	stmt->map.set = expr2;
+ 
+-	if (!json_unpack(value, "{s:o}", "stmt", &stmt_json))
+-		json_parse_set_stmt_list(ctx, &stmt->set.stmt_list, stmt_json);
++	if (!json_unpack(value, "{s:o}", "stmt", &stmt_json) &&
++	    json_parse_set_stmt_list(ctx, &stmt->set.stmt_list, stmt_json) < 0) {
++		stmt_free(stmt);
++		return NULL;
++	}
+ 
+ 	return stmt;
+ }
+@@ -3445,8 +3456,12 @@ static struct cmd *json_parse_cmd_add_set(struct json_ctx *ctx, json_t *root,
+ 	json_unpack(root, "{s:i}", "size", &set->desc.size);
+ 	json_unpack(root, "{s:b}", "auto-merge", &set->automerge);
+ 
+-	if (!json_unpack(root, "{s:o}", "stmt", &stmt_json))
+-		json_parse_set_stmt_list(ctx, &set->stmt_list, stmt_json);
++	if (!json_unpack(root, "{s:o}", "stmt", &stmt_json) &&
++	    json_parse_set_stmt_list(ctx, &set->stmt_list, stmt_json) < 0) {
++		set_free(set);
++		handle_free(&h);
++		return NULL;
++	}
+ 
+ 	handle_merge(&set->handle, &h);
+ 

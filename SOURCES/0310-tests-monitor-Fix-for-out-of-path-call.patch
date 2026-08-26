@@ -1,0 +1,48 @@
+From 42e1fb111ee4600b8e165a9c62bc6cd834989248 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Tue, 21 Jul 2026 17:18:39 +0200
+Subject: [PATCH] tests: monitor: Fix for out-of-path call
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 1ac69c4de8ff7b472c3a5f2cf1d9442642e9047c
+
+commit 1ac69c4de8ff7b472c3a5f2cf1d9442642e9047c
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Tue Dec 16 15:36:23 2025 +0100
+
+    tests: monitor: Fix for out-of-path call
+
+    When called from another directory without specifying test cases, an
+    incorrect regexp was used to glob all tests and no test was run at all:
+
+    | # ./tests/monitor/run-tests.sh
+    | echo: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+    | monitor: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+    | json-echo: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+    | json-monitor: running tests from file *.t
+    | ./tests/monitor/run-tests.sh: line 201: testcases/*.t: No such file or directory
+
+    Fixes: 83eaf50c36fe8 ("tests: monitor: Become $PWD agnostic")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index 50e915e..a81a7fe 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -243,7 +243,7 @@ total_rc=0
+ for syntax in ${syntaxes:-standard json}; do
+ 	[ $syntax == json ] && test_json=true || test_json=false
+ 	for variant in ${variants:-echo monitor}; do
+-		for testcase in ${testcases:-testcases/*.t}; do
++		for testcase in ${testcases:-$(dirname $0)/testcases/*.t}; do
+ 			run_testcase "$testcase"
+ 			let "total_rc += $?"
+ 		done

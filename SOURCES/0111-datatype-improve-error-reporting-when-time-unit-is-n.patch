@@ -1,0 +1,44 @@
+From 1d307c03b99a145202aa08f28f1665fc739fd686 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] datatype: improve error reporting when time unit is not
+ correct
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 6bcaef6a1ea6dc60250ed6124f3b49a8cd29434c
+
+commit 6bcaef6a1ea6dc60250ed6124f3b49a8cd29434c
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Aug 14 13:05:54 2024 +0200
+
+    datatype: improve error reporting when time unit is not correct
+
+    Display:
+
+      Wrong unit format, expecting bytes or kbytes or mbytes
+
+    instead of:
+
+      Wrong rate format
+
+    Fixes: 6615676d825e ("src: add per-bytes limit")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/datatype.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/datatype.c b/src/datatype.c
+index 4cceeb8..c94c839 100644
+--- a/src/datatype.c
++++ b/src/datatype.c
+@@ -1424,7 +1424,7 @@ static struct error_record *time_unit_parse(const struct location *loc,
+ 	else if (strcmp(str, "week") == 0)
+ 		*unit = 1ULL * 60 * 60 * 24 * 7;
+ 	else
+-		return error(loc, "Wrong rate format");
++		return error(loc, "Wrong time format, expecting second, minute, hour, day or week");
+ 
+ 	return NULL;
+ }

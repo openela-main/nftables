@@ -1,0 +1,49 @@
+From 5104ecc5b5f0726ab58df27742c9c3cf8a65f1b3 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] doc: incorrect datatype description for icmpv6_type and
+ icmpvx_code
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 9caa5142f95557decc19925ad37411f1df4589a2
+
+commit 9caa5142f95557decc19925ad37411f1df4589a2
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Jan 9 12:42:20 2024 +0100
+
+    doc: incorrect datatype description for icmpv6_type and icmpvx_code
+
+    Fix incorrect description in manpage:
+
+     ICMPV6 TYPE TYPE is icmpv6_type
+     ICMPVX CODE TYPE is icmpx_code
+
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/data-types.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/doc/data-types.txt b/doc/data-types.txt
+index 961fc62..e5ee91a 100644
+--- a/doc/data-types.txt
++++ b/doc/data-types.txt
+@@ -270,7 +270,7 @@ ICMPV6 TYPE TYPE
+ |==================
+ |Name | Keyword | Size | Base type
+ |ICMPv6 Type |
+-icmpx_code |
++icmpv6_type |
+ 8 bit |
+ integer
+ |===================
+@@ -364,7 +364,7 @@ ICMPVX CODE TYPE
+ |==================
+ |Name | Keyword | Size | Base type
+ |ICMPvX Code |
+-icmpv6_type |
++icmpx_code |
+ 8 bit |
+ integer
+ |===================

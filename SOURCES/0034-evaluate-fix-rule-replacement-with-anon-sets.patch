@@ -1,0 +1,39 @@
+From ecd609b492cbc755529e75a6af8fd9c06b89135b Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:40 +0200
+Subject: [PATCH] evaluate: fix rule replacement with anon sets
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 256904b1ded6314974dddc75726149f7b19d33f4
+
+commit 256904b1ded6314974dddc75726149f7b19d33f4
+Author: Florian Westphal <fw@strlen.de>
+Date:   Sun Nov 19 13:05:55 2023 +0100
+
+    evaluate: fix rule replacement with anon sets
+
+    nft replace rule t c handle 3 'jhash ip protocol . ip saddr mod 170 vmap { 0-94 : goto wan1, 95-169 : goto wan2, 170-269 }"'
+    BUG: unhandled op 2
+    nft: src/evaluate.c:1748: interval_set_eval: Assertion `0' failed.
+
+    Fixes: 81e36530fcac ("src: replace interval segment tree overlap and automerge")
+    Reported-by: Tino Reichardt <milky-netfilter@mcmilk.de>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 27ecaa2..30190ac 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1723,6 +1723,7 @@ static int interval_set_eval(struct eval_ctx *ctx, struct set *set,
+ 	switch (ctx->cmd->op) {
+ 	case CMD_CREATE:
+ 	case CMD_ADD:
++	case CMD_REPLACE:
+ 	case CMD_INSERT:
+ 		if (set->automerge) {
+ 			ret = set_automerge(ctx->msgs, ctx->cmd, set, init,

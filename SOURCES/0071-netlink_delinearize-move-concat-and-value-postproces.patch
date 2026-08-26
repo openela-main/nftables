@@ -1,0 +1,132 @@
+From 633d5e7cf14961687216422323b6476775e0086e Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:42 +0200
+Subject: [PATCH] netlink_delinearize: move concat and value postprocessing to
+ helpers
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 7ef933d16fd1b14afb276ab26f4114a2c9d6a3ea
+
+commit 7ef933d16fd1b14afb276ab26f4114a2c9d6a3ea
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Jan 19 13:47:08 2024 +0100
+
+    netlink_delinearize: move concat and value postprocessing to helpers
+
+    No functional changes intended.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink_delinearize.c | 82 ++++++++++++++++++++++-----------------
+ 1 file changed, 47 insertions(+), 35 deletions(-)
+
+diff --git a/src/netlink_delinearize.c b/src/netlink_delinearize.c
+index e214510..27630a8 100644
+--- a/src/netlink_delinearize.c
++++ b/src/netlink_delinearize.c
+@@ -2720,6 +2720,50 @@ static struct expr *expr_postprocess_string(struct expr *expr)
+ 	return out;
+ }
+ 
++static void expr_postprocess_value(struct rule_pp_ctx *ctx, struct expr **exprp)
++{
++	struct expr *expr = *exprp;
++
++	// FIXME
++	if (expr->byteorder == BYTEORDER_HOST_ENDIAN)
++		mpz_switch_byteorder(expr->value, expr->len / BITS_PER_BYTE);
++
++	if (expr_basetype(expr)->type == TYPE_STRING)
++		*exprp = expr_postprocess_string(expr);
++
++	expr = *exprp;
++	if (expr->dtype->basetype != NULL &&
++	    expr->dtype->basetype->type == TYPE_BITMASK)
++		*exprp = bitmask_expr_to_binops(expr);
++}
++
++static void expr_postprocess_concat(struct rule_pp_ctx *ctx, struct expr **exprp)
++{
++	struct expr *i, *n, *expr = *exprp;
++	unsigned int type = expr->dtype->type, ntype = 0;
++	int off = expr->dtype->subtypes;
++	const struct datatype *dtype;
++	LIST_HEAD(tmp);
++
++	assert(expr->etype == EXPR_CONCAT);
++
++	ctx->flags |= RULE_PP_IN_CONCATENATION;
++	list_for_each_entry_safe(i, n, &expr->expressions, list) {
++		if (type) {
++			dtype = concat_subtype_lookup(type, --off);
++			expr_set_type(i, dtype, dtype->byteorder);
++		}
++		list_del(&i->list);
++		expr_postprocess(ctx, &i);
++		list_add_tail(&i->list, &tmp);
++
++		ntype = concat_subtype_add(ntype, i->dtype->type);
++	}
++	ctx->flags &= ~RULE_PP_IN_CONCATENATION;
++	list_splice(&tmp, &expr->expressions);
++	__datatype_set(expr, concat_type_alloc(ntype));
++}
++
+ static void expr_postprocess(struct rule_pp_ctx *ctx, struct expr **exprp)
+ {
+ 	struct dl_proto_ctx *dl = dl_proto_ctx(ctx);
+@@ -2746,30 +2790,9 @@ static void expr_postprocess(struct rule_pp_ctx *ctx, struct expr **exprp)
+ 		list_for_each_entry(i, &expr->expressions, list)
+ 			expr_postprocess(ctx, &i);
+ 		break;
+-	case EXPR_CONCAT: {
+-		unsigned int type = expr->dtype->type, ntype = 0;
+-		int off = expr->dtype->subtypes;
+-		const struct datatype *dtype;
+-		LIST_HEAD(tmp);
+-		struct expr *n;
+-
+-		ctx->flags |= RULE_PP_IN_CONCATENATION;
+-		list_for_each_entry_safe(i, n, &expr->expressions, list) {
+-			if (type) {
+-				dtype = concat_subtype_lookup(type, --off);
+-				expr_set_type(i, dtype, dtype->byteorder);
+-			}
+-			list_del(&i->list);
+-			expr_postprocess(ctx, &i);
+-			list_add_tail(&i->list, &tmp);
+-
+-			ntype = concat_subtype_add(ntype, i->dtype->type);
+-		}
+-		ctx->flags &= ~RULE_PP_IN_CONCATENATION;
+-		list_splice(&tmp, &expr->expressions);
+-		__datatype_set(expr, concat_type_alloc(ntype));
++	case EXPR_CONCAT:
++		expr_postprocess_concat(ctx, exprp);
+ 		break;
+-	}
+ 	case EXPR_UNARY:
+ 		expr_postprocess(ctx, &expr->arg);
+ 		expr_set_type(expr, expr->arg->dtype, !expr->arg->byteorder);
+@@ -2882,18 +2905,7 @@ static void expr_postprocess(struct rule_pp_ctx *ctx, struct expr **exprp)
+ 		payload_dependency_kill(&dl->pdctx, expr, dl->pctx.family);
+ 		break;
+ 	case EXPR_VALUE:
+-		// FIXME
+-		if (expr->byteorder == BYTEORDER_HOST_ENDIAN)
+-			mpz_switch_byteorder(expr->value, expr->len / BITS_PER_BYTE);
+-
+-		if (expr_basetype(expr)->type == TYPE_STRING)
+-			*exprp = expr_postprocess_string(expr);
+-
+-		expr = *exprp;
+-		if (expr->dtype->basetype != NULL &&
+-		    expr->dtype->basetype->type == TYPE_BITMASK)
+-			*exprp = bitmask_expr_to_binops(expr);
+-
++		expr_postprocess_value(ctx, exprp);
+ 		break;
+ 	case EXPR_RANGE:
+ 		expr_postprocess(ctx, &expr->left);

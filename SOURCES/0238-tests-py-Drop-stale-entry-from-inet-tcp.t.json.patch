@@ -1,0 +1,69 @@
+From 71414c3a97deb69dbd107f0173edaf5b74aa3a86 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:18 +0200
+Subject: [PATCH] tests: py: Drop stale entry from inet/tcp.t.json
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit f8fe3d56194f06bea9cd82d1d707064b202f5202
+
+commit f8fe3d56194f06bea9cd82d1d707064b202f5202
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 14:32:11 2025 +0200
+
+    tests: py: Drop stale entry from inet/tcp.t.json
+
+    The test was changed but JSON equivalents not updated. Commit
+    c0b685951fabb ("json: fix parse of flagcmp expression") then added an
+    equivalent matching the changed test, so just drop the old one.
+
+    Fixes: c3d57114f119b ("parser_bison: add shortcut syntax for matching flags without binary operations")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/inet/tcp.t.json | 31 -------------------------------
+ 1 file changed, 31 deletions(-)
+
+diff --git a/tests/py/inet/tcp.t.json b/tests/py/inet/tcp.t.json
+index bd589cf..95a9e48 100644
+--- a/tests/py/inet/tcp.t.json
++++ b/tests/py/inet/tcp.t.json
+@@ -910,37 +910,6 @@
+     }
+ ]
+ 
+-# tcp flags & (syn|fin) == (syn|fin)
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "&": [
+-                    {
+-                        "payload": {
+-                            "field": "flags",
+-                            "protocol": "tcp"
+-                        }
+-                    },
+-                    {
+-                        "|": [
+-                            "syn",
+-                            "fin"
+-                        ]
+-                    }
+-                ]
+-            },
+-            "op": "==",
+-            "right": {
+-                "|": [
+-                    "syn",
+-                    "fin"
+-                ]
+-            }
+-        }
+-    }
+-]
+-
+ # tcp flags & (fin | syn | rst | psh | ack | urg | ecn | cwr) == fin | syn | rst | psh | ack | urg | ecn | cwr
+ [
+     {

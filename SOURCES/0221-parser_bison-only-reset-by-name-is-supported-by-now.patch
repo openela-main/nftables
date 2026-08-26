@@ -1,0 +1,55 @@
+From 3d06fd69116855f116796d628a91c2c106d57c70 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:04 +0200
+Subject: [PATCH] parser_bison: only reset by name is supported by now
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit e8c7ba0aac7ce321e61008fe9b4b8f11c3ba7e1d
+
+commit e8c7ba0aac7ce321e61008fe9b4b8f11c3ba7e1d
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sun Jun 15 11:34:11 2025 +0200
+
+    parser_bison: only reset by name is supported by now
+
+    NFT_MSG_GETSET does not support for handle lookup yet, restrict this to
+    reset by name by now.
+
+    Add a bogon test reported by Florian Westphal.
+
+    Fixes: 83e0f4402fb7 ("Implement 'reset {set,map,element}' commands")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y                                     | 4 ++--
+ tests/shell/testcases/bogons/nft-f/null_set_name_crash | 2 ++
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/null_set_name_crash
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 67a35e1..cdc9809 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -1755,11 +1755,11 @@ reset_cmd		:	COUNTERS	list_cmd_spec_any
+ 			{
+ 				$$ = cmd_alloc(CMD_RESET, CMD_OBJ_ELEMENTS, &$2, &@$, $3);
+ 			}
+-			|	SET		set_or_id_spec
++			|	SET		set_spec
+ 			{
+ 				$$ = cmd_alloc(CMD_RESET, CMD_OBJ_SET, &$2, &@$, NULL);
+ 			}
+-			|	MAP		set_or_id_spec
++			|	MAP		set_spec
+ 			{
+ 				$$ = cmd_alloc(CMD_RESET, CMD_OBJ_MAP, &$2, &@$, NULL);
+ 			}
+diff --git a/tests/shell/testcases/bogons/nft-f/null_set_name_crash b/tests/shell/testcases/bogons/nft-f/null_set_name_crash
+new file mode 100644
+index 0000000..e5d85b2
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/null_set_name_crash
+@@ -0,0 +1,2 @@
++table y { }
++reset set y handle 6

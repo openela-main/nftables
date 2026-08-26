@@ -1,0 +1,112 @@
+From 98660a0a6450d9dac867d82f0f59f171d8c08b76 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:24 +0200
+Subject: [PATCH] tests: Prepare exit codes for automake
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 15c01d744a6b8f428e785a36687e7ecdbc3e7a15
+
+commit 15c01d744a6b8f428e785a36687e7ecdbc3e7a15
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Aug 31 12:44:55 2023 +0200
+
+    tests: Prepare exit codes for automake
+
+    Make the test suite runners exit 77 when requiring root and running as
+    regular user, exit 99 for internal errors (unrelated to test cases) and
+    exit 1 (or any free non-zero value) to indicate test failures.
+
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/monitor/run-tests.sh | 11 ++++-------
+ tests/py/nft-test.py       | 12 +++++++-----
+ tests/shell/run-tests.sh   |  2 +-
+ 3 files changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/tests/monitor/run-tests.sh b/tests/monitor/run-tests.sh
+index c6a3322..7cbc7b1 100755
+--- a/tests/monitor/run-tests.sh
++++ b/tests/monitor/run-tests.sh
+@@ -13,18 +13,15 @@ err() {
+ 	echo "$*" >&2
+ }
+ 
+-die() {
+-	err "$*"
+-	exit 1
+-}
+-
+ if [ "$(id -u)" != "0" ] ; then
+-	die "this requires root!"
++	err "this requires root!"
++	exit 77
+ fi
+ 
+ testdir=$(mktemp -d)
+ if [ ! -d $testdir ]; then
+-	die "Failed to create test directory"
++	err "Failed to create test directory"
++	exit 99
+ fi
+ trap 'rm -rf $testdir; $nft flush ruleset' EXIT
+ 
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 4799636..5ce9a64 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -1513,7 +1513,7 @@ def main():
+ 
+     if os.getuid() != 0:
+         print("You need to be root to run this, sorry")
+-        return
++        return 77
+ 
+     if not args.no_netns and not spawn_netns():
+         print_warning("cannot run in own namespace, connectivity might break")
+@@ -1532,11 +1532,11 @@ def main():
+     if check_lib_path and not os.path.exists(args.library):
+         print("The nftables library at '%s' does not exist. "
+               "You need to build the project." % args.library)
+-        return
++        return 99
+ 
+     if args.enable_schema and not args.enable_json:
+         print_error("Option --schema requires option --json")
+-        return
++        return 99
+ 
+     global nftables
+     nftables = Nftables(sofile = args.library)
+@@ -1549,7 +1549,7 @@ def main():
+         print_info("Log will be available at %s" % LOGFILE)
+     except IOError:
+         print_error("Cannot open log file %s" % LOGFILE)
+-        return
++        return 99
+ 
+     file_list = []
+     if args.filenames:
+@@ -1595,5 +1595,7 @@ def main():
+                 print("%d test files, %d files passed, %d unit tests, " % (test_files, files_ok, tests))
+                 print("%d error, %d warning" % (errors, warnings))
+ 
++    return errors != 0
++
+ if __name__ == '__main__':
+-    main()
++    sys.exit(main())
+diff --git a/tests/shell/run-tests.sh b/tests/shell/run-tests.sh
+index 22105c2..beb7dda 100755
+--- a/tests/shell/run-tests.sh
++++ b/tests/shell/run-tests.sh
+@@ -79,7 +79,7 @@ _msg() {
+ 		printf '%s\n' "$level: $*"
+ 	fi
+ 	if [ "$level" = E ] ; then
+-		exit 1
++		exit 99
+ 	fi
+ }
+ 

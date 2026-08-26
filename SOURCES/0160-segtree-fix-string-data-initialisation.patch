@@ -1,0 +1,136 @@
+From 6b999820a60ddaecb544e5c5266307a662879afc Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] segtree: fix string data initialisation
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 63e3d5953c144abbc4ead2665ad7cec799c4cb64
+
+commit 63e3d5953c144abbc4ead2665ad7cec799c4cb64
+Author: Florian Westphal <fw@strlen.de>
+Date:   Wed Mar 5 16:01:48 2025 +0100
+
+    segtree: fix string data initialisation
+
+    This uses the wrong length.  This must re-use the length of the datatype,
+    not the string length.
+
+    The added test cases will fail without the fix due to erroneous
+    overlap detection, which in itself is due to incorrect sorting of
+    the elements.
+
+    Example error:
+     netlink: Error: interval overlaps with an existing one
+     add element inet testifsets simple_wild {  "2-1" } failed.
+     table inet testifsets {
+          ...       elements = { "1-1", "abcdef*", "othername", "ppp0" }
+
+    ... but clearly "2-1" doesn't overlap with any existing members.
+    The false detection is because of the "acvdef*" wildcard getting sorted
+    at the beginning of the list which is because its erronously initialised
+    as a 64bit number instead of 128 bits (16 bytes / IFNAMSIZ).
+
+    Fixes: 5e393ea1fc0a ("segtree: add string "range" reversal support")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/segtree.c                                |  2 +-
+ tests/shell/testcases/sets/sets_with_ifnames | 62 ++++++++++++++++++++
+ 2 files changed, 63 insertions(+), 1 deletion(-)
+
+diff --git a/src/segtree.c b/src/segtree.c
+index c5f27c9..a57d865 100644
+--- a/src/segtree.c
++++ b/src/segtree.c
+@@ -495,7 +495,7 @@ static struct expr *interval_to_string(struct expr *low, struct expr *i, const m
+ 
+ 	expr = constant_expr_alloc(&low->location, low->dtype,
+ 				   BYTEORDER_HOST_ENDIAN,
+-				   (str_len + 1) * BITS_PER_BYTE, data);
++				   len * BITS_PER_BYTE, data);
+ 
+ 	return __expr_to_set_elem(low, expr);
+ }
+diff --git a/tests/shell/testcases/sets/sets_with_ifnames b/tests/shell/testcases/sets/sets_with_ifnames
+index 9531c85..713778b 100755
+--- a/tests/shell/testcases/sets/sets_with_ifnames
++++ b/tests/shell/testcases/sets/sets_with_ifnames
+@@ -103,10 +103,67 @@ check_matching_icmp_ppp()
+ 	fi
+ }
+ 
++check_add_del_ifnames()
++{
++	local what="$1"
++	local setname="$2"
++	local prefix="$3"
++	local data="$4"
++	local i=0
++
++	for i in $(seq 1 5);do
++		local cmd="element inet testifsets $setname { "
++		local to_batch=16
++
++		for j in $(seq 1 $to_batch);do
++			local name=$(printf '"%x-%d"' $i $j)
++
++			[ -n "$prefix" ] && cmd="$cmd $prefix . "
++
++			cmd="$cmd $name"
++
++			[ -n "$data" ] && cmd="$cmd : $data"
++
++			if [ $j -lt $to_batch ] ; then
++				cmd="$cmd, "
++			fi
++		done
++
++		cmd="$cmd }"
++
++		if ! $NFT "$what" "$cmd"; then
++			echo "$what $cmd failed."
++			$NFT list set inet testifsets $setname
++			exit 1
++		fi
++
++		if ! ip netns exec "$ns1" $NFT "$what" "$cmd"; then
++			echo "$ns1 $what $cmd failed."
++			ip netns exec "$ns1" $NFT list set inet testifsets $setname
++			exit 1
++		fi
++	done
++}
++
++check_add_ifnames()
++{
++	check_add_del_ifnames "add" "$1" "$2" "$3"
++}
++
++check_del_ifnames()
++{
++	check_add_del_ifnames "delete" "$1" "$2" "$3"
++}
++
+ ip netns add "$ns1" || exit 111
+ ip netns add "$ns2" || exit 111
+ ip netns exec "$ns1" $NFT -f "$dumpfile" || exit 3
+ 
++check_add_ifnames "simple" "" ""
++check_add_ifnames "simple_wild" "" ""
++check_add_ifnames "concat" "10.1.2.2" ""
++check_add_ifnames "map_wild" "" "drop"
++
+ for n in abcdef0 abcdef1 othername;do
+ 	check_elem simple $n
+ done
+@@ -148,3 +205,8 @@ ip -net "$ns2" addr add 10.1.2.2/24 dev veth0
+ ip -net "$ns2" addr add 10.2.2.2/24 dev veth1
+ 
+ check_matching_icmp_ppp
++
++check_del_ifnames "simple" "" ""
++check_del_ifnames "simple_wild" "" ""
++check_del_ifnames "concat" "10.1.2.2" ""
++check_del_ifnames "map_wild" "" "drop"

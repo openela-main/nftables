@@ -1,0 +1,65 @@
+From c296c3d263b6bd897fd807ad174d33a3bfd2e015 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:09:25 +0200
+Subject: [PATCH] cmd: provide better hint if chain is already declared with
+ different type/hook/priority
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 1f321f86c45fce88a5bcd6f8eafa0157248c8b38
+
+commit 1f321f86c45fce88a5bcd6f8eafa0157248c8b38
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Mon Jun 10 19:36:21 2024 +0200
+
+    cmd: provide better hint if chain is already declared with different type/hook/priority
+
+    Display the following error in such case:
+
+      ruleset.nft:7:9-52: Error: Chain "input" already exists in table ip 'filter' with different declaration
+              type filter hook postrouting priority filter;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    instead of reporting a misleading unsupported chain type when updating
+    an existing chain with different type/hook/priority.
+
+    Fixes: 573788e05363 ("src: improve error reporting for unsupported chain type")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cmd.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/src/cmd.c b/src/cmd.c
+index 21533e0..de11468 100644
+--- a/src/cmd.c
++++ b/src/cmd.c
+@@ -256,7 +256,8 @@ static void nft_cmd_enoent(struct netlink_ctx *ctx, const struct cmd *cmd,
+ static int nft_cmd_chain_error(struct netlink_ctx *ctx, struct cmd *cmd,
+ 			       struct mnl_err *err)
+ {
+-	struct chain *chain = cmd->chain;
++	struct chain *chain = cmd->chain, *existing_chain;
++	const struct table *table;
+ 	int priority;
+ 
+ 	switch (err->err) {
+@@ -270,6 +271,18 @@ static int nft_cmd_chain_error(struct netlink_ctx *ctx, struct cmd *cmd,
+ 			return netlink_io_error(ctx, &chain->priority.loc,
+ 						"Chains of type \"nat\" must have a priority value above -200");
+ 
++		table = table_cache_find(&ctx->nft->cache.table_cache,
++					 cmd->handle.table.name, cmd->handle.family);
++		if (table) {
++			existing_chain = chain_cache_find(table, cmd->handle.chain.name);
++			if (existing_chain && existing_chain != chain &&
++			    !strcmp(existing_chain->handle.chain.name, chain->handle.chain.name))
++				return netlink_io_error(ctx, &chain->loc,
++							"Chain \"%s\" already exists in table %s '%s' with different declaration",
++							chain->handle.chain.name,
++							family2str(table->handle.family), table->handle.table.name);
++		}
++
+ 		return netlink_io_error(ctx, &chain->loc,
+ 					"Chain of type \"%s\" is not supported, perhaps kernel support is missing?",
+ 					chain->type.str);

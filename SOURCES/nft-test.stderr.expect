@@ -1,6 +1,6 @@
-any/tcpopt.t: ERROR: line 58: add rule ip test-ip4 input reset tcp option mptcp: This rule should not have failed.
-any/tcpopt.t: ERROR: line 59: add rule ip test-ip4 input reset tcp option 2: This rule should not have failed.
-any/tcpopt.t: ERROR: line 60: add rule ip test-ip4 input reset tcp option 123: This rule should not have failed.
+any/tcpopt.t: ERROR: line 59: add rule ip test-ip4 input reset tcp option mptcp: This rule should not have failed.
+any/tcpopt.t: ERROR: line 60: add rule ip test-ip4 input reset tcp option 2: This rule should not have failed.
+any/tcpopt.t: ERROR: line 61: add rule ip test-ip4 input reset tcp option 123: This rule should not have failed.
 bridge/redirect.t: ERROR: line 5: add rule bridge test-bridge prerouting meta broute set 1: This rule should not have failed.
 inet/dccp.t: ERROR: line 27: add rule ip test-ip4 input dccp option 0 exists: This rule should not have failed.
 inet/dccp.t: ERROR: line 28: add rule ip test-ip4 input dccp option 43 missing: This rule should not have failed.

@@ -1,0 +1,66 @@
+From 1a384d6d3f411695375ee5d04a32cc317a295b30 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:00 +0200
+Subject: [PATCH] evaluate: optimize zero length range
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit deda274293f80f9718de4cbb416bd2b2bf296709
+
+commit deda274293f80f9718de4cbb416bd2b2bf296709
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sat Feb 22 00:32:11 2025 +0100
+
+    evaluate: optimize zero length range
+
+    A rule like the following:
+
+      ... tcp dport 22-22 ...
+
+    results in a range expression to match from 22 to 22.
+
+    Simplify to singleton value so a cmp is used instead.
+
+    This optimization already exists in set elements which might explain
+    this overlook.
+
+    Fixes: 7a6e16040d65 ("evaluate: allow for zero length ranges")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 2cc17c3..7059108 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1285,12 +1285,12 @@ static int __expr_evaluate_range(struct eval_ctx *ctx, struct expr **expr)
+ 	return 0;
+ }
+ 
+-static int expr_evaluate_range(struct eval_ctx *ctx, struct expr **expr)
++static int expr_evaluate_range(struct eval_ctx *ctx, struct expr **exprp)
+ {
+-	struct expr *range = *expr, *left, *right;
++	struct expr *range = *exprp, *left, *right;
+ 	int rc;
+ 
+-	rc = __expr_evaluate_range(ctx, expr);
++	rc = __expr_evaluate_range(ctx, exprp);
+ 	if (rc)
+ 		return rc;
+ 
+@@ -1300,6 +1300,12 @@ static int expr_evaluate_range(struct eval_ctx *ctx, struct expr **expr)
+ 	if (mpz_cmp(left->value, right->value) > 0)
+ 		return expr_error(ctx->msgs, range, "Range negative size");
+ 
++	if (mpz_cmp(left->value, right->value) == 0) {
++		*exprp = expr_get(left);
++		expr_free(range);
++		return 0;
++	}
++
+ 	datatype_set(range, left->dtype);
+ 	range->flags |= EXPR_F_CONSTANT;
+ 	return 0;

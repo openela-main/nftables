@@ -1,0 +1,40 @@
+From 8d0cfbc6790d4206414cf21e6cd65ad4fd275624 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:43 +0200
+Subject: [PATCH] evaluate: display "Range negative size" error
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit c0a5b8c6a6433ec1d4e41646dc42ccb8444c96be
+
+commit c0a5b8c6a6433ec1d4e41646dc42ccb8444c96be
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Tue Mar 19 19:50:00 2024 +0100
+
+    evaluate: display "Range negative size" error
+
+    zero length ranges now allowed, therefore, update error message to refer
+    to negative ranges which are not possible.
+
+    Fixes: 7a6e16040d65 ("evaluate: allow for zero length ranges")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 89656eb..38a80f2 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -1255,8 +1255,8 @@ static int expr_evaluate_range(struct eval_ctx *ctx, struct expr **expr)
+ 	right = range->right;
+ 
+ 	if (mpz_cmp(left->value, right->value) > 0)
+-		return expr_error(ctx->msgs, range,
+-				  "Range has zero or negative size");
++		return expr_error(ctx->msgs, range, "Range negative size");
++
+ 	datatype_set(range, left->dtype);
+ 	range->flags |= EXPR_F_CONSTANT;
+ 	return 0;

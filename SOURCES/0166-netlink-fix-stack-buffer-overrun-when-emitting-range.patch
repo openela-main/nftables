@@ -1,0 +1,194 @@
+From 4aa22bdc2b7ea1d652ca0a1ba3628d2087703ea6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:11:01 +0200
+Subject: [PATCH] netlink: fix stack buffer overrun when emitting ranged
+ expressions
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 37dfb1972cae061c09f278933af998a7c4fc2696
+
+commit 37dfb1972cae061c09f278933af998a7c4fc2696
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Mar 14 07:50:54 2025 +0100
+
+    netlink: fix stack buffer overrun when emitting ranged expressions
+
+    Included bogon input generates following Sanitizer splat:
+
+    AddressSanitizer: dynamic-stack-buffer-overflow on address 0x7...
+    WRITE of size 2 at 0x7fffffffcbe4 thread T0
+        #0 0x0000003a68b8 in __asan_memset (src/nft+0x3a68b8) (BuildId: 3678ff51a5405c77e3e0492b9a985910efee73b8)
+        #1 0x0000004eb603 in __mpz_export_data src/gmputil.c:108:2
+        #2 0x0000004eb603 in netlink_export_pad src/netlink.c:256:2
+        #3 0x0000004eb603 in netlink_gen_range src/netlink.c:471:2
+        #4 0x0000004ea250 in __netlink_gen_data src/netlink.c:523:10
+        #5 0x0000004e8ee3 in alloc_nftnl_setelem src/netlink.c:205:3
+        #6 0x0000004d4541 in mnl_nft_setelem_batch src/mnl.c:1816:11
+
+    Problem is that the range end is emitted to the buffer at the *padded*
+    location (rounded up to next register size), but buffer sizing is
+    based of the expression length, not the padded length.
+
+    Also extend the test script: Capture stderr and if we see
+    AddressSanitizer warning, make it fail.
+
+    Same bug as the one fixed in 600b84631410 ("netlink: fix stack buffer overflow with sub-reg sized prefixes"),
+    just in a different function.
+
+    Apply same fix: no dynamic array + add a range check.
+
+    Joint work with Pablo Neira Ayuso.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/netlink.c                                 | 50 +++++++++++++------
+ tests/shell/testcases/bogons/assert_failures  | 17 ++++++-
+ ..._stack_buffer_overrun_in_netlink_gen_range |  6 +++
+ 3 files changed, 57 insertions(+), 16 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/asan_stack_buffer_overrun_in_netlink_gen_range
+
+diff --git a/src/netlink.c b/src/netlink.c
+index 726003f..8c191f1 100644
+--- a/src/netlink.c
++++ b/src/netlink.c
+@@ -315,11 +315,15 @@ static int __netlink_gen_concat_key(uint32_t flags, const struct expr *i,
+ static void netlink_gen_concat_key(const struct expr *expr,
+ 				    struct nft_data_linearize *nld)
+ {
+-	unsigned int len = expr->len / BITS_PER_BYTE, offset = 0;
+-	unsigned char data[len];
++	unsigned int len = netlink_padded_len(expr->len) / BITS_PER_BYTE;
++	unsigned char data[NFT_MAX_EXPR_LEN_BYTES];
++	unsigned int offset = 0;
+ 	const struct expr *i;
+ 
+-	memset(data, 0, len);
++	if (len > sizeof(data))
++		BUG("Value export of %u bytes would overflow", len);
++
++	memset(data, 0, sizeof(data));
+ 
+ 	list_for_each_entry(i, &expr->expressions, list)
+ 		offset += __netlink_gen_concat_key(expr->flags, i, data + offset);
+@@ -359,11 +363,15 @@ static int __netlink_gen_concat_data(int end, const struct expr *i,
+ static void __netlink_gen_concat_expand(const struct expr *expr,
+ 				        struct nft_data_linearize *nld)
+ {
+-	unsigned int len = div_round_up(expr->len, BITS_PER_BYTE) * 2, offset = 0;
+-	unsigned char data[len];
++	unsigned int len = (netlink_padded_len(expr->len) / BITS_PER_BYTE) * 2;
++	unsigned char data[NFT_MAX_EXPR_LEN_BYTES];
++	unsigned int offset = 0;
+ 	const struct expr *i;
+ 
+-	memset(data, 0, len);
++	if (len > sizeof(data))
++		BUG("Value export of %u bytes would overflow", len);
++
++	memset(data, 0, sizeof(data));
+ 
+ 	list_for_each_entry(i, &expr->expressions, list)
+ 		offset += __netlink_gen_concat_data(false, i, data + offset);
+@@ -378,11 +386,15 @@ static void __netlink_gen_concat_expand(const struct expr *expr,
+ static void __netlink_gen_concat(const struct expr *expr,
+ 				 struct nft_data_linearize *nld)
+ {
+-	unsigned int len = expr->len / BITS_PER_BYTE, offset = 0;
+-	unsigned char data[len];
++	unsigned int len = netlink_padded_len(expr->len) / BITS_PER_BYTE;
++	unsigned char data[NFT_MAX_EXPR_LEN_BYTES];
++	unsigned int offset = 0;
+ 	const struct expr *i;
+ 
+-	memset(data, 0, len);
++	if (len > sizeof(data))
++		BUG("Value export of %u bytes would overflow", len);
++
++	memset(data, 0, sizeof(data));
+ 
+ 	list_for_each_entry(i, &expr->expressions, list)
+ 		offset += __netlink_gen_concat_data(expr->flags, i, data + offset);
+@@ -450,11 +462,14 @@ static void netlink_gen_verdict(const struct expr *expr,
+ static void netlink_gen_range(const struct expr *expr,
+ 			      struct nft_data_linearize *nld)
+ {
+-	unsigned int len = div_round_up(expr->left->len, BITS_PER_BYTE) * 2;
+-	unsigned char data[len];
+-	unsigned int offset = 0;
++	unsigned int len = (netlink_padded_len(expr->left->len) / BITS_PER_BYTE) * 2;
++	unsigned char data[NFT_MAX_EXPR_LEN_BYTES];
++	unsigned int offset;
+ 
+-	memset(data, 0, len);
++	if (len > sizeof(data))
++		BUG("Value export of %u bytes would overflow", len);
++
++	memset(data, 0, sizeof(data));
+ 	offset = netlink_export_pad(data, expr->left->value, expr->left);
+ 	netlink_export_pad(data + offset, expr->right->value, expr->right);
+ 	memcpy(nld->value, data, len);
+@@ -1196,10 +1211,15 @@ static struct expr *range_expr_reduce(struct expr *range)
+ static struct expr *netlink_parse_interval_elem(const struct set *set,
+ 						struct expr *expr)
+ {
+-	unsigned int len = div_round_up(expr->len, BITS_PER_BYTE);
++	unsigned int len = netlink_padded_len(expr->len) / BITS_PER_BYTE;
+ 	const struct datatype *dtype = set->data->dtype;
+ 	struct expr *range, *left, *right;
+-	char data[len];
++	char data[NFT_MAX_EXPR_LEN_BYTES];
++
++	if (len > sizeof(data))
++		BUG("Value export of %u bytes would overflow", len);
++
++	memset(data, 0, sizeof(data));
+ 
+ 	mpz_export_data(data, expr->value, dtype->byteorder, len);
+ 	left = constant_expr_alloc(&internal_location, dtype,
+diff --git a/tests/shell/testcases/bogons/assert_failures b/tests/shell/testcases/bogons/assert_failures
+index 7909942..3dee63b 100755
+--- a/tests/shell/testcases/bogons/assert_failures
++++ b/tests/shell/testcases/bogons/assert_failures
+@@ -1,12 +1,27 @@
+ #!/bin/bash
+ 
+ dir=$(dirname $0)/nft-f/
++tmpfile=$(mktemp)
++
++cleanup()
++{
++	rm -f "$tmpfile"
++}
++
++trap cleanup EXIT
+ 
+ for f in $dir/*; do
+-	$NFT --check -f "$f"
++	echo "Check $f"
++	$NFT --check -f "$f" 2> "$tmpfile"
+ 
+ 	if [ $? -ne 1 ]; then
+ 		echo "Bogus input file $f did not cause expected error code" 1>&2
+ 		exit 111
+ 	fi
++
++	if grep AddressSanitizer "$tmpfile"; then
++		echo "Address sanitizer splat for $f" 1>&2
++		cat "$tmpfile"
++		exit 111
++	fi
+ done
+diff --git a/tests/shell/testcases/bogons/nft-f/asan_stack_buffer_overrun_in_netlink_gen_range b/tests/shell/testcases/bogons/nft-f/asan_stack_buffer_overrun_in_netlink_gen_range
+new file mode 100644
+index 0000000..2f7872e
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/asan_stack_buffer_overrun_in_netlink_gen_range
+@@ -0,0 +1,6 @@
++table ip test {
++        chain y {
++                redirect to :tcp dport map { 83 : 80/3, 84 :4 }
++        }
++}
++

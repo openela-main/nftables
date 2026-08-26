@@ -1,0 +1,69 @@
+From 9f755eed0849227f88d69b5efeb2809a8fc311a7 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: exthdr: statement arg must be not be a range
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 8eeedce89d8bf0ad58da398782c2ca8a91d83a32
+
+commit 8eeedce89d8bf0ad58da398782c2ca8a91d83a32
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Dec 14 17:56:59 2023 +0100
+
+    evaluate: exthdr: statement arg must be not be a range
+
+    Else we get:
+    BUG: unknown expression type range
+    nft: src/netlink_linearize.c:909: netlink_gen_expr: Assertion `0' failed.
+
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                | 19 ++++++++++++++++---
+ .../bogons/nft-f/exthdr_with_range_bug        |  1 +
+ 2 files changed, 17 insertions(+), 3 deletions(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/exthdr_with_range_bug
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index fa3512b..78a5d10 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -2964,14 +2964,27 @@ static bool stmt_evaluate_payload_need_csum(const struct expr *payload)
+ static int stmt_evaluate_exthdr(struct eval_ctx *ctx, struct stmt *stmt)
+ {
+ 	struct expr *exthdr;
++	int ret;
+ 
+ 	if (__expr_evaluate_exthdr(ctx, &stmt->exthdr.expr) < 0)
+ 		return -1;
+ 
+ 	exthdr = stmt->exthdr.expr;
+-	return stmt_evaluate_arg(ctx, stmt, exthdr->dtype, exthdr->len,
+-				 BYTEORDER_BIG_ENDIAN,
+-				 &stmt->exthdr.val);
++	ret = stmt_evaluate_arg(ctx, stmt, exthdr->dtype, exthdr->len,
++				BYTEORDER_BIG_ENDIAN,
++				&stmt->exthdr.val);
++	if (ret < 0)
++		return ret;
++
++	switch (stmt->exthdr.val->etype) {
++	case EXPR_RANGE:
++		return expr_error(ctx->msgs, stmt->exthdr.val,
++				   "cannot be a range");
++	default:
++		break;
++	}
++
++	return 0;
+ }
+ 
+ static int stmt_evaluate_payload(struct eval_ctx *ctx, struct stmt *stmt)
+diff --git a/tests/shell/testcases/bogons/nft-f/exthdr_with_range_bug b/tests/shell/testcases/bogons/nft-f/exthdr_with_range_bug
+new file mode 100644
+index 0000000..e307e7c
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/exthdr_with_range_bug
+@@ -0,0 +1 @@
++add rule t c ip option ra set 0-1

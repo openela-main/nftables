@@ -1,0 +1,193 @@
+From 47b48a608741a6ca71b2bf37b69afb849b0afeaf Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:26 +0200
+Subject: [PATCH] src: fix extended netlink error reporting with large set
+ elements
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 68d2de3ca6c6eb18f5b32f7b4324a85c9c6c358e
+
+commit 68d2de3ca6c6eb18f5b32f7b4324a85c9c6c358e
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Oct 24 00:24:55 2024 +0200
+
+    src: fix extended netlink error reporting with large set elements
+
+    Large sets can expand into several netlink messages, use sequence number
+    and attribute offset to correlate the set element and the location.
+
+    When set element command expands into several netlink messages,
+    increment sequence number for each netlink message. Update struct cmd to
+    store the range of netlink messages that result from this command.
+
+    struct nlerr_loc remains in the same size in x86_64.
+
+     # nft -f set-65535.nft
+     set-65535.nft:65029:22-32: Error: Could not process rule: File exists
+     create element x y { 1.1.254.253 }
+                          ^^^^^^^^^^^
+
+    Fixes: f8aec603aa7e ("src: initial extended netlink error reporting")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ include/rule.h    |  4 +++-
+ src/cmd.c         |  4 +++-
+ src/libnftables.c | 12 ++++++++----
+ src/mnl.c         |  9 +++++----
+ src/parser_json.c |  4 ++--
+ 5 files changed, 21 insertions(+), 12 deletions(-)
+
+diff --git a/include/rule.h b/include/rule.h
+index 2dfa371..a82c794 100644
+--- a/include/rule.h
++++ b/include/rule.h
+@@ -688,6 +688,7 @@ void monitor_free(struct monitor *m);
+ #define NFT_NLATTR_LOC_MAX 32
+ 
+ struct nlerr_loc {
++	uint32_t		seqnum;
+ 	uint32_t		offset;
+ 	const struct location	*location;
+ };
+@@ -710,7 +711,8 @@ struct cmd {
+ 	enum cmd_ops		op;
+ 	enum cmd_obj		obj;
+ 	struct handle		handle;
+-	uint32_t		seqnum;
++	uint32_t		seqnum_from;
++	uint32_t		seqnum_to;
+ 	union {
+ 		void		*data;
+ 		struct expr	*expr;
+diff --git a/src/cmd.c b/src/cmd.c
+index 4cd3a07..6f6da35 100644
+--- a/src/cmd.c
++++ b/src/cmd.c
+@@ -24,6 +24,7 @@ void cmd_add_loc(struct cmd *cmd, const struct nlmsghdr *nlh, const struct locat
+ 		cmd->attr = xrealloc(cmd->attr, sizeof(struct nlerr_loc) * cmd->attr_array_len);
+ 	}
+ 
++	cmd->attr[cmd->num_attrs].seqnum = nlh->nlmsg_seq;
+ 	cmd->attr[cmd->num_attrs].offset = nlh->nlmsg_len;
+ 	cmd->attr[cmd->num_attrs].location = loc;
+ 	cmd->num_attrs++;
+@@ -300,7 +301,8 @@ void nft_cmd_error(struct netlink_ctx *ctx, struct cmd *cmd,
+ 	uint32_t i;
+ 
+ 	for (i = 0; i < cmd->num_attrs; i++) {
+-		if (cmd->attr[i].offset == err->offset)
++		if (cmd->attr[i].seqnum == err->seqnum &&
++		    cmd->attr[i].offset == err->offset)
+ 			loc = cmd->attr[i].location;
+ 	}
+ 
+diff --git a/src/libnftables.c b/src/libnftables.c
+index c363a3e..653060b 100644
+--- a/src/libnftables.c
++++ b/src/libnftables.c
+@@ -38,7 +38,7 @@ static int nft_netlink(struct nft_ctx *nft,
+ 
+ 	batch_seqnum = mnl_batch_begin(ctx.batch, mnl_seqnum_inc(&seqnum));
+ 	list_for_each_entry(cmd, cmds, list) {
+-		ctx.seqnum = cmd->seqnum = mnl_seqnum_inc(&seqnum);
++		ctx.seqnum = cmd->seqnum_from = mnl_seqnum_inc(&seqnum);
+ 		ret = do_command(&ctx, cmd);
+ 		if (ret < 0) {
+ 			netlink_io_error(&ctx, &cmd->location,
+@@ -46,6 +46,8 @@ static int nft_netlink(struct nft_ctx *nft,
+ 					 strerror(errno));
+ 			goto out;
+ 		}
++		seqnum = cmd->seqnum_to = ctx.seqnum;
++		mnl_seqnum_inc(&seqnum);
+ 		num_cmds++;
+ 	}
+ 	if (!nft->check)
+@@ -79,12 +81,14 @@ static int nft_netlink(struct nft_ctx *nft,
+ 			cmd = list_first_entry(cmds, struct cmd, list);
+ 
+ 		list_for_each_entry_from(cmd, cmds, list) {
+-			last_seqnum = cmd->seqnum;
+-			if (err->seqnum == cmd->seqnum ||
++			last_seqnum = cmd->seqnum_to;
++			if ((err->seqnum >= cmd->seqnum_from &&
++			     err->seqnum <= cmd->seqnum_to) ||
+ 			    err->seqnum == batch_seqnum) {
+ 				nft_cmd_error(&ctx, cmd, err);
+ 				errno = err->err;
+-				if (err->seqnum == cmd->seqnum) {
++				if (err->seqnum >= cmd->seqnum_from ||
++				    err->seqnum <= cmd->seqnum_to) {
+ 					mnl_err_list_free(err);
+ 					break;
+ 				}
+diff --git a/src/mnl.c b/src/mnl.c
+index d8d62e6..0f54d00 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -1720,7 +1720,7 @@ static void netlink_dump_setelem_done(struct netlink_ctx *ctx)
+ static int mnl_nft_setelem_batch(const struct nftnl_set *nls, struct cmd *cmd,
+ 				 struct nftnl_batch *batch,
+ 				 enum nf_tables_msg_types msg_type,
+-				 unsigned int flags, uint32_t seqnum,
++				 unsigned int flags, uint32_t *seqnum,
+ 				 const struct expr *set,
+ 				 struct netlink_ctx *ctx)
+ {
+@@ -1739,7 +1739,7 @@ static int mnl_nft_setelem_batch(const struct nftnl_set *nls, struct cmd *cmd,
+ next:
+ 	nlh = nftnl_nlmsg_build_hdr(nftnl_batch_buffer(batch), msg_type,
+ 				    nftnl_set_get_u32(nls, NFTNL_SET_FAMILY),
+-				    flags, seqnum);
++				    flags, *seqnum);
+ 
+ 	if (nftnl_set_is_set(nls, NFTNL_SET_TABLE)) {
+                 mnl_attr_put_strz(nlh, NFTA_SET_ELEM_LIST_TABLE,
+@@ -1772,6 +1772,7 @@ next:
+ 		if (mnl_nft_attr_nest_overflow(nlh, nest1, nest2)) {
+ 			mnl_attr_nest_end(nlh, nest1);
+ 			mnl_nft_batch_continue(batch);
++			mnl_seqnum_inc(seqnum);
+ 			goto next;
+ 		}
+ 	}
+@@ -1806,7 +1807,7 @@ int mnl_nft_setelem_add(struct netlink_ctx *ctx, struct cmd *cmd,
+ 	netlink_dump_set(nls, ctx);
+ 
+ 	err = mnl_nft_setelem_batch(nls, cmd, ctx->batch, NFT_MSG_NEWSETELEM,
+-				    flags, ctx->seqnum, expr, ctx);
++				    flags, &ctx->seqnum, expr, ctx);
+ 	nftnl_set_free(nls);
+ 
+ 	return err;
+@@ -1866,7 +1867,7 @@ int mnl_nft_setelem_del(struct netlink_ctx *ctx, struct cmd *cmd,
+ 		msg_type = NFT_MSG_DESTROYSETELEM;
+ 
+ 	err = mnl_nft_setelem_batch(nls, cmd, ctx->batch, msg_type, 0,
+-				    ctx->seqnum, init, ctx);
++				    &ctx->seqnum, init, ctx);
+ 	nftnl_set_free(nls);
+ 
+ 	return err;
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 381d0f8..f7ab79f 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -4244,13 +4244,13 @@ static json_t *seqnum_to_json(const uint32_t seqnum)
+ 		cur = json_cmd_assoc_list;
+ 		json_cmd_assoc_list = cur->next;
+ 
+-		key = cur->cmd->seqnum % CMD_ASSOC_HSIZE;
++		key = cur->cmd->seqnum_from % CMD_ASSOC_HSIZE;
+ 		hlist_add_head(&cur->hnode, &json_cmd_assoc_hash[key]);
+ 	}
+ 
+ 	key = seqnum % CMD_ASSOC_HSIZE;
+ 	hlist_for_each_entry(cur, n, &json_cmd_assoc_hash[key], hnode) {
+-		if (cur->cmd->seqnum == seqnum)
++		if (cur->cmd->seqnum_from == seqnum)
+ 			return cur->json;
+ 	}
+ 

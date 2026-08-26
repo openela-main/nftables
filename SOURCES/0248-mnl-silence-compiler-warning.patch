@@ -1,0 +1,55 @@
+From d9cb07c0161ed0de935b92a8f2383e2de4bfc320 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:07 +0200
+Subject: [PATCH] mnl: silence compiler warning
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit cd9f168875aca72caacdcfb552c15b6484a82bd5
+
+commit cd9f168875aca72caacdcfb552c15b6484a82bd5
+Author: Florian Westphal <fw@strlen.de>
+Date:   Wed Aug 20 14:44:43 2025 +0200
+
+    mnl: silence compiler warning
+
+    gcc 14.3.0 reports this:
+
+    src/mnl.c: In function 'mnl_nft_chain_add':
+    src/mnl.c:916:25: warning: 'nest' may be used uninitialized [-Wmaybe-uninitialized]
+      916 |                         mnl_attr_nest_end(nlh, nest);
+
+    I guess its because compiler can't know that the conditions cannot change
+    in-between and assumes nest_end() can be called without nest_start().
+
+    Fixes: 01277922fede ("src: ensure chain policy evaluation when specified")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/mnl.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/src/mnl.c b/src/mnl.c
+index 78d02cc..061b74f 100644
+--- a/src/mnl.c
++++ b/src/mnl.c
+@@ -868,7 +868,7 @@ int mnl_nft_chain_add(struct netlink_ctx *ctx, struct cmd *cmd,
+ 	nftnl_chain_nlmsg_build_payload(nlh, nlc);
+ 
+ 	if (cmd->chain && cmd->chain->flags & CHAIN_F_BASECHAIN) {
+-		struct nlattr *nest;
++		struct nlattr *nest = NULL;
+ 
+ 		if (cmd->chain->type.str) {
+ 			cmd_add_loc(cmd, nlh, &cmd->chain->type.loc);
+@@ -889,8 +889,7 @@ int mnl_nft_chain_add(struct netlink_ctx *ctx, struct cmd *cmd,
+ 		if (cmd->chain && cmd->chain->dev_expr)
+ 			mnl_nft_chain_devs_build(nlh, cmd);
+ 
+-		if (cmd->chain->type.str ||
+-		    (cmd->chain && cmd->chain->dev_expr))
++		if (nest)
+ 			mnl_attr_nest_end(nlh, nest);
+ 	}
+ 

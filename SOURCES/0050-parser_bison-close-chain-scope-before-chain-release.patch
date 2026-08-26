@@ -1,0 +1,58 @@
+From fdb03b033c3efcb28b4c51c469d3e93559d7bdb8 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] parser_bison: close chain scope before chain release
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 28b3bbec5a97aaa57f7138fee8b2f22ff0e5b960
+
+commit 28b3bbec5a97aaa57f7138fee8b2f22ff0e5b960
+Author: Florian Westphal <fw@strlen.de>
+Date:   Wed Dec 13 11:09:58 2023 +0100
+
+    parser_bison: close chain scope before chain release
+
+    cmd_alloc() will free the chain, so we must close the scope opened
+    in chain_block_alloc beforehand.
+
+    The included test file will cause a use-after-free because nft attempts
+    to search for an identifier in a scope that has been freed:
+
+    AddressSanitizer: heap-use-after-free on address 0x618000000368 at pc 0x7f1cbc0e6959 bp 0x7ffd3ccb7850 sp 0x7ffd3ccb7840
+        #0 0x7f1cbc0e6958 in symbol_lookup src/rule.c:629
+        #1 0x7f1cbc0e66a1 in symbol_get src/rule.c:588
+        #2 0x7f1cbc120d67 in nft_parse src/parser_bison.y:4325
+
+    Fixes: a66b5ad9540d ("src: allow for updating devices on existing netdev chain")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_bison.y                                           | 1 +
+ .../testcases/bogons/nft-f/use_after_free_on_chain_removal   | 5 +++++
+ 2 files changed, 6 insertions(+)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/use_after_free_on_chain_removal
+
+diff --git a/src/parser_bison.y b/src/parser_bison.y
+index 2c829f9..83302fd 100644
+--- a/src/parser_bison.y
++++ b/src/parser_bison.y
+@@ -1397,6 +1397,7 @@ delete_cmd		:	TABLE		table_or_id_spec
+ 			{
+ 				$5->location = @5;
+ 				handle_merge(&$3->handle, &$2);
++				close_scope(state);
+ 				$$ = cmd_alloc(CMD_DELETE, CMD_OBJ_CHAIN, &$2, &@$, $5);
+ 			}
+ 			|	RULE		ruleid_spec
+diff --git a/tests/shell/testcases/bogons/nft-f/use_after_free_on_chain_removal b/tests/shell/testcases/bogons/nft-f/use_after_free_on_chain_removal
+new file mode 100644
+index 0000000..bb9632b
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/use_after_free_on_chain_removal
+@@ -0,0 +1,5 @@
++delete	chain d iUi {
++}}
++delete	chain d hUi {
++delete	chain o
++c b icmpv6  id$i

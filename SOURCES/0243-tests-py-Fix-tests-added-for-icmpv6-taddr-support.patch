@@ -1,0 +1,155 @@
+From 2677bdc9830c7b1930d1995759647b982a9a7986 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:14:19 +0200
+Subject: [PATCH] tests: py: Fix tests added for 'icmpv6 taddr' support
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit ef8b8ef36f80a2bfcc9df35cccb61ab490a8d6e7
+
+commit ef8b8ef36f80a2bfcc9df35cccb61ab490a8d6e7
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Wed Aug 13 16:14:08 2025 +0200
+
+    tests: py: Fix tests added for 'icmpv6 taddr' support
+
+    There was a duplicate test, also stored JSON equivalents should match
+    input as much as possible. The expected deviation in output (just like
+    with standard syntax) is stored in the .json.output file instead.
+
+    Fixes: 2e86f45d0260a ("icmpv6: Allow matching target address in NS/NA, redirect and MLD")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+    Reviewed-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/ip6/icmpv6.t             |  2 --
+ tests/py/ip6/icmpv6.t.json        | 58 -------------------------------
+ tests/py/ip6/icmpv6.t.json.output | 36 +++++++++++++++++++
+ 3 files changed, 36 insertions(+), 60 deletions(-)
+
+diff --git a/tests/py/ip6/icmpv6.t b/tests/py/ip6/icmpv6.t
+index 7632bfd..5108b42 100644
+--- a/tests/py/ip6/icmpv6.t
++++ b/tests/py/ip6/icmpv6.t
+@@ -91,8 +91,6 @@ icmpv6 type nd-neighbor-solicit icmpv6 taddr 2001:db8::133;ok
+ icmpv6 type nd-neighbor-advert icmpv6 taddr 2001:db8::133;ok
+ icmpv6 taddr 2001:db8::133;ok;icmpv6 type { mld-listener-query, mld-listener-report, mld-listener-done, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect} icmpv6 taddr 2001:db8::133
+ 
+-icmpv6 taddr 2001:db8::133;ok;icmpv6 type { mld-listener-query, mld-listener-report, mld-listener-done, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect} icmpv6 taddr 2001:db8::133
+-
+ icmpv6 type { mld-listener-query, mld-listener-report, mld-listener-done, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect} icmpv6 taddr 2001:db8::133;ok
+ icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert } icmpv6 taddr 2001:db8::133;ok
+ icmpv6 daddr 2001:db8::133;ok
+diff --git a/tests/py/ip6/icmpv6.t.json b/tests/py/ip6/icmpv6.t.json
+index 9df886d..5c36aab 100644
+--- a/tests/py/ip6/icmpv6.t.json
++++ b/tests/py/ip6/icmpv6.t.json
+@@ -1250,64 +1250,6 @@
+ 
+ # icmpv6 taddr 2001:db8::133
+ [
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "type",
+-                    "protocol": "icmpv6"
+-                }
+-            },
+-            "op": "==",
+-            "right": {
+-                "set": [
+-                    "mld-listener-query",
+-                    "mld-listener-report",
+-                    "mld-listener-done",
+-                    "nd-neighbor-solicit",
+-                    "nd-neighbor-advert",
+-                    "nd-redirect"
+-                ]
+-            }
+-        }
+-    },
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "taddr",
+-                    "protocol": "icmpv6"
+-                }
+-            },
+-            "op": "==",
+-            "right": "2001:db8::133"
+-        }
+-    }
+-]
+-
+-# icmpv6 taddr 2001:db8::133
+-[
+-    {
+-        "match": {
+-            "left": {
+-                "payload": {
+-                    "field": "type",
+-                    "protocol": "icmpv6"
+-                }
+-            },
+-            "op": "==",
+-            "right": {
+-                "set": [
+-                    "mld-listener-query",
+-                    "mld-listener-report",
+-                    "mld-listener-done",
+-                    "nd-neighbor-solicit",
+-                    "nd-neighbor-advert",
+-                    "nd-redirect"
+-                ]
+-            }
+-        }
+-    },
+     {
+         "match": {
+             "left": {
+diff --git a/tests/py/ip6/icmpv6.t.json.output b/tests/py/ip6/icmpv6.t.json.output
+index f29b346..8704eaf 100644
+--- a/tests/py/ip6/icmpv6.t.json.output
++++ b/tests/py/ip6/icmpv6.t.json.output
+@@ -758,3 +758,39 @@
+     }
+ ]
+ 
++# icmpv6 taddr 2001:db8::133
++[
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "type",
++                    "protocol": "icmpv6"
++                }
++            },
++            "op": "==",
++            "right": {
++                "set": [
++                    "mld-listener-query",
++                    "mld-listener-report",
++                    "mld-listener-done",
++                    "nd-neighbor-solicit",
++                    "nd-neighbor-advert",
++                    "nd-redirect"
++                ]
++            }
++        }
++    },
++    {
++        "match": {
++            "left": {
++                "payload": {
++                    "field": "taddr",
++                    "protocol": "icmpv6"
++                }
++            },
++            "op": "==",
++            "right": "2001:db8::133"
++        }
++    }
++]

@@ -1,0 +1,110 @@
+From bbfd033cb9014f854f6a4db3cec2aafe160847d4 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:08 +0200
+Subject: [PATCH] intervals: fix element deletions with maps
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 551a4ad68b922fa6c942f5e79ac59f723a12e233
+
+commit 551a4ad68b922fa6c942f5e79ac59f723a12e233
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Jul 3 16:29:26 2024 +0200
+
+    intervals: fix element deletions with maps
+
+    Set element deletion in maps (including catchall elements) does not work.
+
+     # nft delete element ip x m { \* }
+     BUG: invalid range expression type catch-all set element
+     nft: src/expression.c:1472: range_expr_value_low: Assertion `0' failed.
+     Aborted
+
+    Call interval_expr_key() to fetch expr->left in the mapping but use the
+    expression that represents the mapping because it provides access to the
+    EXPR_F_REMOVE flags.
+
+    Moreover, assume maximum value for catchall expression by means of the
+    expr->len to reuse the existing code to check if the element to be
+    deleted really exists.
+
+    Fixes: 3e8d934e4f72 ("intervals: support to partial deletion with automerge")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/intervals.c | 31 ++++++++++++++++++-------------
+ 1 file changed, 18 insertions(+), 13 deletions(-)
+
+diff --git a/src/intervals.c b/src/intervals.c
+index d5406ef..af1415a 100644
+--- a/src/intervals.c
++++ b/src/intervals.c
+@@ -378,7 +378,7 @@ static int setelem_delete(struct list_head *msgs, struct set *set,
+ 			  struct expr *purge, struct expr *elems,
+ 			  unsigned int debug_mask)
+ {
+-	struct expr *i, *next, *prev = NULL;
++	struct expr *i, *next, *elem, *prev = NULL;
+ 	struct range range, prev_range;
+ 	int err = 0;
+ 	mpz_t rop;
+@@ -389,21 +389,26 @@ static int setelem_delete(struct list_head *msgs, struct set *set,
+ 	mpz_init(range.high);
+ 	mpz_init(rop);
+ 
+-	list_for_each_entry_safe(i, next, &elems->expressions, list) {
+-		if (i->key->etype == EXPR_SET_ELEM_CATCHALL)
+-			continue;
++	list_for_each_entry_safe(elem, next, &elems->expressions, list) {
++		i = interval_expr_key(elem);
+ 
+-		range_expr_value_low(range.low, i);
+-		range_expr_value_high(range.high, i);
++		if (i->key->etype == EXPR_SET_ELEM_CATCHALL) {
++			/* Assume max value to simplify handling. */
++			mpz_bitmask(range.low, i->len);
++			mpz_bitmask(range.high, i->len);
++		} else {
++			range_expr_value_low(range.low, i);
++			range_expr_value_high(range.high, i);
++		}
+ 
+-		if (!prev && i->flags & EXPR_F_REMOVE) {
++		if (!prev && elem->flags & EXPR_F_REMOVE) {
+ 			expr_error(msgs, i, "element does not exist");
+ 			err = -1;
+ 			goto err;
+ 		}
+ 
+-		if (!(i->flags & EXPR_F_REMOVE)) {
+-			prev = i;
++		if (!(elem->flags & EXPR_F_REMOVE)) {
++			prev = elem;
+ 			mpz_set(prev_range.low, range.low);
+ 			mpz_set(prev_range.high, range.high);
+ 			continue;
+@@ -411,12 +416,12 @@ static int setelem_delete(struct list_head *msgs, struct set *set,
+ 
+ 		if (mpz_cmp(prev_range.low, range.low) == 0 &&
+ 		    mpz_cmp(prev_range.high, range.high) == 0) {
+-			if (i->flags & EXPR_F_REMOVE) {
++			if (elem->flags & EXPR_F_REMOVE) {
+ 				if (prev->flags & EXPR_F_KERNEL)
+ 					list_move_tail(&prev->list, &purge->expressions);
+ 
+-				list_del(&i->list);
+-				expr_free(i);
++				list_del(&elem->list);
++				expr_free(elem);
+ 			}
+ 		} else if (set->automerge) {
+ 			if (setelem_adjust(set, purge, &prev_range, &range, prev, i) < 0) {
+@@ -424,7 +429,7 @@ static int setelem_delete(struct list_head *msgs, struct set *set,
+ 				err = -1;
+ 				goto err;
+ 			}
+-		} else if (i->flags & EXPR_F_REMOVE) {
++		} else if (elem->flags & EXPR_F_REMOVE) {
+ 			expr_error(msgs, i, "element does not exist");
+ 			err = -1;
+ 			goto err;

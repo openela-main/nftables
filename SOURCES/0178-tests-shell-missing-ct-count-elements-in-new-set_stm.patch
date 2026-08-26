@@ -1,0 +1,41 @@
+From 0ae0614d239ddefde390025bffc4807ce642a046 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:20 +0200
+Subject: [PATCH] tests: shell: missing ct count elements in new set_stmt test
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 74ba5ff75bf79bb6b4aa68e4bbddad47e4984beb
+
+commit 74ba5ff75bf79bb6b4aa68e4bbddad47e4984beb
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Sat Mar 22 21:43:26 2025 +0100
+
+    tests: shell: missing ct count elements in new set_stmt test
+
+    Add missing entries to dump file.
+
+    Reported-by: Florian Westphal <fw@strlen.de>
+    Fixes: 1f3d0b9cf9cc ("tests: shell: extend coverage for set element statements")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/shell/testcases/sets/dumps/set_stmt.nft | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/tests/shell/testcases/sets/dumps/set_stmt.nft b/tests/shell/testcases/sets/dumps/set_stmt.nft
+index f8cf08a..71ba799 100644
+--- a/tests/shell/testcases/sets/dumps/set_stmt.nft
++++ b/tests/shell/testcases/sets/dumps/set_stmt.nft
+@@ -20,6 +20,10 @@ table ip x {
+ 	set y2 {
+ 		type ipv4_addr
+ 		ct count over 2
++		elements = { 2.2.2.2 ct count over 5,
++			     3.3.3.2 ct count over 2,
++			     5.5.5.2 ct count over 2,
++			     6.6.6.2 ct count over 5 }
+ 	}
+ 
+ 	set y3 {

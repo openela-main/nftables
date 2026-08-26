@@ -1,0 +1,95 @@
+From 13898075b80145cc92cd2c330dd2461c264e795d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] cache: assert filter when calling nft_cache_evaluate()
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 4dd20f3bbd606eed4869ebe449debee8b2ac7900
+
+commit 4dd20f3bbd606eed4869ebe449debee8b2ac7900
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Thu Aug 29 12:42:08 2024 +0200
+
+    cache: assert filter when calling nft_cache_evaluate()
+
+    nft_cache_evaluate() always takes a non-null filter, remove superfluous
+    checks when calculating cache requirements via flags.
+
+    Note that filter is still option from netlink dump path, since this can
+    be called from error path to provide hints.
+
+    Fixes: 08725a9dc14c ("cache: filter out rules by chain")
+    Fixes: b3ed8fd8c9f3 ("cache: missing family in cache filtering")
+    Fixes: 635ee1cad8aa ("cache: filter out sets and maps that are not requested")
+    Fixes: 3f1d3912c3a6 ("cache: filter out tables that are not requested")
+    Tested-by: Eric Garver <eric@garver.life>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/cache.c | 16 +++++++---------
+ 1 file changed, 7 insertions(+), 9 deletions(-)
+
+diff --git a/src/cache.c b/src/cache.c
+index 77a67f7..82553a9 100644
+--- a/src/cache.c
++++ b/src/cache.c
+@@ -219,18 +219,17 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ {
+ 	switch (cmd->obj) {
+ 	case CMD_OBJ_TABLE:
+-		if (filter)
+-			filter->list.family = cmd->handle.family;
++		filter->list.family = cmd->handle.family;
+ 		if (!cmd->handle.table.name) {
+ 			flags |= NFT_CACHE_TABLE;
+ 			break;
+-		} else if (filter) {
++		} else {
+ 			filter->list.table = cmd->handle.table.name;
+ 		}
+ 		flags |= NFT_CACHE_FULL;
+ 		break;
+ 	case CMD_OBJ_CHAIN:
+-		if (filter && cmd->handle.chain.name) {
++		if (cmd->handle.chain.name) {
+ 			filter->list.family = cmd->handle.family;
+ 			filter->list.table = cmd->handle.table.name;
+ 			filter->list.chain = cmd->handle.chain.name;
+@@ -243,7 +242,7 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 		break;
+ 	case CMD_OBJ_SET:
+ 	case CMD_OBJ_MAP:
+-		if (filter && cmd->handle.table.name && cmd->handle.set.name) {
++		if (cmd->handle.table.name && cmd->handle.set.name) {
+ 			filter->list.family = cmd->handle.family;
+ 			filter->list.table = cmd->handle.table.name;
+ 			filter->list.set = cmd->handle.set.name;
+@@ -263,8 +262,7 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ 			flags |= NFT_CACHE_SETELEM;
+ 		break;
+ 	case CMD_OBJ_FLOWTABLE:
+-		if (filter &&
+-		    cmd->handle.table.name &&
++		if (cmd->handle.table.name &&
+ 		    cmd->handle.flowtable.name) {
+ 			filter->list.family = cmd->handle.family;
+ 			filter->list.table = cmd->handle.table.name;
+@@ -321,8 +319,6 @@ static unsigned int evaluate_cache_list(struct nft_ctx *nft, struct cmd *cmd,
+ static unsigned int evaluate_cache_reset(struct cmd *cmd, unsigned int flags,
+ 					 struct nft_cache_filter *filter)
+ {
+-	assert(filter);
+-
+ 	switch (cmd->obj) {
+ 	case CMD_OBJ_TABLE:
+ 	case CMD_OBJ_CHAIN:
+@@ -489,6 +485,8 @@ int nft_cache_evaluate(struct nft_ctx *nft, struct list_head *cmds,
+ 	unsigned int flags, batch_flags = NFT_CACHE_EMPTY;
+ 	struct cmd *cmd;
+ 
++	assert(filter);
++
+ 	list_for_each_entry(cmd, cmds, list) {
+ 		if (nft_handle_validate(cmd, msgs) < 0)
+ 			return -1;

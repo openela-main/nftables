@@ -1,0 +1,53 @@
+From 5a2bd880073087f7e6238ec87d691cc9511eda9d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:15:25 +0200
+Subject: [PATCH] monitor: fix memleak in setelem cb
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit d2a427c4abfadd2ce51bdab54c40fbf3d990c724
+
+commit d2a427c4abfadd2ce51bdab54c40fbf3d990c724
+Author: Florian Westphal <fw@strlen.de>
+Date:   Wed Jan 21 14:33:21 2026 +0100
+
+    monitor: fix memleak in setelem cb
+
+    since 4521732ebbf3 ("monitor: missing cache and set handle initialization")
+    these fields are set via handle_merge(), so don't clobber those
+    fields in json output case:
+
+    ==31877==ERROR: LeakSanitizer: detected memory leaks
+    Direct leak of 16 byte(s) in 2 object(s) allocated from:
+     #0 0x7f0cb9f29d4b in strdup asan/asan_interceptors.cpp:593
+     #1 0x7f0cb9b584fd in xstrdup src/utils.c:80
+     #2 0x7f0cb9b355b3 in handle_merge src/rule.c:127
+     #3 0x7f0cb9ae12b8 in netlink_events_setelem_cb src/monitor.c:457
+
+    Seen when running tests/monitor with asan enabled.
+
+    Fixes: 4521732ebbf3 ("monitor: missing cache and set handle initialization")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/monitor.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/src/monitor.c b/src/monitor.c
+index b9b0263..448a106 100644
+--- a/src/monitor.c
++++ b/src/monitor.c
+@@ -496,13 +496,7 @@ static int netlink_events_setelem_cb(const struct nlmsghdr *nlh, int type,
+ 		nft_mon_print(monh, "\n");
+ 		break;
+ 	case NFTNL_OUTPUT_JSON:
+-		dummyset->handle.family = family;
+-		dummyset->handle.set.name = setname;
+-		dummyset->handle.table.name = table;
+ 		monitor_print_element_json(monh, cmd, dummyset);
+-		/* prevent set_free() from trying to free those */
+-		dummyset->handle.set.name = NULL;
+-		dummyset->handle.table.name = NULL;
+ 		if (!nft_output_echo(&monh->ctx->nft->output))
+ 			nft_mon_print(monh, "\n");
+ 		break;

@@ -1,0 +1,51 @@
+From 23a5147a32733f75548526e9b8769cd1157b34f8 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:41 +0200
+Subject: [PATCH] evaluate: fix stack overflow with huge priority string
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit b626c86abaf294fcf1ec788f722071dc90da68c4
+
+commit b626c86abaf294fcf1ec788f722071dc90da68c4
+Author: Florian Westphal <fw@strlen.de>
+Date:   Fri Dec 15 10:19:02 2023 +0100
+
+    evaluate: fix stack overflow with huge priority string
+
+    Alternative would be to refactor this and move this into the parsers
+    (bison, json) instead of this hidden re-parsing.
+
+    Fixes: 627c451b2351 ("src: allow variables in the chain priority specification")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/evaluate.c                                     | 2 +-
+ tests/shell/testcases/bogons/nft-f/huge_chain_prio | 5 +++++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+ create mode 100644 tests/shell/testcases/bogons/nft-f/huge_chain_prio
+
+diff --git a/src/evaluate.c b/src/evaluate.c
+index 1a8c815..c655e3a 100644
+--- a/src/evaluate.c
++++ b/src/evaluate.c
+@@ -4820,7 +4820,7 @@ static bool evaluate_priority(struct eval_ctx *ctx, struct prio_spec *prio,
+ 			NFT_NAME_MAXLEN);
+ 	loc = prio->expr->location;
+ 
+-	if (sscanf(prio_str, "%s %c %d", prio_fst, &op, &prio_snd) < 3) {
++	if (sscanf(prio_str, "%255s %c %d", prio_fst, &op, &prio_snd) < 3) {
+ 		priority = std_prio_lookup(prio_str, family, hook);
+ 		if (priority == NF_IP_PRI_LAST)
+ 			return false;
+diff --git a/tests/shell/testcases/bogons/nft-f/huge_chain_prio b/tests/shell/testcases/bogons/nft-f/huge_chain_prio
+new file mode 100644
+index 0000000..41f8061
+--- /dev/null
++++ b/tests/shell/testcases/bogons/nft-f/huge_chain_prio
+@@ -0,0 +1,5 @@
++table t {
++        chain c {
++                type filter hook input priority srcnDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD#DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD; policy accept;
++        }
++}

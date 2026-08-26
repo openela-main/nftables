@@ -1,0 +1,52 @@
+From e13594e528eb47b798a9c6aecd1e27153678af26 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:10:09 +0200
+Subject: [PATCH] parser_json: fix several expression memleaks from error path
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit bae7b4d283826efbeb28c21aecd7b355e86da170
+
+commit bae7b4d283826efbeb28c21aecd7b355e86da170
+Author: Sebastian Walz (sivizius) <sebastian.walz@secunet.com>
+Date:   Mon Aug 19 20:11:44 2024 +0200
+
+    parser_json: fix several expression memleaks from error path
+
+    Fixes: 586ad210368b ("libnftables: Implement JSON parser")
+    Signed-off-by: Sebastian Walz (sivizius) <sebastian.walz@secunet.com>
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/parser_json.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/parser_json.c b/src/parser_json.c
+index 3473a2a..381d0f8 100644
+--- a/src/parser_json.c
++++ b/src/parser_json.c
+@@ -1283,6 +1283,7 @@ static struct expr *json_parse_range_expr(struct json_ctx *ctx,
+ 	expr_high = json_parse_primary_expr(ctx, high);
+ 	if (!expr_high) {
+ 		json_error(ctx, "Invalid high value in range expression.");
++		expr_free(expr_low);
+ 		return NULL;
+ 	}
+ 	return range_expr_alloc(int_loc, expr_low, expr_high);
+@@ -1864,6 +1865,8 @@ static struct stmt *json_parse_mangle_stmt(struct json_ctx *ctx,
+ 		return stmt;
+ 	default:
+ 		json_error(ctx, "Invalid mangle statement key expression type.");
++		expr_free(key);
++		expr_free(value);
+ 		return NULL;
+ 	}
+ }
+@@ -2868,6 +2871,7 @@ static struct stmt *json_parse_optstrip_stmt(struct json_ctx *ctx,
+ 	    expr->etype != EXPR_EXTHDR ||
+ 	    expr->exthdr.op != NFT_EXTHDR_OP_TCPOPT) {
+ 		json_error(ctx, "Illegal TCP optstrip argument");
++		expr_free(expr);
+ 		return NULL;
+ 	}
+ 

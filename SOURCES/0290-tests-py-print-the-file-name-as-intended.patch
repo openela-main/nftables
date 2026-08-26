@@ -1,0 +1,35 @@
+From 845bba4d86d62afe9d52aeece4dc56886a4292f6 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:20:06 +0200
+Subject: [PATCH] tests: py: print the file name as intended
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit fbd69788d961189430a9587133b5a4e217c8d4f1
+
+commit fbd69788d961189430a9587133b5a4e217c8d4f1
+Author: Florian Westphal <fw@strlen.de>
+Date:   Thu Apr 16 19:01:33 2026 +0200
+
+    tests: py: print the file name as intended
+
+    Fixes: f2b5d6fc26b9 ("tests: py: don't use a fixed filename")
+    Signed-off-by: Florian Westphal <fw@strlen.de>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ tests/py/nft-test.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/py/nft-test.py b/tests/py/nft-test.py
+index 581a4f2..8ae65b4 100755
+--- a/tests/py/nft-test.py
++++ b/tests/py/nft-test.py
+@@ -1581,7 +1581,7 @@ def main():
+     try:
+         log_file = tempfile.NamedTemporaryFile(prefix="nftables-test-py-", suffix=".log", mode='w', delete=auto_delete)
+         if auto_delete:
+-            print_info("Log file %s will not be retained.  Pass -k to keep it.")
++            print_info("Log file %s will not be retained.  Pass -k to keep it." % log_file.name)
+         else:
+             print_info("Log will be available at %s" % log_file.name)
+     except IOError:

@@ -1,0 +1,51 @@
+From dd80c4580464f4eb2f27b10d5a42f0e95499383d Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:08:43 +0200
+Subject: [PATCH] doc: nft.8: Two minor synopsis fixups
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit 3bccc478d27498f7ecc8a0233176accb1b91f584
+
+commit 3bccc478d27498f7ecc8a0233176accb1b91f584
+Author: Phil Sutter <phil@nwl.cc>
+Date:   Thu Mar 21 14:57:41 2024 +0100
+
+    doc: nft.8: Two minor synopsis fixups
+
+    The curly braces in 'add table' are to be put literally, so need to be
+    bold. Also, they are optional unless either one (or both) of 'comment'
+    and 'flags' are specified.
+
+    The 'add chain' synopsis contained a stray tick, messing up the
+    following markup.
+
+    Fixes: 7fd67ce121f86 ("doc: fix synopsis of named counter, quota and ct {helper,timeout,expect}")
+    Signed-off-by: Phil Sutter <phil@nwl.cc>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ doc/nft.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/doc/nft.txt b/doc/nft.txt
+index dba1b60..2080c07 100644
+--- a/doc/nft.txt
++++ b/doc/nft.txt
+@@ -321,7 +321,7 @@ Effectively, this is the nft-equivalent of *iptables-save* and
+ TABLES
+ ------
+ [verse]
+-{*add* | *create*} *table* ['family'] 'table' [ {*comment* 'comment' *;*'} *{ flags* 'flags' *; }*]
++{*add* | *create*} *table* ['family'] 'table' [*{* [*comment* 'comment' *;*] [*flags* 'flags' *;*] *}*]
+ {*delete* | *destroy* | *list* | *flush*} *table* ['family'] 'table'
+ *list tables* ['family']
+ *delete table* ['family'] *handle* 'handle'
+@@ -385,7 +385,7 @@ add table inet mytable
+ CHAINS
+ ------
+ [verse]
+-{*add* | *create*} *chain* ['family'] 'table' 'chain' [*{ type* 'type' *hook* 'hook' [*device* 'device'] *priority* 'priority' *;* [*policy* 'policy' *;*] [*comment* 'comment' *;*'] *}*]
++{*add* | *create*} *chain* ['family'] 'table' 'chain' [*{ type* 'type' *hook* 'hook' [*device* 'device'] *priority* 'priority' *;* [*policy* 'policy' *;*] [*comment* 'comment' *;*] *}*]
+ {*delete* | *destroy* | *list* | *flush*} *chain* ['family'] 'table' 'chain'
+ *list chains* ['family']
+ *delete chain* ['family'] 'table' *handle* 'handle'

@@ -1,0 +1,38 @@
+From 1465dfac159747261db7f95d14833071a7ca85db Mon Sep 17 00:00:00 2001
+From: Phil Sutter <psutter@redhat.com>
+Date: Fri, 17 Jul 2026 11:12:20 +0200
+Subject: [PATCH] optimize: incorrect comparison for reject statement
+
+JIRA: https://issues.redhat.com/browse/RHEL-190549
+Upstream Status: nftables commit abab6e60c755aef7e1ab9d3320effa714a0b49e2
+
+commit abab6e60c755aef7e1ab9d3320effa714a0b49e2
+Author: Pablo Neira Ayuso <pablo@netfilter.org>
+Date:   Wed Mar 26 21:54:04 2025 +0100
+
+    optimize: incorrect comparison for reject statement
+
+    Logic is reverse, this should returns false if the compared reject
+    expressions are not the same.
+
+    Fixes: 38d48fe57fff ("optimize: fix reject statement")
+    Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+
+Signed-off-by: Phil Sutter <psutter@redhat.com>
+---
+ src/optimize.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/optimize.c b/src/optimize.c
+index c4295f9..c8082c3 100644
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -265,7 +265,7 @@ static bool __stmt_type_eq(const struct stmt *stmt_a, const struct stmt *stmt_b,
+ 		if (!stmt_a->reject.expr)
+ 			return true;
+ 
+-		if (__expr_cmp(stmt_a->reject.expr, stmt_b->reject.expr))
++		if (!__expr_cmp(stmt_a->reject.expr, stmt_b->reject.expr))
+ 			return false;
+ 		break;
+ 	case STMT_NAT:
